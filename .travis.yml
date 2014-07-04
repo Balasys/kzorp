@@ -1,0 +1,47 @@
+language: c
+sudo: required
+dist: trusty
+
+compiler:
+  - gcc
+
+branches:
+  only:
+    - /^6\.0\.[0-9]*$/
+
+before_install:
+  - dpkg -l linux-headers\*
+  - ls -lad /lib/modules/*
+  - source ci/obs_common.sh
+  - source ci/obs_before_install.sh
+
+before_script:
+  - dpkg -l linux-headers\*
+  - ls -lad /lib/modules/*
+  - sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu/ trusty main universe multiverse"
+  - sudo apt-get update
+  - sudo apt-get install --yes devscripts equivs linux-headers-generic
+  - sudo mk-build-deps -i -r -t " apt-get --no-install-recommends --yes"
+
+script:
+  - autoreconf -if
+  - ./configure
+  - make
+  - make check
+  - source ci/obs_common.sh
+  - source ci/obs_prepare.sh
+
+after_success:
+  - source ci/obs_common.sh
+  - source ci/obs_commit.sh
+
+env:
+  global:
+    - secure: "DNYtkAhuVGiA0ktjoP3tk+moZy1dvWfnAjNIdcb7Hlutxz3z4B7fXcdrwuX3HRRBkPgNxGiG787SJAnaAx+BfUgPtECIlhEv/1Qg+fE3QkGsblCc2iB5McMyPeDSzsUEg7gBsy66T3nabOIummu0YFh4ai8sjceMLNsb/dJ657OcGtkShCSR5ybkZzx8jgIdR5vc3i1DdOh/Bi1h2H6k3+OwX2h8sPUrTLbb+FjnV1/9HsVl1T41t4ohdZEo6aro4XDipIpocLJsAiYpOlAN5iYuJexiLR/Fu8vnBrr+gXm4TS+2usdadCutY9nLxFoMefFoJnrZiRGzCL76KZ4MHt8Banbw2r8EWnCCx3YJcDd4kMLoFeKL2uVtl7wSmG/QHhlKMomV7VSCMjMdHQ4oyVfwuxdxc6O0vAaHGyVQE52029YMJUzuaDj92A6w/8/z0pecH8L0MnNcnD1x23aKkCryvlwEvkHlgpzJy6+kE/mCKtnCPU/tUky83bp1xctylDekhO76WlMqU7gePSO5WeOgmxSutfDkPGGD6XmZY5lPE1l7LXB6ol9MLmuBwybos5WR13+ZCG82kcdUebPSj+qUNO1JVdamhIcHXN7ipwZdWAhJ9Ln2DaQRbC4ghfmlJ+c4eRm8K2HYKi5TsmLtGsdpSyuJMXvmXDqaPKFfHok="
+    - OBS_HOME=security
+    - OBS_PROJECT=Zorp
+    - OBS_MAJOR_VERSION=6
+    - OBS_MINOR_VERSION=0
+    - OBS_MAINTENANCE_VERSION=11
+    - OBS_PACKAGE=kzorp
+    - KBUILD=/lib/modules/3.13.0-137-generic/build
