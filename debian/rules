@@ -13,8 +13,7 @@ ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 endif
 
 build: build-indep
-	dh_autoreconf -i
-	CFLAGS="-Iinclude" dh_auto_configure
+	dh $@  --with autotools-dev,autoreconf
 
 build-indep: build-indep-stamp
 build-indep-stamp:
@@ -51,7 +50,7 @@ install-indep: build-indep debian/kzorp-dkms.dkms
 	dh_auto_install --destdir=debian/kzorpd -- -C daemon install
 
 binary-indep: build-indep install-indep
-	dh $@  --with autotools-dev
+	dh $@  --with autotools-dev,python2
 
 install:
 	KERNELRELEASE=$(kernel_release) dh_auto_install --destdir=debian/kzorp --sourcedirectory=driver
@@ -60,7 +59,7 @@ build-arch:
 	KERNELRELEASE=$(kernel_release) dh $@  --with autotools-dev --sourcedirectory=driver
 
 binary-arch: build-arch install
-	KERNELRELEASE=$(kernel_release) dh $@  --with autotools-dev --sourcedirectory=driver
+	KERNELRELEASE=$(kernel_release) dh $@  --with autotools-dev,python2 --sourcedirectory=driver
 
 override_dh_auto_test:
 
