@@ -1500,7 +1500,7 @@ kz_head_destroy_dispatcher(struct kz_head_d *head)
  ***********************************************************/
 
 #ifdef CONFIG_SYSCTL
-static ctl_table kzorp_table[] = {
+static struct ctl_table kzorp_table[] = {
 	{
 		.procname	= "log_ratelimit_msg_cost",
 		.data		= &sysctl_kzorp_log_ratelimit_msg_cost,
