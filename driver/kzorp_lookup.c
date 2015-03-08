@@ -1349,7 +1349,7 @@ kz_ndim_lookup(const struct kz_head_d * const dispatchers,
 		 traffic_props->dst_zone ? traffic_props->dst_zone->name : kz_log_null);
 
 	preempt_disable();
-	lenv = __get_cpu_var(kz_percpu);
+	lenv = *this_cpu_ptr(&kz_percpu);
 
 	kz_ndim_eval(traffic_props, dispatchers, lenv);
 	if (lenv->best_rule) {
