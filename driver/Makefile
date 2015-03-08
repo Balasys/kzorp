@@ -42,6 +42,10 @@ ifeq (,$(wildcard $(VERSION_H)))
 $(error Please run 'make modules_prepare' in $(KBUILD))
 endif
 
+ifeq (,$(wildcard $(KBUILD)/include/net/netfilter/nf_tproxy_core.h))
+	EXTRA_CFLAGS += -DWITH_KZ_TPROXY_CORE_H
+endif
+
 KVERS := $(shell sed -ne 's/"//g;s/^\#define UTS_RELEASE //p' $(VERSION_H))
 
 ifeq (,$(KVERS))
@@ -65,6 +69,7 @@ obj-m := kzorp.o xt_KZORP.o xt_rule.o xt_service.o xt_zone.o $(PATCHED_UPSTREAM_
 kzorp-y := kzorp_core.o kzorp_lookup.o kzorp_sockopt.o kzorp_netlink.o kzorp_ext.o
 
 all: config_check modules
+        KBUILD ?= $(shell readlink -f /lib/modules/$(KVERS_UNAME)/build)
 
 config_check:
 	@if [ -z "$(CONFIG_NETFILTER_XT_TARGET_TPROXY)" ]; then \
