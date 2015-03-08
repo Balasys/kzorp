@@ -117,19 +117,10 @@ get_notifier(struct netlink_notify * notifier) {
 #endif
 
 #if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 3, 0) )
-	#ifdef CONFIG_NF_CONNTRACK_PROCFS
-		#define CONFIG_KZORP_PROC_FS CONFIG_NF_CONNTRACK_PROCFS
-	#endif
-	#define counter2long(x) ((unsigned long long)x.counter)
 	#define ipv6_addr_copy(x,y) ((*x) = (*y))
 	#define IP_NAT_RANGE_MAP_IPS NF_NAT_RANGE_MAP_IPS
 	#define IP_NAT_RANGE_PROTO_SPECIFIED NF_NAT_RANGE_PROTO_SPECIFIED
 	#define IP_NAT_MANIP_SRC NF_NAT_MANIP_SRC
-#else
-	#define counter2long(x) ((unsigned long long)x)
-	#ifdef CONFIG_KZORP_PROC_FS
-		#define CONFIG_KZORP_PROC_FS CONFIG_KZORP_PROC_FS
-	#endif
 #endif
 
 #if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 11, 0) )

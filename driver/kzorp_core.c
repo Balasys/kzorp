@@ -1537,222 +1537,6 @@ static struct ctl_path kzorp_sysctl_path[] = {
 static struct ctl_table_header * kzorp_sysctl_header;
 #endif /* CONFIG_SYSCTL */
 
-#ifdef CONFIG_KZORP_PROC_FS
-static unsigned int
-seq_print_counters(struct seq_file *s,
-		   const struct nf_conn *ct,
-		   enum ip_conntrack_dir dir)
-{
-	struct nf_conn_counter *acct;
-
-	acct = nf_conn_acct_find(ct);
-	if (!acct)
-		return 0;
-
-#define counter2long(x) ((unsigned long long)x.counter)
-	return seq_printf(s, "packets=%llu bytes=%llu ",
-				counter2long(acct[dir].packets),
-				counter2long(acct[dir].bytes));
-}
-
-struct kz_iter_state {
-	struct seq_net_private p;
-	unsigned int bucket;
-};
-
-static struct hlist_nulls_node *kz_get_first(struct seq_file *seq)
-{
-	struct net *net = seq_file_net(seq);
-	struct kz_iter_state *st = seq->private;
-	struct hlist_nulls_node *n;
-
-	for (st->bucket = 0;
-	     st->bucket < net->ct.htable_size;
-	     st->bucket++) {
-		n = rcu_dereference(net->ct.hash[st->bucket].first);
-		if (!is_a_nulls(n))
-			return n;
-	}
-	return NULL;
-}
-
-static struct hlist_nulls_node *kz_get_next(struct seq_file *seq, struct hlist_nulls_node *head)
-{
-	struct net *net = seq_file_net(seq);
-	struct kz_iter_state *st = seq->private;
-
-	head = rcu_dereference(head->next);
-	while (is_a_nulls(head)) {
-		if (likely(get_nulls_value(head) == st->bucket)) {
-			if (++st->bucket >= net->ct.htable_size)
-				return NULL;
-		}
-		head = rcu_dereference(net->ct.hash[st->bucket].first);
-	}
-	return head;
-}
-
-static struct hlist_nulls_node *kz_get_idx(struct seq_file *seq, loff_t pos)
-{
-	struct hlist_nulls_node *head = kz_get_first(seq);
-
-	if (head)
-		while (pos && (head = kz_get_next(seq, head)))
-			pos--;
-	return pos ? NULL : head;
-}
-
-static void *kz_seq_start(struct seq_file *seq, loff_t *pos)
-	__acquires(RCU)
-{
-	rcu_read_lock();
-	return kz_get_idx(seq, *pos);
-}
-
-static void *kz_seq_next(struct seq_file *s, void *v, loff_t *pos)
-{
-	(*pos)++;
-	return kz_get_next(s, v);
-}
-
-static void kz_seq_stop(struct seq_file *s, void *v)
-	__releases(RCU)
-{
-	rcu_read_unlock();
-}
-
-/* return 0 on success, 1 in case of error */
-static int kz_seq_show(struct seq_file *s, void *v)
-{
-	const struct nf_conntrack_tuple_hash *hash = v;
-	struct nf_conn *conntrack = nf_ct_tuplehash_to_ctrack(hash);
-	const struct nf_conntrack_kzorp *kzorp = kz_extension_find(conntrack);
-	struct nf_conntrack_l3proto *l3proto;
-	struct nf_conntrack_l4proto *l4proto;
-	struct kz_dispatcher *dpt = NULL;
-	struct kz_zone *czone = NULL, *szone = NULL;
-	struct kz_service *svc = NULL;
-	struct kz_instance *ins = NULL;
-	int ret = 0;
-
-	NF_CT_ASSERT(conntrack);
-
-	if (unlikely(!atomic_inc_not_zero(&conntrack->ct_general.use)))
-		return 0;
-
-	/* we only want to print DIR_ORIGINAL */
-	if (NF_CT_DIRECTION(hash))
-		goto release;
-
-	/* we onyl want to print forwarded sessions */
-	if (!kzorp || !kzorp->czone || !kzorp->szone || !kzorp->dpt || !kzorp->svc)
-		goto release;
-
-	szone = kzorp->szone;
-	czone = kzorp->czone;
-	dpt   = kzorp->dpt;
-	svc   = kzorp->svc;
-
-	if (svc->type != KZ_SERVICE_FORWARD)
-		goto release;
-
-	ins = kz_instance_lookup_id(svc->instance_id);
-
-	if (!ins)
-		goto release;
-
-	l3proto = __nf_ct_l3proto_find(conntrack->tuplehash[IP_CT_DIR_ORIGINAL]
-				       .tuple.src.l3num);
-
-	NF_CT_ASSERT(l3proto);
-	l4proto = __nf_ct_l4proto_find(conntrack->tuplehash[IP_CT_DIR_ORIGINAL]
-				   .tuple.src.l3num,
-				   conntrack->tuplehash[IP_CT_DIR_ORIGINAL]
-				   .tuple.dst.protonum);
-	NF_CT_ASSERT(l4proto);
-
-	ret = -ENOSPC;
-	if (seq_printf(s, "instance=%-8s sid=%lu dpt=%-8s svc=%-8s czone=%-8s "
-		       "szone=%-8s ", ins->name, kzorp->sid,
-		       dpt->name, svc->name, czone->name, szone->name) != 0)
-		goto release;
-
-	if (seq_printf(s, "%-8s %u %-8s %u %ld ",
-		       l3proto->name,
-		       conntrack->tuplehash[IP_CT_DIR_ORIGINAL].tuple.src.l3num,
-		       l4proto->name,
-		       conntrack->tuplehash[IP_CT_DIR_ORIGINAL].tuple.dst.protonum,
-		       timer_pending(&conntrack->timeout)
-		       ? (long)(conntrack->timeout.expires - jiffies)/HZ : 0) != 0)
-		goto release;
-
-	if (l4proto->print_conntrack && l4proto->print_conntrack(s, conntrack))
-		goto release;
-
-	if (print_tuple(s, &conntrack->tuplehash[IP_CT_DIR_ORIGINAL].tuple,
-			l3proto, l4proto))
-		goto release;
-
-	if (seq_print_counters(s, conntrack, IP_CT_DIR_ORIGINAL))
-		goto release;
-
-	if (!(test_bit(IPS_SEEN_REPLY_BIT, &conntrack->status)))
-		if (seq_printf(s, "[UNREPLIED] "))
-			goto release;
-
-	if (print_tuple(s, &conntrack->tuplehash[IP_CT_DIR_REPLY].tuple,
-			l3proto, l4proto))
-		goto release;
-
-	if (seq_print_counters(s, conntrack, IP_CT_DIR_REPLY))
-		goto release;
-
-	if (test_bit(IPS_ASSURED_BIT, &conntrack->status))
-		if (seq_printf(s, "[ASSURED] "))
-			goto release;
-
-#if defined(CONFIG_NF_CONNTRACK_MARK)
-	if (seq_printf(s, "mark=%u ", conntrack->mark))
-		goto release;
-#endif
-
-#ifdef CONFIG_NF_CONNTRACK_SECMARK
-	if (seq_printf(s, "secmark=%u ", conntrack->secmark))
-		goto release;
-#endif
-
-	if (seq_printf(s, "use=%u\n", atomic_read(&conntrack->ct_general.use)))
-		goto release;
-
-	ret = 0;
-release:
-	nf_ct_put(conntrack);
-	return ret;
-}
-
-static struct seq_operations kz_seq_ops = {
-	.start = kz_seq_start,
-	.next  = kz_seq_next,
-	.stop  = kz_seq_stop,
-	.show  = kz_seq_show
-};
-
-static int kz_open(struct inode *inode, struct file *file)
-{
-	return seq_open_net(inode, file, &kz_seq_ops,
-			sizeof(struct kz_iter_state));
-}
-
-static const struct file_operations kz_file_ops = {
-	.owner   = THIS_MODULE,
-	.open    = kz_open,
-	.read    = seq_read,
-	.llseek  = seq_lseek,
-	.release = seq_release_net,
-};
-#endif /* CONFIG_PROC_FS */
-
-
 /***********************************************************
  * Rate limit
  ***********************************************************/
@@ -2004,9 +1788,6 @@ int __init kzorp_core_init(void)
 {
 	int res = -ENOMEM;
 	struct kz_instance *global;
-#ifdef CONFIG_KZORP_PROC_FS
-	struct proc_dir_entry *proc;
-#endif
 
 	sysctl_kzorp_log_ratelimit_msg_cost = msecs_to_jiffies(LOG_RATELIMIT_MSG_COST);
 
@@ -2054,17 +1835,9 @@ int __init kzorp_core_init(void)
 	}
 #endif
 
-#ifdef CONFIG_KZORP_PROC_FS
-	proc = proc_create("nf_kzorp", 0440, init_net.proc_net, &kz_file_ops);
-	if (!proc) {
-		res = -EINVAL;
-		goto cleanup_sysctl;
-	}
-#endif
-
 	res = kz_sockopt_init();
 	if (res < 0)
-		goto cleanup_proc;
+		goto cleanup_sysctl;
 
 	res = kz_netlink_init();
 	if (res < 0)
@@ -2075,15 +1848,7 @@ int __init kzorp_core_init(void)
 cleanup_sockopt:
 	kz_sockopt_cleanup();
 
-cleanup_proc:
-#ifdef CONFIG_KZORP_PROC_FS
-	remove_proc_entry("nf_kzorp", init_net.proc_net);
-#endif
-
-#ifdef CONFIG_KZORP_PROC_FS
 cleanup_sysctl:
-#endif
-
 #if CONFIG_SYSCTL
 	unregister_sysctl_table(kzorp_sysctl_header);
 #endif
