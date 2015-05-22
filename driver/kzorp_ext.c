@@ -36,6 +36,8 @@ PRIVATE struct hlist_nulls_head *kz_hash;
 __cacheline_aligned_in_smp spinlock_t kz_hash_locks[KZ_HASH_LOCK_NUM];
 PRIVATE struct kmem_cache *kz_cachep;
 
+static void (*nf_ct_destroy_orig)(struct nf_conntrack *) __rcu __read_mostly;
+
 unsigned const int kz_hash_rnd = GOLDEN_RATIO_PRIME_32;
 
 /*
@@ -245,41 +247,43 @@ struct nf_conntrack_kzorp *kz_extension_create(struct nf_conn *ct)
 	return kzorp;
 }
 
-static int
-kz_extension_conntrack_event(unsigned int events, struct nf_ct_event *item)
+static void
+kz_extension_conntrack_destroy(struct nf_conntrack *nfct)
 {
-	struct nf_conn *ct = item->ct;
+	struct nf_conn *ct = (struct nf_conn *) nfct;
+	void (*destroy_orig)(struct nf_conntrack *);
 
-	if (ct == NULL || nf_ct_is_untracked(ct))
-		return 0;
+	kz_extension_destroy(ct);
 
-	if (events & (1 << IPCT_DESTROY)) {
-		kz_extension_destroy(ct);
-	}
-
-	return 0;
+	rcu_read_lock();
+	destroy_orig = rcu_dereference(nf_ct_destroy_orig);
+	BUG_ON(destroy_orig == NULL);
+	destroy_orig(nfct);
+	rcu_read_unlock();
 }
-
-static struct nf_ct_event_notifier kz_extension_notifier = {
-	.fcn = kz_extension_conntrack_event,
-};
 
 static int __net_init kz_extension_net_init(struct net *net)
 {
-	int ret;
+	rcu_read_lock();
+	nf_ct_destroy_orig = rcu_dereference(nf_ct_destroy);
+	BUG_ON(nf_ct_destroy_orig == NULL);
+	rcu_read_unlock();
 
-	ret = nf_conntrack_register_notifier(net, &kz_extension_notifier);
-	if (ret < 0) {
-		kz_err("kz_extension_net_init: cannot register notifier.\n");
-		return -1;
-	}
+	rcu_assign_pointer(nf_ct_destroy, kz_extension_conntrack_destroy);
 
 	return 0;
 }
 
 void kz_extension_net_exit(struct net *net)
 {
-	nf_conntrack_unregister_notifier(net, &kz_extension_notifier);
+	void (*destroy_orig)(struct nf_conntrack *);
+
+	rcu_read_lock();
+	destroy_orig = rcu_dereference(nf_ct_destroy_orig);
+	BUG_ON(destroy_orig == NULL);
+	rcu_read_unlock();
+
+	rcu_assign_pointer(nf_ct_destroy, destroy_orig);
 }
 
 static void __net_exit kz_extension_net_exit_batch(struct list_head *net_exit_list)
