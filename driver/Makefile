@@ -56,8 +56,8 @@ include $(KCONFIG)
 
 EXTRA_CFLAGS += -I$(src)/include
 
-PATCHED_UPSTREAM_MODULES = xt_socket_kzorp nf_conntrack_netlink_kzorp
-PATCHED_UPSTREAM_OBJECTS = xt_socket_kzorp.o nf_conntrack_netlink_kzorp.o
+PATCHED_UPSTREAM_MODULES = xt_socket_kzorp
+PATCHED_UPSTREAM_OBJECTS = xt_socket_kzorp.o
 
 MODULE_NAMES = kzorp xt_KZORP xt_rule xt_service xt_zone $(PATCHED_UPSTREAM_MODULES)
 
