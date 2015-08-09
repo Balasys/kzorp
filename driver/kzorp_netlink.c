@@ -1875,7 +1875,8 @@ kznl_build_zone_add_subnet(struct sk_buff *skb, u_int32_t pid, u_int32_t seq,
 	if (kznl_dump_inet_subnet(skb, KZNL_ATTR_ZONE_SUBNET, subnet->family, &subnet->addr, &subnet->mask) < 0)
 		goto nla_put_failure;
 
-	return genlmsg_end(skb, hdr);
+	genlmsg_end(skb, hdr);
+	return 0;
 
 nla_put_failure:
 	genlmsg_cancel(skb, hdr);
@@ -1906,7 +1907,8 @@ kznl_build_zone_add(struct sk_buff *skb, netlink_port_t pid, u_int32_t seq, int 
 	if (kznl_dump_count(skb, KZNL_ATTR_ACCOUNTING_COUNTER_NUM, atomic64_read(&zone->count)))
 		goto nla_put_failure;
 
-	return genlmsg_end(skb, hdr);
+	genlmsg_end(skb, hdr);
+	return 0;
 
 nla_put_failure:
 	genlmsg_cancel(skb, hdr);
@@ -2374,7 +2376,8 @@ kznl_build_service_add_nat(struct sk_buff *skb, netlink_port_t pid, u_int32_t se
 	if (nla_put(skb, KZNL_ATTR_SERVICE_NAT_MAP, sizeof(nat), &nat))
 		goto nla_put_failure;
 
-	return genlmsg_end(skb, hdr);
+	genlmsg_end(skb, hdr);
+	return 0;
 
 nlmsg_failure:
 nla_put_failure:
@@ -2436,7 +2439,8 @@ kznl_build_service_add(struct sk_buff *skb, netlink_port_t pid, u_int32_t seq, i
 	if (kznl_dump_count(skb, KZNL_ATTR_ACCOUNTING_COUNTER_NUM, atomic64_read(&svc->count)))
 		goto nla_put_failure;
 
-	return genlmsg_end(skb, hdr);
+	genlmsg_end(skb, hdr);
+	return 0;
 
 nla_put_failure:
 	genlmsg_cancel(skb, hdr);
@@ -3324,7 +3328,8 @@ kznl_dump_bind(struct sk_buff *skb, netlink_port_t pid, u_int32_t seq, int flags
 	if (kznl_dump_inet_addr(skb, KZNL_ATTR_BIND_ADDR, bind->family, &bind->addr) < 0)
 		goto nla_put_failure;
 
-	return genlmsg_end(skb, hdr);
+	genlmsg_end(skb, hdr);
+	return 0;
 
 nla_put_failure:
 	genlmsg_cancel(skb, hdr);
@@ -3502,7 +3507,8 @@ kznl_build_dispatcher_add_rule_entry(struct sk_buff *skb, u_int32_t pid, u_int32
 
 #undef CALL_kznl_build_dispatcher_rule_entry
 
-	return genlmsg_end(skb, hdr);
+	genlmsg_end(skb, hdr);
+	return 0;
 
 nla_put_failure:
 	genlmsg_cancel(skb, hdr);
@@ -3542,7 +3548,8 @@ kznl_build_dispatcher_add_rule(struct sk_buff *skb, u_int32_t pid, u_int32_t seq
 
 #undef KZNL_BUILD_DISPATCHER_RULE_DIMENSION
 
-	return genlmsg_end(skb, hdr);
+	genlmsg_end(skb, hdr);
+	return 0;
 
 nla_put_failure:
 	genlmsg_cancel(skb, hdr);
@@ -3565,7 +3572,8 @@ kznl_build_dispatcher_add(struct sk_buff *skb, u_int32_t pid, u_int32_t seq, int
 	if (nla_put(skb, KZNL_ATTR_DISPATCHER_N_DIMENSION_PARAMS, sizeof(n_dimension), &n_dimension))
 		goto nla_put_failure;
 
-	return genlmsg_end(skb, hdr);
+	genlmsg_end(skb, hdr);
+	return 0;
 
 nla_put_failure:
 	genlmsg_cancel(skb, hdr);
@@ -3827,7 +3835,8 @@ kznl_build_query_resp(struct sk_buff *skb, u_int32_t pid, u_int32_t seq, int fla
 	if (service && kznl_dump_name(skb, KZNL_ATTR_SERVICE_NAME, service->name) < 0)
 		goto nfattr_failure;
 
-	return genlmsg_end(skb, hdr);
+	genlmsg_end(skb, hdr);
+	return 0;
 
 nfattr_failure:
 	genlmsg_cancel(skb, hdr);
@@ -3990,7 +3999,8 @@ kznl_build_get_version_resp(struct sk_buff *skb, u_int32_t pid, u_int32_t seq, i
 	if (nla_put_u8(skb, KZNL_ATTR_COMPAT_VERSION, KZ_COMPAT_VERSION))
 		goto nla_put_failure;
 
-	return genlmsg_end(skb, hdr);
+	genlmsg_end(skb, hdr);
+	return 0;
 
 nla_put_failure:
 	genlmsg_cancel(skb, hdr);
