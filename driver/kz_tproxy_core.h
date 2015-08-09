@@ -26,6 +26,8 @@
 
 #include <linux/netfilter/xt_TPROXY.h>
 
+#include "kzorp_compat.h"
+
 enum nf_tproxy_lookup_t {
          NFT_LOOKUP_LISTENER,
          NFT_LOOKUP_ESTABLISHED,
