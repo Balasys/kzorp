@@ -394,11 +394,7 @@ socket_mt6_v1_v2_v3(const struct sk_buff *skb, struct xt_action_param *par)
 		 */
 		wildcard = (!(info->flags & XT_SOCKET_NOWILDCARD) &&
 			    sk->sk_state != TCP_TIME_WAIT &&
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0) )
-			    ipv6_addr_any(&inet6_sk(sk)->rcv_saddr)
-#else
 			    ipv6_addr_any(&sk->sk_v6_rcv_saddr)
-#endif
 			   );
 
 		/* Ignore non-transparent sockets,
