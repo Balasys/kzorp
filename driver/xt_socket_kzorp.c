@@ -37,7 +37,7 @@
 
 #include "kzorp_compat.h"
 
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0) )
+#ifndef sk_dport
 static void
 sock_gen_put(struct sock *sk)
 {
