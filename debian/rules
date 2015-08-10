@@ -2,7 +2,7 @@
 
 version := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)/\1/p')
 kernel_version := $(shell apt-cache policy linux-headers-generic | grep "\*\*\*" | sed 's% *\*\*\* *\(.*\)\.\(.*\)\..*%\1-\2%')
-kernel_release := $(kernel_version)-generic
+kernel_release := $(shell ls -1d /lib/modules/*/build | head -1 | sed 's%/lib/modules/\(.*\)/build%\1%')
 
 # Uncomment this to turn on verbose mode.
 export DH_VERBOSE=1
