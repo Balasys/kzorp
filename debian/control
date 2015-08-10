@@ -33,7 +33,6 @@ Section: kernel
 Depends: ${misc:Depends},
          ${python:Depends},
          python-all (>= 2.7),
-         python-support (>= 0.90),
          python-kzorp (= ${source:Version}),
          zorp-kernel-module
 Conflicts: kzorp (< 6.0)
@@ -76,7 +75,6 @@ Section: python
 Depends: ${misc:Depends},
          ${python:Depends},
          python-all (>= 2.7),
-         python-support (>= 0.90),
          python-daemon,
          zorp-kernel-module,
          python-kzorp (= ${source:Version}),
