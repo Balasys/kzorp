@@ -4,6 +4,7 @@ Priority: extra
 Maintainer: BalaBit Development Team <devel@balabit.hu>
 Build-Depends: debhelper (>= 8.0.0),
                dh-autoreconf,
+               autotools-dev,
                dkms (>= 1.95),
                python-all (>= 2.7),
                apt,
