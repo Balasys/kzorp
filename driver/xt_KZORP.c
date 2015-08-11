@@ -120,7 +120,7 @@ v4_get_socket_to_redirect_to(const struct kz_dispatcher *dpt,
 			if (sk) {
 				if (sk->sk_state == TCP_TIME_WAIT &&
 				    tcp_header->syn && !tcp_header->rst && !tcp_header->ack && !tcp_header->fin)
-					inet_twsk_deschedule(inet_twsk(sk), &tcp_death_row);
+					kz_inet_twsk_deschedule(inet_twsk(sk));
 
 				if (sk->sk_state == TCP_TIME_WAIT)
 					inet_twsk_put(inet_twsk(sk));
@@ -238,7 +238,7 @@ relookup_time_wait6(struct sk_buff *skb, int l4proto, int thoff,
 					    proxy_port,
 					    skb->dev, NFT_LOOKUP_LISTENER);
 		if (sk2) {
-			inet_twsk_deschedule(inet_twsk(sk), &tcp_death_row);
+			kz_inet_twsk_deschedule(inet_twsk(sk));
 			inet_twsk_put(inet_twsk(sk));
 			sk = sk2;
 		}

@@ -10,13 +10,6 @@
 #endif /* _UAPI_LINUX_KERNEL_H */
 #endif /* KZ_USERSPACE */
 
-#ifdef WITH_KZ_TPROXY_CORE_H
-	#include "kz_tproxy_core.h"
-#else
-	#include <net/udp.h>
-	#include <net/netfilter/nf_tproxy_core.h>
-#endif
-
 #include <net/genetlink.h>
 #include <linux/netlink.h>
 #include <net/netfilter/nf_conntrack_zones.h>
@@ -196,6 +189,19 @@ get_notifier(struct netlink_notify * notifier) {
 #else
 #define NF_CT_DEFAULT_ZONE NF_CT_DEFAULT_ZONE_ID
 #define nf_ct_zone_id(ct) nf_ct_zone((ct))->id
+#endif
+
+#ifdef inet_twsk_for_each
+#define kz_inet_twsk_deschedule(tw) inet_twsk_deschedule((tw), &tcp_death_row)
+#else
+#define kz_inet_twsk_deschedule inet_twsk_deschedule
+#endif
+
+#ifdef WITH_KZ_TPROXY_CORE_H
+	#include "kz_tproxy_core.h"
+#else
+	#include <net/udp.h>
+	#include <net/netfilter/nf_tproxy_core.h>
 #endif
 
 #endif /* _KZORP_COMPAT_H */
