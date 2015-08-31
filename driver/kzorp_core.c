@@ -67,7 +67,7 @@ instance_init(void)
 	INIT_LIST_HEAD(&kz_instances);
 }
 
-static void __exit 
+static void __exit
 instance_cleanup(void)
 {
 	struct kz_instance *i, *s;
@@ -249,9 +249,9 @@ kz_name_dup(const char * const name)
    only generation may change after module init!  */
 static struct kz_config static_config =
 {
-	.zones = {.head = LIST_HEAD_INIT(static_config.zones.head)}, 
-	.services = {.head = LIST_HEAD_INIT(static_config.services.head)}, 
-	.dispatchers = {.head = LIST_HEAD_INIT(static_config.dispatchers.head)}, 
+	.zones = {.head = LIST_HEAD_INIT(static_config.zones.head)},
+	.services = {.head = LIST_HEAD_INIT(static_config.services.head)},
+	.dispatchers = {.head = LIST_HEAD_INIT(static_config.dispatchers.head)},
 	.generation = 1,
 	.cookie = 0UL
 };
@@ -369,7 +369,7 @@ void nfct_kzorp_lookup_rcu(struct nf_conntrack_kzorp * kzorp,
 
 	BUG_ON(*p_cfg == NULL);
 	kzorp->generation = (*p_cfg)->generation;
-	
+
 	switch (l3proto) {
 	case NFPROTO_IPV4:
 	{
@@ -493,7 +493,7 @@ done:
 			kz_##type##_put(kzorp->name); \
 		kzorp->name = name ? kz_##type##_get(name) : NULL; \
 	}
-	
+
 	REPLACE_PTR(czone, zone);
 	REPLACE_PTR(szone, zone);
 	REPLACE_PTR(dpt, dispatcher);
@@ -1280,7 +1280,7 @@ static int
 kz_rule_arr_relink_zones(u_int32_t * size, struct kz_zone **arr, u_int32_t rule_id, const struct list_head * zonelist)
 {
 	u_int32_t i, put;
-	
+
 	if (*size == 0)
 		return 0;
 
@@ -1853,6 +1853,7 @@ kz_log_session_verdict(enum kz_verdict verdict,
 {
 	u_int16_t l3proto;
 	u_int16_t l4proto;
+	bool has_server_side_connection;
 	char _buf[L4PROTOCOL_STRING_SIZE];
 	char server_str[IP_MAX_LENGTH + 1];
 	char server_local_str[IP_MAX_LENGTH + 1];
@@ -1884,7 +1885,8 @@ kz_log_session_verdict(enum kz_verdict verdict,
 	}
 
 	l3proto = nf_ct_l3num(ct);
-	if (verdict == KZ_VERDICT_ACCEPTED) {
+	has_server_side_connection = verdict != KZ_VERDICT_DENIED_BY_POLICY;
+	if (has_server_side_connection) {
 		const char *format = l3proto == NFPROTO_IPV4 ? "%pI4" : "%pI6c";
 		snprintf(server_str, sizeof(server_str), format, &ct_reply_tuple->src.u3.all);
 		snprintf(server_local_str, sizeof(server_local_str), format, &ct_reply_tuple->dst.u3.all);
@@ -2009,7 +2011,7 @@ int __init kzorp_core_init(void)
 
 	atomic_set(&service_id_cnt, 1);
 	instance_init();
-	
+
 	res = static_cfg_init();
 	if (res < 0)
 		goto cleanup;
