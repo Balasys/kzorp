@@ -2070,16 +2070,14 @@ nat_in_range(const NAT_RANGE_TYPE *r,
 	kz_debug("with packet; proto='%d', ip='%pI4', port='%u'\n",
 		 proto, &addr, ntohs(port));
 
-	if ((proto != IPPROTO_TCP) && (proto != IPPROTO_UDP))
-		return 0;
-
 	if (r->flags & IP_NAT_RANGE_MAP_IPS) {
 		if ((*kz_nat_range_get_min_ip(r) && ntohl(addr) < ntohl(*kz_nat_range_get_min_ip(r))) ||
 		    (*kz_nat_range_get_max_ip(r) && ntohl(addr) > ntohl(*kz_nat_range_get_max_ip(r))))
 			return 0;
 	}
 
-	if (r->flags & IP_NAT_RANGE_PROTO_SPECIFIED) {
+	if ((r->flags & IP_NAT_RANGE_PROTO_SPECIFIED) &&
+	    ((proto == IPPROTO_TCP) || (proto == IPPROTO_UDP))) {
 		if ((*kz_nat_range_get_min_port(r) && ntohs(port) < ntohs(*kz_nat_range_get_min_port(r))) ||
 		    (*kz_nat_range_get_max_port(r) && ntohs(port) > ntohs(*kz_nat_range_get_max_port(r))))
 			return 0;
