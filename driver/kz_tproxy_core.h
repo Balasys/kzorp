@@ -236,8 +236,8 @@ nf_tproxy_get_sock_v6(struct net *net, const u8 protocol,
  * no such listener is found, or NULL if the TCP header is incomplete.
  */
 static struct sock *
-tproxy_handle_time_wait4(struct sk_buff *skb, __be32 laddr, __be16 lport,
-			struct sock *sk)
+tproxy_handle_time_wait4(struct net *net, struct sk_buff *skb,
+			 __be32 laddr, __be16 lport, struct sock *sk)
 {
 	const struct iphdr *iph = ip_hdr(skb);
 	struct tcphdr _hdr, *hp;
@@ -253,7 +253,7 @@ tproxy_handle_time_wait4(struct sk_buff *skb, __be32 laddr, __be16 lport,
 		 * to a listener socket if there's one */
 		struct sock *sk2;
 
-		sk2 = nf_tproxy_get_sock_v4(dev_net(skb->dev), iph->protocol,
+		sk2 = nf_tproxy_get_sock_v4(net, iph->protocol,
 					    iph->saddr, laddr ? laddr : iph->daddr,
 					    hp->source, lport ? lport : hp->dest,
 					    skb->dev, NFT_LOOKUP_LISTENER);
@@ -276,7 +276,7 @@ nf_tproxy_assign_sock(struct sk_buff *skb, struct sock *sk)
 }
 
 static unsigned int
-tproxy_tg4(struct sk_buff *skb, __be32 laddr, __be16 lport,
+tproxy_tg4(struct net *net, struct sk_buff *skb, __be32 laddr, __be16 lport,
 	   u_int32_t mark_mask, u_int32_t mark_value)
 {
 	const struct iphdr *iph = ip_hdr(skb);
@@ -291,7 +291,7 @@ tproxy_tg4(struct sk_buff *skb, __be32 laddr, __be16 lport,
 	 * addresses, this happens if the redirect already happened
 	 * and the current packet belongs to an already established
 	 * connection */
-	sk = nf_tproxy_get_sock_v4(dev_net(skb->dev), iph->protocol,
+	sk = nf_tproxy_get_sock_v4(net, iph->protocol,
 				   iph->saddr, iph->daddr,
 				   hp->source, hp->dest,
 				   skb->dev, NFT_LOOKUP_ESTABLISHED);
@@ -303,11 +303,11 @@ tproxy_tg4(struct sk_buff *skb, __be32 laddr, __be16 lport,
 	/* UDP has no TCP_TIME_WAIT state, so we never enter here */
 	if (sk && sk->sk_state == TCP_TIME_WAIT)
 		/* reopening a TIME_WAIT connection needs special handling */
-		sk = tproxy_handle_time_wait4(skb, laddr, lport, sk);
+		sk = tproxy_handle_time_wait4(net, skb, laddr, lport, sk);
 	else if (!sk)
 		/* no, there's no established connection, check if
 		 * there's a listener on the redirected addr/port */
-		sk = nf_tproxy_get_sock_v4(dev_net(skb->dev), iph->protocol,
+		sk = nf_tproxy_get_sock_v4(net, iph->protocol,
 					   iph->saddr, laddr,
 					   hp->source, lport,
 					   skb->dev, NFT_LOOKUP_LISTENER);
@@ -337,7 +337,7 @@ tproxy_tg4_v0(struct sk_buff *skb, const struct xt_action_param *par)
 {
 	const struct xt_tproxy_target_info *tgi = par->targinfo;
 
-	return tproxy_tg4(skb, tgi->laddr, tgi->lport, tgi->mark_mask, tgi->mark_value);
+	return tproxy_tg4(par->net, skb, tgi->laddr, tgi->lport, tgi->mark_mask, tgi->mark_value);
 }
 
 static inline unsigned int
@@ -345,7 +345,7 @@ tproxy_tg4_v1(struct sk_buff *skb, const struct xt_action_param *par)
 {
 	const struct xt_tproxy_target_info_v1 *tgi = par->targinfo;
 
-	return tproxy_tg4(skb, tgi->laddr.ip, tgi->lport, tgi->mark_mask, tgi->mark_value);
+	return tproxy_tg4(par->net, skb, tgi->laddr.ip, tgi->lport, tgi->mark_mask, tgi->mark_value);
 }
 
 static inline int
