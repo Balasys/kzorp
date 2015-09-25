@@ -2064,19 +2064,14 @@ kznl_recv_get_zone(struct sk_buff *skb, struct genl_info *info)
 		/* data did not fit in a single entry -- for now no support of continuation
 		   we could loop and multicast; we chose not to send the partial info */
 		kz_err("failed to create zone messages\n");
+		nlmsg_free(nskb);
 		res = -ENOMEM;
-		goto error_free_skb;
+	} else {
+		res = genlmsg_reply(nskb, info);
 	}
 
-	rcu_read_unlock();
-
-	return genlmsg_reply(nskb, info);
-
-error_free_skb:
-	nlmsg_free(nskb);
-
 error_unlock_zone:
-	rcu_read_unlock();;
+	rcu_read_unlock();
 
 	if (zone_name != NULL)
 		kfree(zone_name);
@@ -2600,16 +2595,11 @@ kznl_recv_get_service(struct sk_buff *skb, struct genl_info *info)
 	if (kznl_build_service(nskb, get_genetlink_sender(info),
 			       info->snd_seq, 0, svc) < 0) {
 		kz_err("failed to create service messages\n");
+		nlmsg_free(nskb);
 		res = -ENOMEM;
-		goto error_free_skb;
+	} else {
+		res = genlmsg_reply(nskb, info);
 	}
-
-	rcu_read_unlock();
-
-	return genlmsg_reply(nskb, info);
-
-error_free_skb:
-	nlmsg_free(nskb);
 
 error_unlock_svc:
 	rcu_read_unlock();
@@ -3757,7 +3747,6 @@ kznl_recv_get_dispatcher(struct sk_buff *skb, struct genl_info *info)
 {
 	int res = 0;
 	int ret = 0;
-	int netlink_return = 0;
 	char *dpt_name = NULL;
 	struct kz_dispatcher *dpt;
 	struct sk_buff *nskb = NULL;
@@ -3805,13 +3794,9 @@ kznl_recv_get_dispatcher(struct sk_buff *skb, struct genl_info *info)
 		ret = kznl_build_dispatcher(nskb, get_genetlink_sender(info),
 					    info->snd_seq, 0,
 					    dpt, &dpt_item_idx, &rule_entry_idx);
-		netlink_return = genlmsg_reply(nskb, info);
+		res = genlmsg_reply(nskb, info);
 
-	} while ((ret < 0) && (netlink_return >= 0));
-
-	rcu_read_unlock();
-
-	return netlink_return;
+	} while ((ret < 0) && (ret >= 0));
 
 error_unlock_dpt:
 	rcu_read_unlock();
