@@ -185,18 +185,21 @@ static void kz_extension_destroy(struct nf_conn *ct)
 	if ((kzorp->svc != NULL) && (kzorp->sid != 0) &&
 	    (kzorp->svc->type == KZ_SERVICE_FORWARD)) {
 		if (kz_log_ratelimit()) {
-			struct nf_conn_counter *acct;
+			struct nf_conn_acct *acct;
 
 			acct = nf_conn_acct_find(ct);
-			if (acct)
+			if (acct) {
+				struct nf_conn_counter *counter = acct->counter;
+
 				printk(KERN_INFO "kzorp (svc/%s:%lu): Ending forwarded session; "
-				       "orig_bytes='%llu', orig_packets='%llu', "
+				       "orig_bytes='%lld', orig_packets='%llu', "
 				       "reply_bytes='%llu', reply_packets='%llu'\n",
 				       kzorp->svc->name, kzorp->sid,
-				       acct[IP_CT_DIR_ORIGINAL].bytes,
-				       acct[IP_CT_DIR_ORIGINAL].packets,
-				       acct[IP_CT_DIR_REPLY].bytes,
-				       acct[IP_CT_DIR_REPLY].packets);
+				       (unsigned long long)atomic64_read(&counter[IP_CT_DIR_ORIGINAL].bytes),
+				       (unsigned long long)atomic64_read(&counter[IP_CT_DIR_ORIGINAL].packets),
+				       (unsigned long long)atomic64_read(&counter[IP_CT_DIR_REPLY].bytes),
+				       (unsigned long long)atomic64_read(&counter[IP_CT_DIR_REPLY].packets));
+			}
 			kz_log_session_verdict(KZ_VERDICT_ACCEPTED, "Ending forwarded session", ct, kzorp);
 		}
 	}
