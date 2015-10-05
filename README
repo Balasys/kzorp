@@ -1,3 +1,7 @@
+[![Travis Build Status](https://secure.travis-ci.org/Balasys/kzorp.svg?branch=6.0.12)](http://travis-ci.org/Balasys/kzorp)
+[![Coverity Scan Build Status](https://scan.coverity.com/projects/Balasys-kzorp/badge.svg)](https://scan.coverity.com/projects/Balasys-kzorp)
+[![HitCount](https://hitt.herokuapp.com/nelsonic/hits.svg)](https://github.com/Balasys/kzorp/hits)
+
 Kzorp is a open source set of mechanisms to implement mixed packet filter/application level gateway functionality on Linux.
 Kzorp is used by Zorp, and anyone is welcome to use it with other gateways.
 
