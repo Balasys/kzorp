@@ -82,9 +82,9 @@ kz_hash_get_hash_index_from_tuple_and_zone(const struct nf_conntrack_tuple *tupl
 }
 
 static inline u32
-kz_hash_get_hash_index_from_ct(const struct nf_conn *ct, enum ip_conntrack_dir dir)
+kz_hash_get_hash_index_from_ct(const struct nf_conn *ct)
 {
-	const u32 index = kz_hash_get_hash_index_from_tuple_and_zone(&(ct->tuplehash[dir].tuple), kz_nf_ct_zone_id(ct));
+	const u32 index = kz_hash_get_hash_index_from_tuple_and_zone(&(ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple), kz_nf_ct_zone_id(ct));
 	return index;
 }
 
@@ -114,7 +114,7 @@ __kz_extension_find(struct nf_conn *ct)
 	struct nf_conntrack_tuple_hash *th = &(ct->tuplehash[0]);
 	unsigned int zone = kz_nf_ct_zone_id(ct);
 
-	const u32 hash_index = kz_hash_get_hash_index_from_ct(ct, IP_CT_DIR_ORIGINAL);
+	const u32 hash_index = kz_hash_get_hash_index_from_ct(ct);
 
 	local_bh_disable();
 begin:
@@ -224,9 +224,9 @@ static void kz_extension_destroy(struct nf_conn *ct)
 	kz_extension_dealloc(kzorp);
 }
 
-PRIVATE void kz_extension_fill_one(struct nf_conntrack_kzorp *kzorp, struct nf_conn *ct,int direction)
+PRIVATE void kz_extension_fill_one(struct nf_conntrack_kzorp *kzorp, struct nf_conn *ct)
 {
-	const u32 hash_index = kz_hash_get_hash_index_from_ct(ct, direction);
+	const u32 hash_index = kz_hash_get_hash_index_from_ct(ct);
         const u32 lock_index = kz_hash_get_lock_index(hash_index);
 
 	spin_lock(&kz_hash_locks[lock_index]);
@@ -271,7 +271,7 @@ struct nf_conntrack_kzorp *kz_extension_create(struct nf_conn *ct)
 
 	nf_conntrack_kzorp_init(kzorp);
 	kz_extension_copy_tuplehash(kzorp,ct);
-	kz_extension_fill_one(kzorp,ct,IP_CT_DIR_ORIGINAL);
+	kz_extension_fill_one(kzorp,ct);
 	kzorp->ct_zone = kz_nf_ct_zone_id(ct);
 	return kzorp;
 }
