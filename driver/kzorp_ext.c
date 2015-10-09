@@ -81,7 +81,7 @@ struct nf_conntrack_kzorp * kz_get_kzorp_from_node(struct nf_conntrack_tuple_has
 	struct nf_conntrack_kzorp *kz;
 	kz = container_of((struct hlist_nulls_node *)p,
 			  struct nf_conntrack_kzorp,
-			  tuplehash[p->tuple.dst.dir].hnnode);
+			  tuplehash_orig.hnnode);
 	return kz;
 }
 
@@ -147,16 +147,12 @@ begin:
 
 static void kz_extension_dealloc(struct nf_conntrack_kzorp *kz)
 {
-	enum ip_conntrack_dir dir;
+	const u32 hash_index = kz_hash_get_hash_index_from_tuple_and_zone(&kz->tuplehash_orig.tuple, kz->ct_zone);
+	const u32 lock_index = kz_hash_get_lock_index(hash_index);
 
-	for (dir = 0; dir < IP_CT_DIR_MAX; dir++) {
-	        const u32 hash_index = kz_hash_get_hash_index_from_tuple_and_zone(&kz->tuplehash[dir].tuple, kz->ct_zone);
-	        const u32 lock_index = kz_hash_get_lock_index(hash_index);
-
-		spin_lock(&kz_hash_locks[lock_index]);
-		hlist_nulls_del_rcu(&(kz->tuplehash[dir].hnnode));
-		spin_unlock(&kz_hash_locks[lock_index]);
-	}
+	spin_lock(&kz_hash_locks[lock_index]);
+	hlist_nulls_del_rcu(&(kz->tuplehash_orig.hnnode));
+	spin_unlock(&kz_hash_locks[lock_index]);
 
 	if (kz->czone != NULL)
 		kz_zone_put(kz->czone);
@@ -200,27 +196,17 @@ static void kz_extension_destroy(struct nf_conn *ct)
 
 PRIVATE void kz_extension_fill_one(struct nf_conntrack_kzorp *kzorp, struct nf_conn *ct,int direction)
 {
-	struct nf_conntrack_tuple_hash *th = &(kzorp->tuplehash[direction]);
 	const u32 hash_index = kz_hash_get_hash_index_from_ct(ct, direction);
         const u32 lock_index = kz_hash_get_lock_index(hash_index);
 
 	spin_lock(&kz_hash_locks[lock_index]);
-	hlist_nulls_add_head_rcu(&(th->hnnode), &kz_hash[hash_index]);
+	hlist_nulls_add_head_rcu(&(kzorp->tuplehash_orig.hnnode), &kz_hash[hash_index]);
 	spin_unlock(&kz_hash_locks[lock_index]);
-}
-
-PRIVATE void kz_extension_fill(struct nf_conntrack_kzorp *kzorp, struct nf_conn *ct)
-{
-	int i;
-	for (i = 0; i < IP_CT_DIR_MAX; i++) {
-		kz_extension_fill_one(kzorp,ct,i);
-	}
 }
 
 PRIVATE void kz_extension_copy_tuplehash(struct nf_conntrack_kzorp *kzorp, struct nf_conn *ct)
 {
-	memcpy(&(kzorp->tuplehash), &(ct->tuplehash),
-	       IP_CT_DIR_MAX * sizeof(struct nf_conntrack_tuple_hash));
+	memcpy(&(kzorp->tuplehash_orig), &(ct->tuplehash[IP_CT_DIR_ORIGINAL]), sizeof(struct nf_conntrack_tuple_hash));
 }
 
 static inline void
@@ -254,7 +240,7 @@ struct nf_conntrack_kzorp *kz_extension_create(struct nf_conn *ct)
 
 	nf_conntrack_kzorp_init(kzorp);
 	kz_extension_copy_tuplehash(kzorp,ct);
-	kz_extension_fill(kzorp,ct);
+	kz_extension_fill_one(kzorp,ct,IP_CT_DIR_ORIGINAL);
 	kzorp->ct_zone = nf_ct_zone(ct);
 	return kzorp;
 }
