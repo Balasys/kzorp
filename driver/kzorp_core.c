@@ -21,6 +21,7 @@
 #include <linux/skbuff.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
+#include <linux/vmalloc.h>
 #include <linux/workqueue.h>
 #ifdef CONFIG_SYSCTL
 #include <linux/sysctl.h>
