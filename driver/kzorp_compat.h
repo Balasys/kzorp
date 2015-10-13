@@ -19,6 +19,7 @@
 
 #include <net/genetlink.h>
 #include <linux/netlink.h>
+#include <net/netfilter/nf_conntrack_zones.h>
 
 /* 
  * Copyright (C) 2006-2012, BalaBit IT Ltd.
@@ -188,6 +189,13 @@ get_notifier(struct netlink_notify * notifier) {
 
 #ifndef sk_v6_rcv_saddr
 #define sk_v6_rcv_saddr         __sk_common.skc_v6_rcv_saddr
+#endif
+
+#ifdef NF_CT_DEFAULT_ZONE
+#define nf_ct_zone_id(ct) nf_ct_zone((ct))
+#else
+#define NF_CT_DEFAULT_ZONE NF_CT_DEFAULT_ZONE_ID
+#define nf_ct_zone_id(ct) nf_ct_zone((ct))->id
 #endif
 
 #endif /* _KZORP_COMPAT_H */
