@@ -28,7 +28,6 @@ zone_mt_v1_eval(const struct sk_buff *skb, const struct xt_zone_info_v1 *info, c
 
 	rcu_read_lock();
 	kz_extension_get_from_ct_or_lookup(skb, par->in, par->family, &local_kzorp, &kzorp, NULL);
-	rcu_read_unlock();
 
 	reply = skb->nfctinfo >= IP_CT_IS_REPLY;
 	if (info->flags & IPT_ZONE_SRC)
@@ -59,6 +58,7 @@ ret_true:
 done:
 	if (kzorp == &local_kzorp)
 		kz_destroy_kzorp(&local_kzorp);
+	rcu_read_unlock();
 	return res;
 }
 
