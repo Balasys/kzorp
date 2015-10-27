@@ -441,18 +441,6 @@ extern struct kz_zone *kz_zone_lookup_name(const struct kz_config *cfg, const ch
 
 extern struct kz_zone *kz_zone_clone(const struct kz_zone * const zone);
 
-static inline struct kz_zone *kz_zone_get(struct kz_zone *zone)
-{
-	atomic_inc(&zone->refcnt);
-	return zone;
-}
-
-static inline void kz_zone_put(struct kz_zone *zone)
-{
-	if (atomic_dec_and_test(&zone->refcnt))
-		kz_zone_destroy(zone);
-}
-
 extern struct kz_service *kz_service_new(void);
 extern void service_destroy(struct kz_service *service);
 extern void kz_service_destroy(struct kz_service *service);
@@ -466,18 +454,6 @@ extern int kz_service_add_nat_entry(struct list_head *head,
 extern struct kz_service *kz_service_clone(const struct kz_service * const o);
 extern long kz_service_lock(struct kz_service * const service);
 extern void kz_service_unlock(struct kz_service * const service);
-
-static inline struct kz_service *kz_service_get(struct kz_service *service)
-{
-	atomic_inc(&service->refcnt);
-	return service;
-}
-
-static inline void kz_service_put(struct kz_service *service)
-{
-	if (atomic_dec_and_test(&service->refcnt))
-		kz_service_destroy(service);
-}
 
 extern int kz_rule_copy(struct kz_rule *dst,
 			const struct kz_rule * const src);
@@ -497,22 +473,29 @@ extern struct kz_dispatcher *kz_dispatcher_clone(const struct kz_dispatcher * co
 extern struct kz_dispatcher *kz_dispatcher_clone_pure(const struct kz_dispatcher * const o);
 extern int kz_dispatcher_relink(struct kz_dispatcher *d, const struct list_head * zonelist, const struct list_head * servicelist);
 
-static inline struct kz_dispatcher *
-kz_dispatcher_get(struct kz_dispatcher *dispatcher)
-{
-	atomic_inc(&dispatcher->refcnt);
-	return dispatcher;
-}
-
-static inline void
-kz_dispatcher_put(struct kz_dispatcher *dispatcher)
-{
-	if (atomic_dec_and_test(&dispatcher->refcnt))
-		kz_dispatcher_destroy(dispatcher);
-}
-
 int kz_log_ratelimit(void);
 bool kz_log_session_verdict_enabled(void);
+
+/*
+ * Get/Put functions should handle null pointer as the result of
+ * the rule evaluation zone/service may null pointers.
+ */
+#define kz_object_declare_ref_funcs(object_name) \
+static inline struct kz_##object_name *kz_##object_name##_get(struct kz_##object_name *object_name) \
+{ \
+	if (object_name) \
+		atomic_inc(&object_name->refcnt); \
+	return object_name; \
+} \
+static inline void kz_##object_name##_put(struct kz_##object_name *object_name) \
+{ \
+	if (object_name && atomic_dec_and_test(&object_name->refcnt)) \
+		kz_##object_name##_destroy(object_name); \
+}
+
+kz_object_declare_ref_funcs(zone)
+kz_object_declare_ref_funcs(service)
+kz_object_declare_ref_funcs(dispatcher)
 
 /***********************************************************
  * Conntrack structure extension
