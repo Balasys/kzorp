@@ -51,7 +51,7 @@ void kz_big_free(void *ptr, enum KZ_ALLOC_TYPE alloc_type);
 typedef unsigned int kz_generation_t; /* integral with suitable size */
 typedef __be32 netlink_port_t;
 
-struct nf_conntrack_kzorp {
+struct kz_extension {
 	struct hlist_nulls_node hnnode;
 	struct rcu_head rcu;
 	struct nf_conntrack_tuple tuple_orig;
@@ -67,7 +67,7 @@ struct nf_conntrack_kzorp {
 	u_int64_t session_start;
 };
 
-#define NF_CT_EXT_KZ_TYPE struct nf_conntrack_kzorp
+#define NF_CT_EXT_KZ_TYPE struct kz_extension
 
 enum kzf_instance_flags {
 	KZF_INSTANCE_DELETED = 1 << 0,
@@ -512,7 +512,7 @@ kz_object_declare_ref_funcs(dispatcher)
    when ct gets destroyed
 */
 
-extern const struct nf_conntrack_kzorp * kz_extension_update(
+extern const struct kz_extension * kz_extension_update(
 	struct nf_conn *ct,
 	enum ip_conntrack_info ctinfo,
 	const struct sk_buff *skb,
@@ -529,7 +529,7 @@ extern const struct nf_conntrack_kzorp * kz_extension_update(
 
    make sure to call kz_destroy_kzorp on pkzorp eventually
 */
-extern void nfct_kzorp_lookup_rcu(struct nf_conntrack_kzorp * pkzorp,
+extern void nfct_kzorp_lookup_rcu(struct kz_extension * pkzorp,
 	enum ip_conntrack_info ctinfo,
 	const struct sk_buff *skb,
 	const struct net_device * const in,
@@ -540,14 +540,14 @@ extern void
 kz_extension_get_from_ct_or_lookup(const struct sk_buff *skb,
 				   const struct net_device * const in,
 				   u8 l3proto,
-				   struct nf_conntrack_kzorp *local_kzorp,
-				   const struct nf_conntrack_kzorp **kzorp,
+				   struct kz_extension *local_kzorp,
+				   const struct kz_extension **kzorp,
 				   const struct kz_config **cfg);
 
 
 /* unreferences stuff inside
 */
-extern void kz_destroy_kzorp(struct nf_conntrack_kzorp *kzorp);
+extern void kz_destroy_kzorp(struct kz_extension *kzorp);
 
 /***********************************************************
  * Hook functions
@@ -563,7 +563,7 @@ extern void kz_hooks_cleanup(void);
 extern int kz_extension_init(void);
 extern void kz_extension_cleanup(void);
 extern void kz_extension_fini(void);
-extern struct nf_conntrack_kzorp *kz_extension_create(struct nf_conn *ct);
+extern struct kz_extension *kz_extension_create(struct nf_conn *ct);
 /* handle kzorp extension in conntrack record
    an earlier version had the kzorp structure directly in nf_conn
    we changed that to use the extension API and add only on request
@@ -582,7 +582,7 @@ extern struct nf_conntrack_kzorp *kz_extension_create(struct nf_conn *ct);
    
 */
 
-extern struct nf_conntrack_kzorp *kz_extension_find(const struct nf_conn *ct);
+extern struct kz_extension *kz_extension_find(const struct nf_conn *ct);
 
 /***********************************************************
  * Lookup functions
@@ -706,7 +706,7 @@ enum kz_verdict {
 	KZ_VERDICT_DENIED_BY_UNKNOWN_FAIL    = 4
 };
 
-void kz_log_session_verdict(enum kz_verdict verdict, const char *info, const struct nf_conn *ct, const struct nf_conntrack_kzorp *kzorp);
+void kz_log_session_verdict(enum kz_verdict verdict, const char *info, const struct nf_conn *ct, const struct kz_extension *kzorp);
 
 /* Bitfield */
 enum {

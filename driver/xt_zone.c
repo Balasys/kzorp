@@ -21,8 +21,8 @@ static bool
 zone_mt_v1_eval(const struct sk_buff *skb, const struct xt_zone_info_v1 *info, const struct xt_action_param *par)
 {
 	struct kz_zone *zone;
-	const struct nf_conntrack_kzorp *kzorp;
-	struct nf_conntrack_kzorp local_kzorp;
+	const struct kz_extension *kzorp;
+	struct kz_extension local_kzorp;
 	int reply;
 	bool res;
 

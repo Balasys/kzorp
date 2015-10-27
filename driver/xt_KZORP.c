@@ -874,7 +874,7 @@ process_denied_session(unsigned int hooknum, struct sk_buff *skb,
 		       u8 l3proto, u8 l4proto,
 		       u16 sport, u16 dport,
 		       const struct nf_conn *ct,
-		       const struct nf_conntrack_kzorp *kzorp)
+		       const struct kz_extension *kzorp)
 {
 	struct kz_service *svc = kzorp->svc;
 	struct net *net = dev_net(in);
@@ -969,10 +969,10 @@ process_denied_session(unsigned int hooknum, struct sk_buff *skb,
 }
 
 /* cast away constness */
-static inline struct nf_conntrack_kzorp *
-patch_kzorp(const struct nf_conntrack_kzorp *kzorp)
+static inline struct kz_extension *
+patch_kzorp(const struct kz_extension *kzorp)
 {
-	return (struct nf_conntrack_kzorp *) kzorp;
+	return (struct kz_extension *) kzorp;
 }
 
 static inline struct kz_rule *
@@ -992,7 +992,7 @@ find_rule_by_id(struct kz_dispatcher *dispatcher, u_int64_t rule_id)
 
 static bool
 service_assign_session_id(const struct nf_conn *ct,
-			  const struct nf_conntrack_kzorp *kzorp)
+			  const struct kz_extension *kzorp)
 {
 	struct kz_service *svc = kzorp->svc;
 
@@ -1001,7 +1001,7 @@ service_assign_session_id(const struct nf_conn *ct,
 				       ct, kzorp);
 		return false;
 	} else {
-		struct nf_conntrack_kzorp *patchable_kzorp = patch_kzorp(kzorp);
+		struct kz_extension *patchable_kzorp = patch_kzorp(kzorp);
 		struct kz_dispatcher *dispatcher = patchable_kzorp->dpt;
 		struct kz_rule *rule = NULL;
 
@@ -1029,7 +1029,7 @@ kz_prerouting_verdict(struct sk_buff *skb,
 		      __be16 sport, __be16 dport,
 		      enum ip_conntrack_info ctinfo,
 		      struct nf_conn *ct,
-		      const struct nf_conntrack_kzorp *kzorp,
+		      const struct kz_extension *kzorp,
 		      const struct xt_kzorp_target_info *tgi)
 {
 	struct kz_dispatcher *dpt = kzorp->dpt; 
@@ -1110,7 +1110,7 @@ kz_input_newconn_verdict(struct sk_buff *skb,
 			 u8 l3proto, u8 l4proto,
 			 u16 sport, u16 dport,
 			 const struct nf_conn *ct,
-			 const struct nf_conntrack_kzorp *kzorp)
+			 const struct kz_extension *kzorp)
 {
 	unsigned int verdict = NF_ACCEPT;
 	struct kz_service *svc = kzorp->svc;
@@ -1134,7 +1134,7 @@ kz_forward_newconn_verdict(struct sk_buff *skb,
 			   u8 l3proto, u8 l4proto,
 			   u16 sport, u16 dport,
 			   const struct nf_conn *ct,
-			   const struct nf_conntrack_kzorp *kzorp)
+			   const struct kz_extension *kzorp)
 {
 	unsigned int verdict = NF_ACCEPT;
 	struct kz_service *svc = kzorp->svc;
@@ -1186,7 +1186,7 @@ kz_postrouting_newconn_verdict(struct sk_buff *skb,
 			       u8 l4proto,
 			       u16 sport, u16 dport,
 			       struct nf_conn *ct,
-			       const struct nf_conntrack_kzorp *kzorp,
+			       const struct kz_extension *kzorp,
 			       const struct xt_kzorp_target_info *tgi)
 {
 	struct kz_dispatcher *dpt = kzorp->dpt; 
@@ -1214,8 +1214,8 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	unsigned int verdict = NF_ACCEPT;
 	enum ip_conntrack_info ctinfo;
 	struct nf_conn *ct;
-	const struct nf_conntrack_kzorp *kzorp;
-	struct nf_conntrack_kzorp local_kzorp;
+	const struct kz_extension *kzorp;
+	struct kz_extension local_kzorp;
 	const struct kz_config *cfg = NULL;
 	u_int8_t l4proto = 0;
 	struct {

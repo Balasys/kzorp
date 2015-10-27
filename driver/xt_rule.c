@@ -20,8 +20,8 @@
 static bool
 rule_mt_v0_eval(const struct sk_buff *skb, const struct ipt_rule_info_v0 *info, const struct xt_action_param *par)
 {
-	const struct nf_conntrack_kzorp *kzorp;
-	struct nf_conntrack_kzorp local_kzorp;
+	const struct kz_extension *kzorp;
+	struct kz_extension local_kzorp;
 	bool res = true;
 
 	rcu_read_lock();

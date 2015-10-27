@@ -22,8 +22,8 @@ service_mt(const struct sk_buff *skb, struct xt_action_param *par)
 {
 	struct xt_service_info *info = (struct xt_service_info *) par->matchinfo;
 	const struct kz_service *s_svc, *p_svc;
-	const struct nf_conntrack_kzorp *kzorp;
-	struct nf_conntrack_kzorp local_kzorp;
+	const struct kz_extension *kzorp;
+	struct kz_extension local_kzorp;
 	const struct kz_config *cfg = NULL;
 	bool res = true;
 

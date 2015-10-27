@@ -336,7 +336,7 @@ kz_config_swap(struct kz_config * new_cfg)
  * Lookup
  ***********************************************************/
 
-void nfct_kzorp_lookup_rcu(struct nf_conntrack_kzorp * kzorp,
+void nfct_kzorp_lookup_rcu(struct kz_extension * kzorp,
 	enum ip_conntrack_info ctinfo,
 	const struct sk_buff *skb,
 	const struct net_device * const in,
@@ -515,7 +515,7 @@ done:
 }
 EXPORT_SYMBOL_GPL(nfct_kzorp_lookup_rcu);
 
-static struct nf_conntrack_kzorp *
+static struct kz_extension *
 kz_extension_add(struct nf_conn *ct,
 		 enum ip_conntrack_info ctinfo,
 		 const struct sk_buff *skb,
@@ -523,7 +523,7 @@ kz_extension_add(struct nf_conn *ct,
 		 const u8 l3proto,
 		 const struct kz_config **p_cfg)
 {
-	struct nf_conntrack_kzorp *kzorp;
+	struct kz_extension *kzorp;
 
 	/* if the conntrack is confirmed extension must not be added */
 	if (unlikely(nf_ct_is_confirmed(ct))) {
@@ -557,7 +557,7 @@ kz_extension_add(struct nf_conn *ct,
 	return kzorp;
 }
 
-const struct nf_conntrack_kzorp *
+const struct kz_extension *
 kz_extension_update(struct nf_conn *ct,
 		    enum ip_conntrack_info ctinfo,
 		    const struct sk_buff *skb,
@@ -565,7 +565,7 @@ kz_extension_update(struct nf_conn *ct,
 		    const u8 l3proto,
 		    const struct kz_config **p_cfg)
 {
-	struct nf_conntrack_kzorp *kzorp;
+	struct kz_extension *kzorp;
 	const struct kz_config *kzorp_config;
 
 	kzorp_config = rcu_dereference(kz_config_rcu);
@@ -588,8 +588,8 @@ void
 kz_extension_get_from_ct_or_lookup(const struct sk_buff *skb,
 				   const struct net_device * const in,
 				   u8 l3proto,
-				   struct nf_conntrack_kzorp *local_kzorp,
-				   const struct nf_conntrack_kzorp **kzorp,
+				   struct kz_extension *local_kzorp,
+				   const struct kz_extension **kzorp,
 				   const struct kz_config **cfg)
 {
 	struct nf_conn *ct;
@@ -607,7 +607,7 @@ kz_extension_get_from_ct_or_lookup(const struct sk_buff *skb,
 	if (*kzorp == NULL) {
 		pr_debug("cannot add kzorp extension, doing local lookup\n");
 
-		memset(local_kzorp, 0, sizeof(struct nf_conntrack_kzorp));
+		memset(local_kzorp, 0, sizeof(struct kz_extension));
 		nfct_kzorp_lookup_rcu(local_kzorp, ctinfo, skb, in, l3proto, cfg);
 
 		*kzorp = local_kzorp;
@@ -1621,7 +1621,7 @@ void
 kz_log_session_verdict(enum kz_verdict verdict,
 		       const char *info,
 		       const struct nf_conn *ct,
-		       const struct nf_conntrack_kzorp *kzorp)
+		       const struct kz_extension *kzorp)
 {
 	u_int16_t l3proto;
 	u_int16_t l4proto;
@@ -1753,7 +1753,7 @@ EXPORT_SYMBOL_GPL(kz_log_session_verdict);
  ***********************************************************/
 
 void
-kz_destroy_kzorp(struct nf_conntrack_kzorp *kzorp)
+kz_destroy_kzorp(struct kz_extension *kzorp)
 {
 	if (kzorp->czone != NULL)
 		kz_zone_put(kzorp->czone);
