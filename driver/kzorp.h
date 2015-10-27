@@ -30,6 +30,7 @@
 #include <linux/netdevice.h>
 
 #include "kzorp_compat.h"
+#include "kzorp_ext.h"
 #include "kzorp_internal.h"
 
 #define KZ_MAJOR_VERSION  4
@@ -50,24 +51,6 @@ void kz_big_free(void *ptr, enum KZ_ALLOC_TYPE alloc_type);
 
 typedef unsigned int kz_generation_t; /* integral with suitable size */
 typedef __be32 netlink_port_t;
-
-struct kz_extension {
-	struct hlist_nulls_node hnnode;
-	struct rcu_head rcu;
-	struct nf_conntrack_tuple tuple_orig;
-	u16 zone_id;
-	unsigned long sid;
-	/*  "lookup data" from here to end */
-	kz_generation_t generation; /* config version */
-	struct kz_zone *czone;		/* client zone */
-	struct kz_zone *szone;		/* server zone */
-	struct kz_dispatcher *dpt;	/* dispatcher */
-	struct kz_service *svc;		/* service */
-	u_int32_t rule_id;
-	u_int64_t session_start;
-};
-
-#define NF_CT_EXT_KZ_TYPE struct kz_extension
 
 enum kzf_instance_flags {
 	KZF_INSTANCE_DELETED = 1 << 0,
@@ -536,53 +519,12 @@ extern void nfct_kzorp_lookup_rcu(struct kz_extension * pkzorp,
 	const u8 l3proto,
 	const struct kz_config **p_cfg);
 
-extern void
-kz_extension_get_from_ct_or_lookup(const struct sk_buff *skb,
-				   const struct net_device * const in,
-				   u8 l3proto,
-				   struct kz_extension *local_kzorp,
-				   const struct kz_extension **kzorp,
-				   const struct kz_config **cfg);
-
-
-/* unreferences stuff inside
-*/
-extern void kz_destroy_kzorp(struct kz_extension *kzorp);
-
 /***********************************************************
  * Hook functions
  ***********************************************************/
 
 extern int kz_hooks_init(void);
 extern void kz_hooks_cleanup(void);
-
-/***********************************************************
- * Cache functions
- ***********************************************************/
-
-extern int kz_extension_init(void);
-extern void kz_extension_cleanup(void);
-extern void kz_extension_fini(void);
-extern struct kz_extension *kz_extension_create(struct nf_conn *ct);
-/* handle kzorp extension in conntrack record
-   an earlier version had the kzorp structure directly in nf_conn
-   we changed that to use the extension API and add only on request
-   this makes it possible to use kzorp as a dkms module.
-
-   FIXME: check/test the below sentences
-   The downside is that extensions can not be added after certain point
-   (basicly, it must happen at the start of a session, not at second
-    or a further packet...). 
-   If the kzorp extension can't be added, we still can do zone/svc
-   lookup on the fly -- only losing the cache. 
-   The other thing we lose is the session id assignment.
-   
-   So a proper ruleset that wants to use those facilities shall make
-   sure to have have the first packet meet KZORP related lookup.
-   
-*/
-
-extern struct kz_extension *kz_extension_find(const struct nf_conn *ct);
 
 /***********************************************************
  * Lookup functions
