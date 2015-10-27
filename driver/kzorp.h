@@ -598,7 +598,7 @@ extern struct nf_conntrack_kzorp *kz_extension_create(struct nf_conn *ct);
    
 */
 
-extern struct nf_conntrack_kzorp *kz_extension_find(struct nf_conn *ct);
+extern struct nf_conntrack_kzorp *kz_extension_find(const struct nf_conn *ct);
 
 /***********************************************************
  * Lookup functions

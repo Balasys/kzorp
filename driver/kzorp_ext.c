@@ -82,13 +82,15 @@ kz_hash_get_hash_index_from_tuple_and_zone(const struct nf_conntrack_tuple *tupl
 }
 
 static inline u32
-kz_hash_get_hash_index_from_ct(const struct nf_conn *ct)
+kz_extension_get_hash_index(const struct nf_conntrack_tuple *tuple, unsigned int zone)
 {
-	const u32 index = kz_hash_get_hash_index_from_tuple_and_zone(&(ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple), kz_nf_ct_zone_id(ct));
+	const u32 index = kz_hash_get_hash_index_from_tuple_and_zone(tuple, zone);
 	return index;
 }
 
-struct nf_conntrack_kzorp * kz_get_kzorp_from_node(struct nf_conntrack_tuple_hash *p) {
+struct nf_conntrack_kzorp *
+kz_get_kzorp_from_node(struct nf_conntrack_tuple_hash *p)
+{
 	struct nf_conntrack_kzorp *kz;
 	kz = container_of((struct hlist_nulls_node *)p,
 			  struct nf_conntrack_kzorp,
@@ -97,32 +99,29 @@ struct nf_conntrack_kzorp * kz_get_kzorp_from_node(struct nf_conntrack_tuple_has
 }
 
 static inline bool
-__kz_extension_key_equal(struct nf_conntrack_tuple_hash *h,
-		                            struct nf_conntrack_tuple_hash *th,
-		                            unsigned int zone)
+__kz_extension_key_equal(const struct nf_conntrack_kzorp *kzorp,
+			 const struct nf_conntrack_tuple *tuple,
+			 unsigned int zone)
 {
-	struct nf_conntrack_kzorp *kz = kz_get_kzorp_from_node(h);
-
-	return nf_ct_tuple_equal(&th->tuple, &h->tuple) && kz && kz->ct_zone == zone;
+	return nf_ct_tuple_equal(tuple, &kzorp->tuplehash_orig.tuple) && kzorp && kzorp->ct_zone == zone;
 }
 
-static struct nf_conntrack_tuple_hash *
-__kz_extension_find(struct nf_conn *ct)
+static struct nf_conntrack_kzorp *
+____kz_extension_find(const struct nf_conntrack_tuple *tuple, unsigned int zone)
 {
 	struct hlist_nulls_node *n;
 	struct nf_conntrack_tuple_hash *h;
-	struct nf_conntrack_tuple_hash *th = &(ct->tuplehash[0]);
-	unsigned int zone = kz_nf_ct_zone_id(ct);
 
-	const u32 hash_index = kz_hash_get_hash_index_from_ct(ct);
+	const u32 hash_index = kz_extension_get_hash_index(tuple, zone);
 
 	local_bh_disable();
 begin:
 	hlist_nulls_for_each_entry_rcu(h, n, &kz_hash[hash_index], hnnode) {
-		if (__kz_extension_key_equal(h, th, zone)) {
+		struct nf_conntrack_kzorp *kzorp = kz_get_kzorp_from_node(h);
+		if (__kz_extension_key_equal(kzorp, tuple, zone)) {
 			this_cpu_inc(kz_hash_stats->found);
 			local_bh_enable();
-			return h;
+			return kzorp;
 		}
 		this_cpu_inc(kz_hash_stats->searched);
 	}
@@ -137,30 +136,41 @@ begin:
 }
 
 struct nf_conntrack_kzorp *
-kz_extension_find(struct nf_conn *ct)
+__kz_extension_find(const struct nf_conntrack_tuple *tuple, unsigned int zone)
 {
-	struct nf_conntrack_kzorp *kz;
-	struct nf_conntrack_tuple_hash *h;
-	struct nf_conntrack_tuple_hash *th = &(ct->tuplehash[0]);
-	unsigned int zone = kz_nf_ct_zone_id(ct);
+	struct nf_conntrack_kzorp *kzorp;
 
 	rcu_read_lock();
 
 begin:
-	h = __kz_extension_find(ct);
-	if (h) {
-		if (unlikely(!__kz_extension_key_equal(h, th, zone))) {
+	kzorp = ____kz_extension_find(tuple, zone);
+	if (kzorp) {
+		if (unlikely(!__kz_extension_key_equal(kzorp, tuple, zone))) {
 			this_cpu_inc(kz_hash_stats->key_not_equal);
 			goto begin;
 		}
-		kz = kz_get_kzorp_from_node(h);
 		rcu_read_unlock();
-		return kz;
+		return kzorp;
 	}
 
 	rcu_read_unlock();
 
 	return NULL;
+}
+
+struct nf_conntrack_kzorp *
+kz_extension_find(const struct nf_conn *ct)
+{
+	const struct nf_conntrack_tuple *tuple;
+	unsigned int zone;
+
+	if (ct == NULL)
+		return NULL;
+
+	tuple = &ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple;
+	zone = kz_nf_ct_zone_id(ct);
+
+	return __kz_extension_find(tuple, zone);
 }
 
 static void kz_extension_free_rcu(struct rcu_head *rcu_head)
@@ -224,9 +234,9 @@ static void kz_extension_destroy(struct nf_conn *ct)
 	kz_extension_dealloc(kzorp);
 }
 
-PRIVATE void kz_extension_fill_one(struct nf_conntrack_kzorp *kzorp, struct nf_conn *ct)
+PRIVATE void kz_extension_add_to_cache(struct nf_conntrack_kzorp *kzorp, const struct nf_conntrack_tuple *tuple, unsigned int zone)
 {
-	const u32 hash_index = kz_hash_get_hash_index_from_ct(ct);
+	const u32 hash_index = kz_extension_get_hash_index(tuple, zone);
         const u32 lock_index = kz_hash_get_lock_index(hash_index);
 
 	spin_lock(&kz_hash_locks[lock_index]);
@@ -235,15 +245,11 @@ PRIVATE void kz_extension_fill_one(struct nf_conntrack_kzorp *kzorp, struct nf_c
 	spin_unlock(&kz_hash_locks[lock_index]);
 }
 
-PRIVATE void kz_extension_copy_tuplehash(struct nf_conntrack_kzorp *kzorp, struct nf_conn *ct)
-{
-	memcpy(&(kzorp->tuplehash_orig), &(ct->tuplehash[IP_CT_DIR_ORIGINAL]), sizeof(struct nf_conntrack_tuple_hash));
-}
-
 static inline void
-nf_conntrack_kzorp_init(struct nf_conntrack_kzorp *kzorp)
+kz_extension_prepare_to_cache_addition(struct nf_conntrack_kzorp *kzorp,
+				       const struct nf_conntrack_tuple *tuple,
+				       unsigned int zone)
 {
-	kzorp->ct_zone = 0;
 	kzorp->sid = 0;
 	kzorp->generation = 0;
 	kzorp->session_start = 0;
@@ -253,9 +259,13 @@ nf_conntrack_kzorp_init(struct nf_conntrack_kzorp *kzorp)
 	kzorp->szone = NULL;
 	kzorp->svc = NULL;
 	kzorp->dpt = NULL;
+
+	memcpy(&kzorp->tuplehash_orig, tuple, sizeof(struct nf_conntrack_tuple));
+	kzorp->ct_zone = zone;
 }
 
-struct nf_conntrack_kzorp *kz_extension_create(struct nf_conn *ct)
+static inline struct nf_conntrack_kzorp *
+__kz_extension_create(const struct nf_conntrack_tuple *tuple, unsigned int zone)
 {
 	struct nf_conntrack_kzorp *kzorp;
 
@@ -269,11 +279,14 @@ struct nf_conntrack_kzorp *kz_extension_create(struct nf_conn *ct)
 		return NULL;
 	}
 
-	nf_conntrack_kzorp_init(kzorp);
-	kz_extension_copy_tuplehash(kzorp,ct);
-	kz_extension_fill_one(kzorp,ct);
-	kzorp->ct_zone = kz_nf_ct_zone_id(ct);
+	kz_extension_prepare_to_cache_addition(kzorp, tuple, zone);
+	kz_extension_add_to_cache(kzorp, tuple, zone);
 	return kzorp;
+}
+
+struct nf_conntrack_kzorp *kz_extension_create(struct nf_conn *ct)
+{
+	return __kz_extension_create(&ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple, kz_nf_ct_zone_id(ct));
 }
 
 static void
