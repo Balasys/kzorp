@@ -89,13 +89,11 @@ kz_extension_get_hash_index(const struct nf_conntrack_tuple *tuple, u16 zone_id)
 }
 
 struct nf_conntrack_kzorp *
-kz_get_kzorp_from_node(struct nf_conntrack_tuple_hash *p)
+kz_extension_get_from_node(struct hlist_nulls_node *n)
 {
-	struct nf_conntrack_kzorp *kz;
-	kz = container_of((struct hlist_nulls_node *)p,
-			  struct nf_conntrack_kzorp,
-			  tuplehash_orig.hnnode);
-	return kz;
+	struct nf_conntrack_kzorp *kzorp;
+	kzorp = hlist_nulls_entry(n, struct nf_conntrack_kzorp, hnnode);
+	return kzorp;
 }
 
 static inline bool
@@ -103,21 +101,20 @@ __kz_extension_key_equal(const struct nf_conntrack_kzorp *kzorp,
 			 const struct nf_conntrack_tuple *tuple,
 			 u16 zone_id)
 {
-	return nf_ct_tuple_equal(tuple, &kzorp->tuplehash_orig.tuple) && kzorp && kzorp->zone_id == zone_id;
+	return nf_ct_tuple_equal(tuple, &kzorp->tuple_orig) && kzorp && kzorp->zone_id == zone_id;
 }
 
 static struct nf_conntrack_kzorp *
 ____kz_extension_find(const struct nf_conntrack_tuple *tuple, u16 zone_id)
 {
 	struct hlist_nulls_node *n;
-	struct nf_conntrack_tuple_hash *h;
+	struct nf_conntrack_kzorp *kzorp;
 
 	const u32 hash_index = kz_extension_get_hash_index(tuple, zone_id);
 
 	local_bh_disable();
 begin:
-	hlist_nulls_for_each_entry_rcu(h, n, &kz_hash[hash_index], hnnode) {
-		struct nf_conntrack_kzorp *kzorp = kz_get_kzorp_from_node(h);
+	hlist_nulls_for_each_entry_rcu(kzorp, n, &kz_hash[hash_index], hnnode) {
 		if (__kz_extension_key_equal(kzorp, tuple, zone_id)) {
 			this_cpu_inc(kz_hash_stats->found);
 			local_bh_enable();
@@ -191,11 +188,11 @@ static void kz_extension_free_rcu(struct rcu_head *rcu_head)
 
 static void kz_extension_dealloc(struct nf_conntrack_kzorp *kz)
 {
-	const u32 hash_index = kz_hash_get_hash_index_from_tuple_and_zone(&kz->tuplehash_orig.tuple, kz->zone_id);
+	const u32 hash_index = kz_hash_get_hash_index_from_tuple_and_zone(&kz->tuple_orig, kz->zone_id);
 	const u32 lock_index = kz_hash_get_lock_index(hash_index);
 
 	spin_lock(&kz_hash_locks[lock_index]);
-	hlist_nulls_del_init_rcu(&(kz->tuplehash_orig.hnnode));
+	hlist_nulls_del_init_rcu(&(kz->hnnode));
 	atomic_dec(&kz_hash_lengths[hash_index]);
 	spin_unlock(&kz_hash_locks[lock_index]);
 
@@ -240,7 +237,7 @@ PRIVATE void kz_extension_add_to_cache(struct nf_conntrack_kzorp *kzorp, const s
         const u32 lock_index = kz_hash_get_lock_index(hash_index);
 
 	spin_lock(&kz_hash_locks[lock_index]);
-	hlist_nulls_add_head_rcu(&(kzorp->tuplehash_orig.hnnode), &kz_hash[hash_index]);
+	hlist_nulls_add_head_rcu(&kzorp->hnnode, &kz_hash[hash_index]);
 	atomic_inc(&kz_hash_lengths[hash_index]);
 	spin_unlock(&kz_hash_locks[lock_index]);
 }
@@ -260,7 +257,7 @@ kz_extension_prepare_to_cache_addition(struct nf_conntrack_kzorp *kzorp,
 	kzorp->svc = NULL;
 	kzorp->dpt = NULL;
 
-	memcpy(&kzorp->tuplehash_orig, tuple, sizeof(struct nf_conntrack_tuple));
+	memcpy(&kzorp->tuple_orig, tuple, sizeof(struct nf_conntrack_tuple));
 	kzorp->zone_id = zone_id;
 }
 
@@ -458,31 +455,15 @@ static struct pernet_operations kz_extension_net_ops = {
 	.exit_batch     = kz_extension_net_exit_batch,
 };
 
-
-static void kz_extension_dealloc_by_tuplehash(struct nf_conntrack_tuple_hash *p)
-{
-	/*
-	 * find the kzorp corresponding to the tuplehash
-	 * dereference all tuplehashes
-	 * free the kzorp
-	 */
-
-	struct nf_conntrack_kzorp *kz;
-	kz = kz_get_kzorp_from_node(p);
-	kz_extension_dealloc(kz);
-}
-
-
 /* deallocate entries in the hashtable */
 static void clean_hash(void)
 {
 	int i;
-	struct nf_conntrack_tuple_hash *p;
 
 	for (i = 0; i < kz_hash_size; i++) {
 		while (!hlist_nulls_empty(&kz_hash[i])) {
-			p = (struct nf_conntrack_tuple_hash *) kz_hash[i].first;
-			kz_extension_dealloc_by_tuplehash(p);
+			struct nf_conntrack_kzorp *kzorp = kz_extension_get_from_node(kz_hash[i].first);
+			kz_extension_dealloc(kzorp);
 		}
 	}
 	kzfree(kz_hash);

@@ -52,8 +52,9 @@ typedef unsigned int kz_generation_t; /* integral with suitable size */
 typedef __be32 netlink_port_t;
 
 struct nf_conntrack_kzorp {
+	struct hlist_nulls_node hnnode;
 	struct rcu_head rcu;
-	struct nf_conntrack_tuple_hash tuplehash_orig;
+	struct nf_conntrack_tuple tuple_orig;
 	u16 zone_id;
 	unsigned long sid;
 	/*  "lookup data" from here to end */
