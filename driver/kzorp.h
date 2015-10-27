@@ -53,8 +53,8 @@ typedef __be32 netlink_port_t;
 
 struct nf_conntrack_kzorp {
 	struct rcu_head rcu;
-	unsigned int ct_zone;
 	struct nf_conntrack_tuple_hash tuplehash_orig;
+	u16 zone_id;
 	unsigned long sid;
 	/*  "lookup data" from here to end */
 	kz_generation_t generation; /* config version */
