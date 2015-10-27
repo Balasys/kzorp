@@ -172,31 +172,31 @@ kz_extension_find(const struct nf_conn *ct)
 
 static void kz_extension_free_rcu(struct rcu_head *rcu_head)
 {
-	struct nf_conntrack_kzorp *kz = container_of(rcu_head, struct nf_conntrack_kzorp, rcu);
+	struct nf_conntrack_kzorp *kzorp = container_of(rcu_head, struct nf_conntrack_kzorp, rcu);
 
-	if (kz->czone != NULL)
-		kz_zone_put(kz->czone);
-	if (kz->szone != NULL)
-		kz_zone_put(kz->szone);
-	if (kz->dpt != NULL)
-		kz_dispatcher_put(kz->dpt);
-	if (kz->svc != NULL)
-		kz_service_put(kz->svc);
+	if (kzorp->czone != NULL)
+		kz_zone_put(kzorp->czone);
+	if (kzorp->szone != NULL)
+		kz_zone_put(kzorp->szone);
+	if (kzorp->dpt != NULL)
+		kz_dispatcher_put(kzorp->dpt);
+	if (kzorp->svc != NULL)
+		kz_service_put(kzorp->svc);
 
-	kmem_cache_free(kz_cachep, kz);
+	kmem_cache_free(kz_cachep, kzorp);
 }
 
-static void kz_extension_dealloc(struct nf_conntrack_kzorp *kz)
+static void kz_extension_dealloc(struct nf_conntrack_kzorp *kzorp)
 {
-	const u32 hash_index = kz_hash_get_hash_index_from_tuple_and_zone(&kz->tuple_orig, kz->zone_id);
+	const u32 hash_index = kz_hash_get_hash_index_from_tuple_and_zone(&kzorp->tuple_orig, kzorp->zone_id);
 	const u32 lock_index = kz_hash_get_lock_index(hash_index);
 
 	spin_lock(&kz_hash_locks[lock_index]);
-	hlist_nulls_del_init_rcu(&(kz->hnnode));
+	hlist_nulls_del_init_rcu(&(kzorp->hnnode));
 	atomic_dec(&kz_hash_lengths[hash_index]);
 	spin_unlock(&kz_hash_locks[lock_index]);
 
-        call_rcu(&kz->rcu, kz_extension_free_rcu);
+        call_rcu(&kzorp->rcu, kz_extension_free_rcu);
 }
 
 static void kz_extension_destroy(struct nf_conn *ct)
