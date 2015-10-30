@@ -32,15 +32,6 @@
  */
 
 
-extern inline __be32
-get_genetlink_sender(struct genl_info *info) {
-#if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0) )
-	return info->snd_portid;
-#else
-	return info->snd_pid;
-#endif
-}
-
 extern inline __u32
 get_skb_portid(struct netlink_skb_parms skb) {
 #if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0) )

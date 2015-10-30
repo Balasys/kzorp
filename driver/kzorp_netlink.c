@@ -1087,7 +1087,7 @@ kznl_recv_start(struct sk_buff *skb, struct genl_info *info)
 	LOCK_TRANSACTIONS();
 
 	/* look up pid in transactions */
-	tr = transaction_lookup(get_genetlink_sender(info));
+	tr = transaction_lookup(info->snd_portid);
 	if (tr != NULL) {
 		/* problem: we already have a transaction running with this PID as peer */
 		kz_err("transaction pending for this PID\n");
@@ -1098,7 +1098,7 @@ kznl_recv_start(struct sk_buff *skb, struct genl_info *info)
 	/* look up/create instance */
 	ins = kz_instance_lookup(ins_name);
 	if (ins == NULL) {
-		ins = kz_instance_create(ins_name, strlen(ins_name), get_genetlink_sender(info));
+		ins = kz_instance_create(ins_name, strlen(ins_name), info->snd_portid);
 		if (ins == NULL) {
 			kz_err("failed to create new instance\n");
 			res = -EINVAL;
@@ -1114,7 +1114,7 @@ kznl_recv_start(struct sk_buff *skb, struct genl_info *info)
 	}
 
 	/* create transaction */
-	tr = transaction_create(get_genetlink_sender(info), ins->id, config_cookie);
+	tr = transaction_create(info->snd_portid, ins->id, config_cookie);
 	if (tr == NULL) {
 		kz_err("failed to create transaction\n");
 		res = -EINVAL;
@@ -1486,10 +1486,10 @@ kznl_recv_commit(struct sk_buff *skb, struct genl_info *info)
 
 	LOCK_TRANSACTIONS();
 
-	tr = transaction_lookup(get_genetlink_sender(info));
+	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
 		/* we have no transaction associated with this peer */
-		kz_err("no transaction found; pid='%d'\n", get_genetlink_sender(info));
+		kz_err("no transaction found; pid='%d'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -1514,10 +1514,10 @@ kznl_recv_setflag(struct sk_buff *skb, struct genl_info *info, unsigned int flag
 
 	LOCK_TRANSACTIONS();
 
-	tr = transaction_lookup(get_genetlink_sender(info));
+	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
 		/* we have no transaction associated with this peer */
-		kz_err("no transaction found; pid='%d'\n", get_genetlink_sender(info));
+		kz_err("no transaction found; pid='%d'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -1702,9 +1702,9 @@ kznl_recv_add_zone_subnet(struct sk_buff *skb, struct genl_info *info)
 	/* look up transaction */
 	LOCK_TRANSACTIONS();
 
-	tr = transaction_lookup(get_genetlink_sender(info));
+	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
-		kz_err("no transaction found; pid='%d'\n", get_genetlink_sender(info));
+		kz_err("no transaction found; pid='%d'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -1746,7 +1746,7 @@ kznl_recv_add_zone(struct sk_buff *skb, struct genl_info *info)
 	if ((res = kznl_parse_add_zone_params(info->attrs, &zone, &parent_name)))
 		return res;
 
-	if ((res = kznl_lock_transaction(get_genetlink_sender(info), &tr)) < 0)
+	if ((res = kznl_lock_transaction(info->snd_portid, &tr)) < 0)
 		goto error_unlock_tr;
 
 	if ((res = kznl_zone_set_from_parent(zone, parent_name, tr)) < 0)
@@ -1837,7 +1837,7 @@ kznl_recv_delete_zone(struct sk_buff *skb, struct genl_info *info)
 	if ((res = kznl_parse_delete_zone_params(info->attrs, &zone)) < 0)
 		return res;
 
-	if ((res = kznl_lock_transaction(get_genetlink_sender(info), &tr)) < 0)
+	if ((res = kznl_lock_transaction(info->snd_portid, &tr)) < 0)
 		goto error_unlock_tr;
 
 	if ((res = kznl_validate_delete_zone_params(zone, tr)) < 0)
@@ -2061,7 +2061,7 @@ kznl_recv_get_zone(struct sk_buff *skb, struct genl_info *info)
 		goto error_unlock_zone;
 	}
 
-	if (kznl_build_zone(nskb, get_genetlink_sender(info),
+	if (kznl_build_zone(nskb, info->snd_portid,
 			    info->snd_seq, 0, zone, &idx) < 0) {
 		/* data did not fit in a single entry -- for now no support of continuation
 		   we could loop and multicast; we chose not to send the partial info */
@@ -2203,9 +2203,9 @@ kznl_recv_add_service(struct sk_buff *skb, struct genl_info *info)
 	/* look up transaction */
 	LOCK_TRANSACTIONS();
 
-	tr = transaction_lookup(get_genetlink_sender(info));
+	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
-		kz_err("no transaction found; pid='%d'\n", get_genetlink_sender(info));
+		kz_err("no transaction found; pid='%d'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -2295,9 +2295,9 @@ kznl_recv_add_service_nat(struct sk_buff *skb, struct genl_info *info, bool snat
 	/* look up transaction */
 	LOCK_TRANSACTIONS();
 
-	tr = transaction_lookup(get_genetlink_sender(info));
+	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
-		kz_err("no transaction found; pid='%u'\n", get_genetlink_sender(info));
+		kz_err("no transaction found; pid='%u'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -2596,7 +2596,7 @@ kznl_recv_get_service(struct sk_buff *skb, struct genl_info *info)
 		goto error_unlock_svc;
 	}
 
-	if (kznl_build_service(nskb, get_genetlink_sender(info),
+	if (kznl_build_service(nskb, info->snd_portid,
 			       info->snd_seq, 0, svc) < 0) {
 		kz_err("failed to create service messages\n");
 		nlmsg_free(nskb);
@@ -2658,9 +2658,9 @@ kznl_recv_add_dispatcher(struct sk_buff *skb, struct genl_info *info)
 	/* look up transaction */
 	LOCK_TRANSACTIONS();
 
-	tr = transaction_lookup(get_genetlink_sender(info));
+	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
-		kz_err("no transaction found; pid='%d'\n", get_genetlink_sender(info));
+		kz_err("no transaction found; pid='%d'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -2811,9 +2811,9 @@ kznl_recv_add_n_dimension_rule(struct sk_buff *skb, struct genl_info *info)
 	/* look up transaction */
 	LOCK_TRANSACTIONS();
 
-	tr = transaction_lookup(get_genetlink_sender(info));
+	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
-		kz_err("no transaction found; pid='%d'\n", get_genetlink_sender(info));
+		kz_err("no transaction found; pid='%d'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -3085,9 +3085,9 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 	/* look up transaction */
 	LOCK_TRANSACTIONS();
 
-	tr = transaction_lookup(get_genetlink_sender(info));
+	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
-		kz_err("no transaction found; pid='%d'\n", get_genetlink_sender(info));
+		kz_err("no transaction found; pid='%d'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -3262,9 +3262,9 @@ kznl_recv_add_bind(struct sk_buff *skb, struct genl_info *info)
 	/* look up transaction */
 	LOCK_TRANSACTIONS();
 
-	tr = transaction_lookup(get_genetlink_sender(info));
+	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
-		kz_err("no transaction found; pid='%d'\n", get_genetlink_sender(info));
+		kz_err("no transaction found; pid='%d'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -3272,7 +3272,7 @@ kznl_recv_add_bind(struct sk_buff *skb, struct genl_info *info)
 	res = kznl_parse_bind_alloc(info->attrs, tr->instance_id, &instance, &bind);
 	if (res < 0)
 		goto error_unlock_tr;
-	bind->peer_pid = get_genetlink_sender(info);
+	bind->peer_pid = info->snd_portid;
 
 	found_bind = kz_bind_lookup_instance(instance, bind);
 	if (found_bind && !(found_bind->peer_pid == bind->peer_pid && (tr->flags & KZF_TRANSACTION_FLUSH_BIND))) {
@@ -3799,7 +3799,7 @@ kznl_recv_get_dispatcher(struct sk_buff *skb, struct genl_info *info)
 			goto error_unlock_dpt;
 		}
 
-		ret = kznl_build_dispatcher(nskb, get_genetlink_sender(info),
+		ret = kznl_build_dispatcher(nskb, info->snd_portid,
 					    info->snd_seq, 0,
 					    dpt, &dpt_item_idx, &rule_entry_idx);
 		res = genlmsg_reply(nskb, info);
@@ -3961,7 +3961,7 @@ kznl_recv_query(struct sk_buff *skb, struct genl_info *info)
 			  0);
 	rcu_read_unlock_bh();
 
-	if (kznl_build_query_resp(nskb, get_genetlink_sender(info),
+	if (kznl_build_query_resp(nskb, info->snd_portid,
 				  info->snd_seq, 0,
 				  KZNL_MSG_QUERY_REPLY,
 				  client_zone, server_zone,
@@ -4021,7 +4021,7 @@ kznl_recv_get_version(struct sk_buff *skb, struct genl_info *info)
 		goto error;
 	}
 
-	if (kznl_build_get_version_resp(nskb, get_genetlink_sender(info), info->snd_seq, 0,
+	if (kznl_build_get_version_resp(nskb, info->snd_portid, info->snd_seq, 0,
 					KZNL_MSG_GET_VERSION_REPLY) < 0) {
 		res = -ENOMEM;
 		goto error;
@@ -4079,7 +4079,7 @@ kznl_recv_lookup_zone(struct sk_buff *skb, struct genl_info *info)
 		goto error_unlock_zone;
 	}
 
-	if (kznl_build_zone_add(nskb, get_genetlink_sender(info), info->snd_seq, 0, KZNL_MSG_ADD_ZONE, zone) < 0) {
+	if (kznl_build_zone_add(nskb, info->snd_portid, info->snd_seq, 0, KZNL_MSG_ADD_ZONE, zone) < 0) {
 		/* data did not fit in a single entry -- for now no support of continuation
 		   we could loop and multicast; we chose not to send the partial info */
 		kz_err("failed to create zone messages\n");
