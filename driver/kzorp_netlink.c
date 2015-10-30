@@ -444,7 +444,7 @@ kznl_parse_in6_addr(const struct nlattr *attr, struct in6_addr *addr)
 {
 	struct kz_in6_subnet *a = nla_data(attr);
 
-	ipv6_addr_copy(addr, &a->addr);
+	*addr = a->addr;
 
 	kz_debug("parsed IPv6 address='%pI6c'\n", addr);
 
@@ -523,8 +523,8 @@ kznl_parse_in6_subnet(const struct nlattr *attr, struct in6_addr *addr, struct i
 	struct in6_addr pfx;
 	int prefixlen;
 
-	ipv6_addr_copy(addr, &a->addr);
-	ipv6_addr_copy(mask, &a->mask);
+	*addr = a->addr;
+	*mask = a->mask;
 
 	kz_debug("address='%pI6c', mask='%pI6c'\n", addr, mask);
 
@@ -939,8 +939,8 @@ kznl_dump_in6_subnet(struct sk_buff *skb, unsigned int attr,
 {
 	struct kz_in6_subnet a;
 
-	ipv6_addr_copy(&a.addr, addr);
-	ipv6_addr_copy(&a.mask, mask);
+	a.addr = *addr;
+	a.mask = *mask;
 
 	if (nla_put(skb, attr, sizeof(struct kz_in6_subnet), &a))
 		goto nla_put_failure;

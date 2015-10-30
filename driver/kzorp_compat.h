@@ -32,10 +32,6 @@
  */
 
 
-#if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 3, 0) )
-	#define ipv6_addr_copy(x,y) ((*x) = (*y))
-#endif
-
 #if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 11, 0) )
 #define SHINY_NEW_HLIST_FOR_EACH 1
 #endif
