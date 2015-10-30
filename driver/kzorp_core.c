@@ -408,12 +408,8 @@ void nfct_kzorp_lookup_rcu(struct nf_conntrack_kzorp * kzorp,
 		u8 tproto = iph->nexthdr;
 
 		/* find transport header */
-#if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 3, 0) )
 		__be16 frag_offp;
 		thoff = ipv6_skip_exthdr(skb, sizeof(*iph), &tproto, &frag_offp);
-#else
-		thoff = ipv6_skip_exthdr(skb, sizeof(*iph), &tproto);
-#endif
 		if (unlikely(thoff < 0))
 			goto done;
 
@@ -1525,15 +1521,6 @@ static struct ctl_table kzorp_table[] = {
 	{ }
 };
 
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3, 5, 0) )
-static struct ctl_path kzorp_sysctl_path[] = {
-	{ .procname = "net", },
-	{ .procname = "netfilter", },
-	{ .procname = "kzorp", },
-	{ }
-};
-#endif
-
 static struct ctl_table_header * kzorp_sysctl_header;
 #endif /* CONFIG_SYSCTL */
 
@@ -1823,11 +1810,7 @@ int __init kzorp_core_init(void)
 		goto cleanup_global_instance;
 	}
 #ifdef CONFIG_SYSCTL
-#if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0) )
 	kzorp_sysctl_header = register_net_sysctl(&init_net, "net/netfilter/kzorp", kzorp_table);
-#else
-	kzorp_sysctl_header = register_sysctl_paths(kzorp_sysctl_path, kzorp_table);
-#endif
 	if (!kzorp_sysctl_header) {
 		printk(KERN_ERR "nf_kzorp: can't register to sysctl.\n");
 		res = -EINVAL;

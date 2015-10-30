@@ -262,12 +262,8 @@ redirect_v6(struct sk_buff *skb, u8 l4proto,
 	struct sock *sk = NULL;
 
 	/* find transport header */
-#if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 3, 0) )
 	__be16 frag_offp;
 	thoff = ipv6_skip_exthdr(skb, sizeof(*iph), &tproto, &frag_offp);
-#else
-	thoff = ipv6_skip_exthdr(skb, sizeof(*iph), &tproto);
-#endif
 	if (unlikely(thoff < 0)) {
 		kz_debug("unable to find transport header in IPv6 packet, dropped; src='%pI6c', dst='%pI6c'\n",
 			 &iph->saddr, &iph->daddr);
@@ -695,14 +691,10 @@ send_reset_v6(struct net *net, struct sk_buff *oldskb)
 	}
 
 	proto = oip6h->nexthdr;
-#if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 3, 0) )
 	{
 		__be16 frag_offp;
 		tcphoff = ipv6_skip_exthdr(oldskb, ((u8*)(oip6h+1) - oldskb->data), &proto, &frag_offp);
 	}
-#else
-	tcphoff = ipv6_skip_exthdr(oldskb, ((u8*)(oip6h+1) - oldskb->data), &proto);
-#endif
 
 	if ((tcphoff < 0) || (tcphoff > oldskb->len)) {
 		pr_debug("Cannot get TCP header.\n");
@@ -1220,12 +1212,8 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 		u8 tproto = iph->nexthdr;
 
 		/* find transport header */
-#if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 3, 0) )
 		__be16 frag_offp;
 		thoff = ipv6_skip_exthdr(skb, sizeof(*iph), &tproto, &frag_offp);
-#else
-		thoff = ipv6_skip_exthdr(skb, sizeof(*iph), &tproto);
-#endif
 		if (unlikely(thoff < 0)) {
 			kz_debug("unable to find transport header in IPv6 packet, dropped; src='%pI6c', dst='%pI6c'\n",
 			         &iph->saddr, &iph->daddr);
