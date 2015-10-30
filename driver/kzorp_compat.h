@@ -32,15 +32,6 @@
  */
 
 
-extern inline __u32
-get_skb_portid(struct netlink_skb_parms skb) {
-#if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0) )
-	return skb.portid;
-#else
-	return skb.pid;
-#endif
-}
-
 extern inline int
 get_notifier(struct netlink_notify * notifier) {
 #if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0) )

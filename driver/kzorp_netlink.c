@@ -2003,7 +2003,7 @@ kznl_dump_zones(struct sk_buff *skb, struct netlink_callback *cb)
 	list_prepare_entry(i, &cfg->zones.head, list);
 	list_for_each_entry_continue(i, &cfg->zones.head, list) {
 		kz_debug("zone name: '%s'", i->name);
-		if (kznl_build_zone(skb, get_skb_portid(NETLINK_CB(cb->skb)),
+		if (kznl_build_zone(skb, NETLINK_CB(cb->skb).portid,
 				   cb->nlh->nlmsg_seq, 0, i, &cb->args[ZONE_DUMP_ARG_SUBNET_SUBPART]) < 0) {
 			/* zone dump failed, try to continue from here next time */
 			cb->args[ZONE_DUMP_ARG_CURRENT_ZONE] = (long) i;
@@ -2535,7 +2535,7 @@ restart:
 				continue;
 		}
 
-		if (kznl_build_service(skb, get_skb_portid(NETLINK_CB(cb->skb)),
+		if (kznl_build_service(skb, NETLINK_CB(cb->skb).portid,
 				       cb->nlh->nlmsg_seq, NLM_F_MULTI, i) < 0) {
 			/* service dump failed, try to continue from here next time */
 			cb->args[SERVICE_DUMP_CURRENT_SERVICE] = (long) i;
@@ -3420,7 +3420,7 @@ kznl_dump_binds(struct sk_buff *skb, struct netlink_callback *cb)
 
 	instance = (const struct kz_instance **) &cb->args[BIND_DUMP_ARG_INSTANCE];
 	bind = (const struct kz_bind **) &cb->args[BIND_DUMP_ARG_BIND];
-	if (kznl_build_instance_bind(skb, get_skb_portid(NETLINK_CB(cb->skb)),
+	if (kznl_build_instance_bind(skb, NETLINK_CB(cb->skb).portid,
 				     cb->nlh->nlmsg_seq, NLM_F_MULTI,
 				     instance, bind) >= 0)
 		cb->args[BIND_DUMP_ARG_STATE] = BIND_DUMP_STATE_LAST_CALL;
@@ -3722,7 +3722,7 @@ restart:
 				continue;
 		}
 
-		if (kznl_build_dispatcher(skb, get_skb_portid(NETLINK_CB(cb->skb)),
+		if (kznl_build_dispatcher(skb, NETLINK_CB(cb->skb).portid,
 					  cb->nlh->nlmsg_seq, NLM_F_MULTI, i,
 					  &cb->args[DISPATCHER_DUMP_ARG_SUBPART],
 					  &cb->args[DISPATCHER_DUMP_ARG_RULE_ENTRY_SUBPART]) < 0) {
