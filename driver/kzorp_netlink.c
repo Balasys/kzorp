@@ -3943,18 +3943,14 @@ kznl_recv_query(struct sk_buff *skb, struct genl_info *info)
 		goto error_put_dev;
 	}
 
-	rcu_read_lock();
 	/* lookup uses per-cpu data mutating it, we must make sure no interruptions on a CPU */
-	local_bh_disable();
-
+	rcu_read_lock_bh();
 	kz_lookup_session(rcu_dereference(kz_config_rcu),
 			  &traffic_props,
 			  &client_zone, &server_zone,
 			  &service, &dispatcher,
 			  0);
-
-	local_bh_enable();
-	rcu_read_unlock();
+	rcu_read_unlock_bh();
 
 	if (kznl_build_query_resp(nskb, get_genetlink_sender(info),
 				  info->snd_seq, 0,
