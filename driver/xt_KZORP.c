@@ -384,8 +384,8 @@ process_forwarded_session(unsigned int hooknum, struct sk_buff *skb,
 			  struct kz_service *svc)
 {
 	unsigned int verdict = NF_ACCEPT;
-	const NAT_RANGE_TYPE *map;
-	NAT_RANGE_TYPE fakemap;
+	const struct nf_nat_range *map;
+	struct nf_nat_range fakemap;
 	__be32 raddr;
 	__be16 rport;
 	const struct list_head *head = NULL;
@@ -432,7 +432,7 @@ process_forwarded_session(unsigned int hooknum, struct sk_buff *skb,
 				if (!(svc->flags & KZF_SERVICE_TRANSPARENT)) {
 					/* PFService with DirectedRouter, we have to DNAT to
 					 * the specified address */
-					fakemap.flags = IP_NAT_RANGE_MAP_IPS | IP_NAT_RANGE_PROTO_SPECIFIED;
+					fakemap.flags = NF_NAT_RANGE_MAP_IPS | NF_NAT_RANGE_PROTO_SPECIFIED;
 					kz_nat_range_set_min_ip(&fakemap, raddr);
 					kz_nat_range_set_max_ip(&fakemap, raddr);
 					kz_nat_range_set_min_port(&fakemap, rport);
@@ -443,8 +443,8 @@ process_forwarded_session(unsigned int hooknum, struct sk_buff *skb,
 				}
 			} else {
 				/* DNAT entry with no specified destination port */
-				if (!(map->flags & IP_NAT_RANGE_PROTO_SPECIFIED)) {
-					fakemap.flags = IP_NAT_RANGE_MAP_IPS | IP_NAT_RANGE_PROTO_SPECIFIED;
+				if (!(map->flags & NF_NAT_RANGE_PROTO_SPECIFIED)) {
+					fakemap.flags = NF_NAT_RANGE_MAP_IPS | NF_NAT_RANGE_PROTO_SPECIFIED;
 					kz_nat_range_set_min_ip(&fakemap, *kz_nat_range_get_min_ip(map));
 					kz_nat_range_set_max_ip(&fakemap, *kz_nat_range_get_max_ip(map));
 					kz_nat_range_set_min_port(&fakemap, rport);
@@ -489,7 +489,7 @@ process_forwarded_session(unsigned int hooknum, struct sk_buff *skb,
 			if ((hooknum == NF_INET_POST_ROUTING) &&
 			    !(svc->flags & KZF_SERVICE_FORGE_ADDR)) {
 				struct rtable *rt;
-				NAT_RANGE_TYPE range;
+				struct nf_nat_range range;
 				__be32 laddr;
 
 				rt = skb_rtable(skb);
@@ -500,7 +500,7 @@ process_forwarded_session(unsigned int hooknum, struct sk_buff *skb,
 					goto done;
 				}
 
-				range.flags = IP_NAT_RANGE_MAP_IPS;
+				range.flags = NF_NAT_RANGE_MAP_IPS;
 				kz_nat_range_set_min_ip(&range, laddr);
 				kz_nat_range_set_max_ip(&range, laddr);
 

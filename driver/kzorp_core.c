@@ -814,8 +814,8 @@ kz_service_lookup_name(const struct kz_config *cfg, const char *name)
 EXPORT_SYMBOL_GPL(kz_service_lookup_name);
 
 int
-kz_service_add_nat_entry(struct list_head *head, NAT_RANGE_TYPE *src,
-			 NAT_RANGE_TYPE *dst, NAT_RANGE_TYPE *map)
+kz_service_add_nat_entry(struct list_head *head, struct nf_nat_range *src,
+			 struct nf_nat_range *dst, struct nf_nat_range *map)
 {
 	struct kz_service_nat_entry *entry;
 

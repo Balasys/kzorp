@@ -696,7 +696,7 @@ error:
 }
 
 static inline int
-kznl_parse_service_nat_params(const struct nlattr *attr, NAT_RANGE_TYPE *range)
+kznl_parse_service_nat_params(const struct nlattr *attr, struct nf_nat_range *range)
 {
 	const struct kza_service_nat_params *a = nla_data(attr);
 	u_int32_t flags = ntohl(a->flags);
@@ -705,9 +705,9 @@ kznl_parse_service_nat_params(const struct nlattr *attr, NAT_RANGE_TYPE *range)
 		return -EINVAL;
 
 	if (flags & KZF_SERVICE_NAT_MAP_IPS)
-		range->flags |= IP_NAT_RANGE_MAP_IPS;
+		range->flags |= NF_NAT_RANGE_MAP_IPS;
 	if (flags & KZF_SERVICE_NAT_MAP_PROTO_SPECIFIC)
-		range->flags |= IP_NAT_RANGE_PROTO_SPECIFIED;
+		range->flags |= NF_NAT_RANGE_PROTO_SPECIFIED;
 
 	kz_nat_range_set_min_ip(range, a->min_ip);
 	kz_nat_range_set_max_ip(range, a->max_ip);
@@ -1030,11 +1030,11 @@ nla_put_failure:
 }
 
 static inline int
-kznl_dump_service_nat_entry(struct kza_service_nat_params *a, NAT_RANGE_TYPE *range)
+kznl_dump_service_nat_entry(struct kza_service_nat_params *a, struct nf_nat_range *range)
 {
-	if (range->flags & IP_NAT_RANGE_MAP_IPS)
+	if (range->flags & NF_NAT_RANGE_MAP_IPS)
 		a->flags |= KZF_SERVICE_NAT_MAP_IPS;
-	if (range->flags & IP_NAT_RANGE_PROTO_SPECIFIED)
+	if (range->flags & NF_NAT_RANGE_PROTO_SPECIFIED)
 		a->flags |= KZF_SERVICE_NAT_MAP_PROTO_SPECIFIC;
 
 	a->flags = htons(a->flags);
@@ -2253,7 +2253,7 @@ kznl_recv_add_service_nat(struct sk_buff *skb, struct genl_info *info, bool snat
 	struct kz_service *svc;
 	struct kz_transaction *tr;
 	char *service_name = NULL;
-	NAT_RANGE_TYPE src, dst, map;
+	struct nf_nat_range src, dst, map;
 
 	if (!info->attrs[KZNL_ATTR_SERVICE_NAME] || !info->attrs[KZNL_ATTR_SERVICE_NAT_SRC] ||
 	    !info->attrs[KZNL_ATTR_SERVICE_NAT_MAP]) {

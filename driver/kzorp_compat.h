@@ -32,44 +32,8 @@
  */
 
 
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0) )
-	#include <linux/netfilter_ipv4/nf_nat.h>
-	#define NAT_RANGE_TYPE struct nf_nat_range
-#endif
-#if ( ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 3, 0) ) && ( LINUX_VERSION_CODE < KERNEL_VERSION(3, 7, 0) ) )
-	#include <linux/netfilter/nf_nat.h>
-	#define NAT_RANGE_TYPE struct nf_nat_ipv4_range
-#endif
-#if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 0) )
-	#include <linux/netfilter/nf_nat.h>
-	#define NAT_RANGE_TYPE struct nf_nat_range
-#endif
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3, 7, 0) )
-        static inline const __be32 *kz_nat_range_get_min_ip(const NAT_RANGE_TYPE *r) { return &r->min_ip; }
-        static inline const __be32 *kz_nat_range_get_max_ip(const NAT_RANGE_TYPE *r) { return &r->max_ip; }
-        static inline const __be16 *kz_nat_range_get_min_port(const NAT_RANGE_TYPE *r) { return &r->min.udp.port; }
-        static inline const __be16 *kz_nat_range_get_max_port(const NAT_RANGE_TYPE *r) { return &r->max.udp.port; }
-        static inline void kz_nat_range_set_min_ip(NAT_RANGE_TYPE *r, __be32 min_ip) { r->min_ip = min_ip; }
-        static inline void kz_nat_range_set_max_ip(NAT_RANGE_TYPE *r, __be32 max_ip) { r->max_ip = max_ip; }
-        static inline void kz_nat_range_set_min_port(NAT_RANGE_TYPE *r, __be16 min_port) { r->min.udp.port = min_port; }
-        static inline void kz_nat_range_set_max_port(NAT_RANGE_TYPE *r, __be16 max_port) { r->max.udp.port = max_port; }
-#endif
-#if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 0) )
-        static inline const __be32 *kz_nat_range_get_min_ip(const NAT_RANGE_TYPE *r) { return &r->min_addr.ip; }
-        static inline const __be32 *kz_nat_range_get_max_ip(const NAT_RANGE_TYPE *r) { return &r->max_addr.ip; }
-        static inline const __be16 *kz_nat_range_get_min_port(const NAT_RANGE_TYPE *r) { return &r->min_proto.udp.port; }
-        static inline const __be16 *kz_nat_range_get_max_port(const NAT_RANGE_TYPE *r) { return &r->max_proto.udp.port; }
-        static inline void kz_nat_range_set_min_ip(NAT_RANGE_TYPE *r, __be32 min_ip) { r->min_addr.ip = min_ip; }
-        static inline void kz_nat_range_set_max_ip(NAT_RANGE_TYPE *r, __be32 max_ip) { r->max_addr.ip = max_ip; }
-        static inline void kz_nat_range_set_min_port(NAT_RANGE_TYPE *r, __be16 min_port) { r->min_proto.udp.port = min_port; }
-        static inline void kz_nat_range_set_max_port(NAT_RANGE_TYPE *r, __be16 max_port) { r->max_proto.udp.port = max_port; }
-#endif
-
 #if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 3, 0) )
 	#define ipv6_addr_copy(x,y) ((*x) = (*y))
-	#define IP_NAT_RANGE_MAP_IPS NF_NAT_RANGE_MAP_IPS
-	#define IP_NAT_RANGE_PROTO_SPECIFIED NF_NAT_RANGE_PROTO_SPECIFIED
-	#define IP_NAT_MANIP_SRC NF_NAT_MANIP_SRC
 #endif
 
 #if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 11, 0) )
