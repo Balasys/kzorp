@@ -43,6 +43,7 @@
 #include <net/netfilter/ipv4/nf_defrag_ipv4.h>
 
 #include "kzorp.h"
+#include "kz_tproxy_core.h"
 
 #ifdef CONFIG_BRIDGE_NETFILTER
 #include <linux/netfilter_bridge.h>

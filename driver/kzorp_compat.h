@@ -34,11 +34,4 @@
 #define kz_inet_twsk_deschedule inet_twsk_deschedule
 #endif
 
-#ifdef WITH_KZ_TPROXY_CORE_H
-	#include "kz_tproxy_core.h"
-#else
-	#include <net/udp.h>
-	#include <net/netfilter/nf_tproxy_core.h>
-#endif
-
 #endif /* _KZORP_COMPAT_H */
