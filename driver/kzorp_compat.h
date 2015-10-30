@@ -31,16 +31,6 @@
  * Foundation,Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3, 5, 0) )
-static inline int nla_put_be16(struct sk_buff *skb, int attrtype, __be16 value)
-{
-	return nla_put(skb, attrtype, sizeof(__be16), &value);
-}
-static inline int nla_put_be32(struct sk_buff *skb, int attrtype, __be32 value)
-{
-	        return nla_put(skb, attrtype, sizeof(__be32), &value);
-}
-#endif
 
 extern inline __be32
 get_genetlink_sender(struct genl_info *info) {
