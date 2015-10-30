@@ -4191,7 +4191,7 @@ int __init kz_netlink_init(void)
 
 	/* register netlink notifier and genetlink family */
 	netlink_register_notifier(&kz_rtnl_notifier);
-	res = genl_register_family_with_ops_and_size(&kznl_family, kznl_ops, ARRAY_SIZE(kznl_ops));
+	res = genl_register_family_with_ops(&kznl_family, kznl_ops);
 	if (res < 0) {
 		kz_err("failed to register generic netlink family; err='%d'\n", res);
 		goto cleanup_notifier;

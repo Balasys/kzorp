@@ -31,20 +31,6 @@
  * Foundation,Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#if ( LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0) )
-	static inline int
-	genl_register_family_with_ops_and_size(struct genl_family *family,
-					       struct genl_ops *ops, size_t n_ops) {
-		return genl_register_family_with_ops(family, ops, n_ops);
-	}
-#else
-	static inline int
-	genl_register_family_with_ops_and_size(struct genl_family *family,
-					       const struct genl_ops *ops, size_t n_ops) {
-		return _genl_register_family_with_ops_grps(family, ops, n_ops, NULL, 0);
-	}
-#endif
-
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(3, 5, 0) )
 static inline int nla_put_be16(struct sk_buff *skb, int attrtype, __be16 value)
 {
