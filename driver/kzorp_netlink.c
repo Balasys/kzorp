@@ -4114,14 +4114,14 @@ kznl_netlink_event(struct notifier_block *n, unsigned long event, void *v)
 
 	if (event == NETLINK_URELEASE &&
 	    notify->protocol == NETLINK_GENERIC &&
-	    get_notifier(notify) != 0) {
+	    notify->portid != 0) {
 		kz_debug("netlink release event received, pid='%d'\n",
-			 get_notifier(notify));
+			 notify->portid);
 
 		/* remove pending transaction */
 		LOCK_TRANSACTIONS();
 
-		tr = transaction_lookup(get_notifier(notify));
+		tr = transaction_lookup(notify->portid);
 		if (tr != NULL) {
 			kz_debug("transaction found, removing\n");
 
@@ -4144,7 +4144,7 @@ kznl_netlink_event(struct notifier_block *n, unsigned long event, void *v)
 			} else {
 				kz_debug("cleaning up instance; id='%d'\n", instance->id);
 			}
-			kz_instance_remove_bind(instance, get_notifier(notify), NULL);
+			kz_instance_remove_bind(instance, notify->portid, NULL);
 		}
 
 		UNLOCK_TRANSACTIONS();

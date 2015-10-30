@@ -32,15 +32,6 @@
  */
 
 
-extern inline int
-get_notifier(struct netlink_notify * notifier) {
-#if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0) )
-	return notifier->portid;
-#else
-	return notifier->pid;
-#endif
-}
-
 #if ( LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0) )
 	#include <linux/netfilter_ipv4/nf_nat.h>
 	#define NAT_RANGE_TYPE struct nf_nat_range
