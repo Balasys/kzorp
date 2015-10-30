@@ -32,10 +32,6 @@
  */
 
 
-#if ( LINUX_VERSION_CODE >= KERNEL_VERSION(3, 11, 0) )
-#define SHINY_NEW_HLIST_FOR_EACH 1
-#endif
-
 #ifndef NLA_PUT
 #define NLA_PUT(skb, attrtype, attrlen, data) \
 	do { \
