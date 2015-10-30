@@ -10,8 +10,6 @@
 #endif /* _UAPI_LINUX_KERNEL_H */
 #endif /* KZ_USERSPACE */
 
-#include <net/genetlink.h>
-#include <linux/netlink.h>
 #include <net/netfilter/nf_conntrack_zones.h>
 
 /* 
@@ -31,38 +29,6 @@
  * Foundation,Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-
-#ifndef NLA_PUT
-#define NLA_PUT(skb, attrtype, attrlen, data) \
-	do { \
-		if (unlikely(nla_put(skb, attrtype, attrlen, data) < 0)) \
-			goto nla_put_failure; \
-	} while(0)
-#define NLA_PUT_TYPE(skb, type, attrtype, value) \
-	do { \
-		type __tmp = value; \
-		NLA_PUT(skb, attrtype, sizeof(type), &__tmp); \
-	} while(0)
-
-#define NLA_PUT_U8(skb, attrtype, value) \
-	NLA_PUT_TYPE(skb, u8, attrtype, value)
-
-#define NLA_PUT_U16(skb, attrtype, value) \
-	NLA_PUT_TYPE(skb, u16, attrtype, value)
-
-#define NLA_PUT_U64(skb, attrtype, value) \
-	NLA_PUT_TYPE(skb, u64, attrtype, value)
-
-#define NLA_PUT_LE16(skb, attrtype, value) \
-	NLA_PUT_TYPE(skb, __le16, attrtype, value)
-
-#define NLA_PUT_BE16(skb, attrtype, value) \
-	NLA_PUT_TYPE(skb, __be16, attrtype, value)
-
-#define NLA_PUT_BE32(skb, attrtype, value) \
-	NLA_PUT_TYPE(skb, __be32, attrtype, value)
-
-#endif // NLA_PUT
 
 #ifndef sk_daddr
 #define sk_daddr             __sk_common.skc_daddr

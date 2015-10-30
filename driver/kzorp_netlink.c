@@ -859,7 +859,8 @@ kznl_dump_name(struct sk_buff *skb, unsigned int attr, const char *name)
 
 		msg.hdr.length = htons(len);
 		memcpy(&msg.name, name, len);
-		NLA_PUT(skb, attr, sizeof(struct kza_name) + len, &msg);
+		if (nla_put(skb, attr, sizeof(struct kza_name) + len, &msg))
+			goto nla_put_failure;
 	}
 
 	return 0;
@@ -1897,7 +1898,8 @@ kznl_build_zone_add(struct sk_buff *skb, netlink_port_t pid, u_int32_t seq, int 
 	if (kznl_dump_name(skb, KZNL_ATTR_ZONE_NAME, zone->name) < 0)
 		goto nla_put_failure;
 
-	NLA_PUT_BE32(skb, KZNL_ATTR_ZONE_SUBNET_NUM, htonl(zone->num_subnet));
+	if (nla_put_be32(skb, KZNL_ATTR_ZONE_SUBNET_NUM, htonl(zone->num_subnet)))
+		goto nla_put_failure;
 
 	if (zone->admin_parent != NULL) {
 		if (kznl_dump_name(skb, KZNL_ATTR_ZONE_PNAME, zone->admin_parent->name) < 0)
