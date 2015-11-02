@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 ## Dependencies
 # sudo modprobe kvm
 # sudo service virtualbox stop
