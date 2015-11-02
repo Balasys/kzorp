@@ -668,7 +668,7 @@ extern void kz_nfnetlink_cleanup(void);
  ***********************************************************/
 
 #define kz_debug(format, args...) pr_debug("%s: " format, __FUNCTION__, ##args)
-#define kz_err(format, args...) pr_err("kzorp:%s: " format, __FUNCTION__, ##args)
+#define kz_err(format, args...) pr_err_ratelimited("kzorp:%s: " format, __FUNCTION__, ##args)
 
 #define kz_bind_debug(bind, msg) \
 { \
