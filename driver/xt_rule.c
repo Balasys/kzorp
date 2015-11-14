@@ -26,7 +26,6 @@ rule_mt_v0_eval(const struct sk_buff *skb, const struct ipt_rule_info_v0 *info, 
 
 	rcu_read_lock();
 	kz_extension_get_from_ct_or_lookup(skb, par->in, par->family, &local_kzorp, &kzorp, NULL);
-	rcu_read_unlock();
 
 	res &= (kzorp->rule_id == info->id);
 	if (res && (info->flags & IPT_RULE_NOCOUNT) == 0)
@@ -35,6 +34,7 @@ rule_mt_v0_eval(const struct sk_buff *skb, const struct ipt_rule_info_v0 *info, 
 
 	if (kzorp == &local_kzorp)
 		kz_destroy_kzorp(&local_kzorp);
+	rcu_read_unlock();
 
 	return res;
 }
