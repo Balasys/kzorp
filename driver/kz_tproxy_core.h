@@ -24,7 +24,11 @@
 #include <net/netfilter/ipv6/nf_defrag_ipv6.h>
 #endif
 
+#include "kzorp_compat.h"
+
 #include <linux/netfilter/xt_TPROXY.h>
+
+#include "kzorp_compat.h"
 
 enum nf_tproxy_lookup_t {
          NFT_LOOKUP_LISTENER,
@@ -257,7 +261,7 @@ tproxy_handle_time_wait4(struct sk_buff *skb, __be32 laddr, __be16 lport,
                                             hp->source, lport ? lport : hp->dest,
                                             skb->dev, NFT_LOOKUP_LISTENER);
                 if (sk2) {
-                        inet_twsk_deschedule(inet_twsk(sk), &tcp_death_row);
+                        kz_inet_twsk_deschedule(inet_twsk(sk));
                         inet_twsk_put(inet_twsk(sk));
                         sk = sk2;
                 }

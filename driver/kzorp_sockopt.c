@@ -81,8 +81,8 @@ kzorp_getsockopt_results(u8 family, struct sock *sk, int optval, void __user *us
 		break;
 	case PF_INET6:
 		tuple.src.l3num = AF_INET6;
-		ipv6_addr_copy(&tuple.src.u3.in6, &sk->sk_v6_rcv_saddr);
-		ipv6_addr_copy(&tuple.dst.u3.in6, &sk->sk_v6_daddr);
+		tuple.src.u3.in6 = sk->sk_v6_rcv_saddr;
+		tuple.dst.u3.in6 = sk->sk_v6_daddr;
 		break;
 	default:
 		BUG();
