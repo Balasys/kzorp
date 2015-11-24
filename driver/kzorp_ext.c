@@ -169,7 +169,7 @@ static void kz_extension_dealloc(struct nf_conntrack_kzorp *kz)
 	const u32 lock_index = kz_hash_get_lock_index(hash_index);
 
 	spin_lock(&kz_hash_locks[lock_index]);
-	hlist_nulls_del_rcu(&(kz->tuplehash_orig.hnnode));
+	hlist_nulls_del_init_rcu(&(kz->tuplehash_orig.hnnode));
 	spin_unlock(&kz_hash_locks[lock_index]);
 
         call_rcu(&kz->rcu, kz_extension_free_rcu);
