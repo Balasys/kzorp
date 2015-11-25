@@ -21,6 +21,27 @@ import testutil
 import errno
 from functools import partial
 from KZorpComm import KZorpComm
+from KZorpBaseTestCaseCommon import KZorpTestCaseDump
+
+class KZorpTestCaseServiceDump(KZorpTestCaseDump):
+    _dump_message = messages.KZorpGetServiceMessage(None)
+
+    def __create_service_messages_that_do_not_fit_into_one_nelink_packet(self):
+        service_name_format = 'service_%d'
+
+        service_messages = []
+
+        for service_num in range(self._get_netlink_packet_size()):
+            service_name = service_name_format % (service_num, )
+
+            add_service_message = messages.KZorpAddForwardServiceMessage(service_name, messages.KZF_SVC_TRANSPARENT)
+            service_messages.append(add_service_message)
+
+        return service_messages
+
+    def test_several_service_with_subnets_do_not_fit_into_one_netlink_packet(self):
+        self._check_objects(self.__create_service_messages_that_do_not_fit_into_one_nelink_packet())
+
 
 class KZorpTestCaseServices(KZorpComm):
 
