@@ -35,12 +35,14 @@
 			break; \
 	}
 
-#define list_find(pos, head, member, elem) \
+#define list_find_or_first(pos, head, member, elem) \
 	{ \
 		list_for_each_entry(pos, head, member) { \
 			if (pos == elem) \
 				break; \
 		} \
+		if (&pos->member == head) \
+			pos = list_first_entry(head, typeof(*(pos)), member); \
 	}
 
 /***********************************************************
@@ -1993,17 +1995,14 @@ kznl_dump_zones(struct sk_buff *skb, struct netlink_callback *cb)
 	cfg = rcu_dereference(kz_config_rcu);
 	if (cb->args[ZONE_DUMP_ARG_STATE] == ZONE_DUMP_STATE_FIRST_CALL ||
 	    !kz_generation_valid(cfg, cb->args[ZONE_DUMP_ARG_CONFIG_GENERATION])) {
-		cb->args[ZONE_DUMP_ARG_CURRENT_ZONE] = 0;
+		cb->args[ZONE_DUMP_ARG_CURRENT_ZONE] = (long) list_first_entry(&cfg->zones.head, struct kz_zone, list);
 		cb->args[ZONE_DUMP_ARG_SUBNET_SUBPART] = 0;
 		cb->args[ZONE_DUMP_ARG_STATE] = ZONE_DUMP_STATE_HAVE_CONFIG;
 		cb->args[ZONE_DUMP_ARG_CONFIG_GENERATION] = kz_generation_get(cfg);
 	}
 
-	if (cb->args[ZONE_DUMP_ARG_STATE] != ZONE_DUMP_STATE_FIRST_CALL)
-		list_find(i, &cfg->zones.head, list, (struct kz_zone *) cb->args[ZONE_DUMP_ARG_CURRENT_ZONE]);
-
-	list_prepare_entry(i, &cfg->zones.head, list);
-	list_for_each_entry_continue(i, &cfg->zones.head, list) {
+	list_find_or_first(i, &cfg->zones.head, list, (struct kz_zone *) cb->args[ZONE_DUMP_ARG_CURRENT_ZONE]);
+	list_for_each_entry_from(i, &cfg->zones.head, list) {
 		kz_debug("zone name: '%s'", i->name);
 		if (kznl_build_zone(skb, NETLINK_CB(cb->skb).portid,
 				   cb->nlh->nlmsg_seq, 0, i, &cb->args[ZONE_DUMP_ARG_SUBNET_SUBPART]) < 0) {
