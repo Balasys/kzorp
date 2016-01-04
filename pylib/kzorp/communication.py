@@ -60,16 +60,18 @@ class Adapter(object):
         self.manage_capabilities = manage_caps
 
     def __enter__(self):
-        if self.manage_capabilities:
-            self.__acquire_caps()
+        self.__acquire_caps()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        if self.manage_capabilities:
-            self.__drop_caps()
+        self.__drop_caps()
 
     def __acquire_caps(self):
         """ aquire the CAP_NET_ADMIN capability """
+
+        if not self.manage_capabilities:
+            return
+
         try:
             import prctl
             prctl.set_caps((prctl.CAP_NET_ADMIN, prctl.CAP_EFFECTIVE, True))
@@ -80,6 +82,10 @@ class Adapter(object):
 
     def __drop_caps(self):
         """ drop the CAP_NET_ADMIN capability """
+
+        if not self.manage_capabilities:
+            return
+
         try:
             import prctl
             prctl.set_caps((prctl.CAP_NET_ADMIN, prctl.CAP_EFFECTIVE, False))
