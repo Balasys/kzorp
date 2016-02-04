@@ -1245,7 +1245,7 @@ kz_commit_transaction_delete_zones(const struct kz_transaction *tr, struct kz_co
 				zone = kz_zone_clone(i);
 				if (zone == NULL)
 					return -ENOMEM;
-				kz_debug("clone zone; name='%s', depth='%u'\n", zone->name, zone->depth);
+				kz_debug("cloned zone; name='%s', depth='%u'\n", zone->name, zone->depth);
 				list_add_tail(&zone->list, &new->zones.head);
 			}
 		}
