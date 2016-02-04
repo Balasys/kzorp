@@ -47,17 +47,17 @@ kzorp_getsockopt_results(u8 family, struct sock *sk, int optval, void __user *us
 	struct nf_conntrack_tuple tuple;
 
 	if (sk->sk_protocol != IPPROTO_TCP && sk->sk_protocol != IPPROTO_UDP) {
-		kz_debug("not a TCP or UDP socket; proto='%u'\n", sk->sk_protocol);
+		pr_debug("not a TCP or UDP socket; proto='%u'\n", sk->sk_protocol);
 		return -ENOPROTOOPT;
 	}
 
 	switch (family) {
 	case PF_INET:
-		kz_debug("getting results; proto='%u', src='%pI4:%hu', dst='%pI4:%hu'\n", sk->sk_protocol,
+		pr_debug("getting results; proto='%u', src='%pI4:%hu', dst='%pI4:%hu'\n", sk->sk_protocol,
 			 &inet_sk(sk)->inet_rcv_saddr, ntohs(inet_sk(sk)->inet_sport), &inet_sk(sk)->inet_daddr, ntohs(inet_sk(sk)->inet_dport));
 		break;
 	case PF_INET6:
-		kz_debug("getting results; proto='%u', src='%pI6c:%hu', dst='%pI6c:%hu'\n", sk->sk_protocol,
+		pr_debug("getting results; proto='%u', src='%pI6c:%hu', dst='%pI6c:%hu'\n", sk->sk_protocol,
 			 &inet6_sk(sk)->saddr, ntohs(inet_sk(sk)->inet_sport), inet6_sk(sk)->daddr_cache, ntohs(inet_sk(sk)->inet_dport));
 		break;
 	default:
@@ -65,7 +65,7 @@ kzorp_getsockopt_results(u8 family, struct sock *sk, int optval, void __user *us
 	}
 
 	if ((unsigned int) *len < sizeof(struct kz_lookup_result)) {
-		kz_debug("buffer size is too small for the result; len='%d', required='%lu'\n", *len, sizeof(struct kz_lookup_result));
+		pr_debug("buffer size is too small for the result; len='%d', required='%lu'\n", *len, sizeof(struct kz_lookup_result));
 		return -EINVAL;
 	}
 
@@ -98,7 +98,7 @@ kzorp_getsockopt_results(u8 family, struct sock *sk, int optval, void __user *us
 		rcu_read_lock_bh();
 		kzorp = kz_extension_find(ct);
 		if (kzorp == NULL) {
-			kz_debug("no kzorp extension structure found\n");
+			pr_debug("no kzorp extension structure found\n");
 			res = -ENOENT;
 			goto error_put_ct;
 		}
@@ -110,7 +110,7 @@ kzorp_getsockopt_results(u8 family, struct sock *sk, int optval, void __user *us
 			cookie = kz_generation_valid(cfg, kzorp->generation) ? cfg->cookie : 0;
 		}
 
-		kz_debug("found kzorp results; client_zone='%s', server_zone='%s', dispatcher='%s', service='%s'\n",
+		pr_debug("found kzorp results; client_zone='%s', server_zone='%s', dispatcher='%s', service='%s'\n",
 			 kzorp->czone ? kzorp->czone->name : kz_log_null,
 			 kzorp->szone ? kzorp->szone->name : kz_log_null,
 			 kzorp->dpt ? kzorp->dpt->name : kz_log_null,
@@ -138,7 +138,7 @@ error_put_ct:
 		return res;
 	}
 
-	kz_debug("conntrack entry not found\n");
+	pr_debug("conntrack entry not found\n");
 
 	return -ENOENT;
 }

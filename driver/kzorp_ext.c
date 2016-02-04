@@ -247,7 +247,7 @@ struct nf_conntrack_kzorp *kz_extension_create(struct nf_conn *ct)
          */
 	kzorp = kmem_cache_alloc(kz_cachep, GFP_ATOMIC);
 	if (unlikely(!kzorp)) {
-		kz_debug("allocation failed creating kzorp extension\n");
+		pr_debug("allocation failed creating kzorp extension\n");
 		return NULL;
 	}
 
@@ -364,7 +364,7 @@ int kz_extension_init(void)
 
         ret = register_pernet_subsys(&kz_extension_net_ops);
 	if (ret < 0) {
-		kz_err("kz_extension_init: cannot register pernet operations\n");
+		pr_err_ratelimited("kz_extension_init: cannot register pernet operations\n");
 		goto error_cleanup_hash;
 	}
 
