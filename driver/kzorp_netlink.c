@@ -1457,7 +1457,7 @@ kznl_recv_commit_transaction(struct kz_instance *instance, struct kz_transaction
 	}
 
 	/* all ok, commit finally */
-	pr_debug("install new config\n");
+	pr_info("reloading configuration\n");
 	kz_config_swap(new);
 	res = 0;
 	goto free_locals;
