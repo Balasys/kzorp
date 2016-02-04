@@ -105,7 +105,7 @@ static void transaction_cleanup_op(struct kz_transaction *);
 static void
 transaction_destroy(struct kz_transaction *t)
 {
-	pr_debug("transaction='%p'\n", t);
+	pr_debug("instance_id='%d' peer_id='%d'\n", t->instance_id, t->peer_pid);
 
 	BUG_ON(t != &transaction);
 
