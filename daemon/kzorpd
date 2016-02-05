@@ -316,7 +316,7 @@ class Daemon():
                                 zone_download.update(messages)
                         except NetlinkException as e:
                             Common.log(None, Common.CORE_ERROR, 1, "Unable to update addresses in zones, keep existing ones; error='%s'" % (e))
-                    else:
+                    elif self.zone_handler.dnscache.hosts:
                         with ZoneDownloadFactory().makeZoneDownload() as zone_download:
                             messages = self.zone_handler.create_zone_dynamic_address_initialization_messages()
                             zone_download.update(messages)
