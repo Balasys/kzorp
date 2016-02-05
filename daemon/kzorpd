@@ -317,9 +317,13 @@ class Daemon():
                         except NetlinkException as e:
                             Common.log(None, Common.CORE_ERROR, 1, "Unable to update addresses in zones, keep existing ones; error='%s'" % (e))
                     elif self.zone_handler.dnscache.hosts:
+                        Common.log(None, Common.CORE_ERROR, 3,
+                                   "Name resolution has failed, reinitialize hostname based addresses;")
                         with ZoneDownloadFactory().makeZoneDownload() as zone_download:
                             messages = self.zone_handler.create_zone_dynamic_address_initialization_messages()
                             zone_download.update(messages)
+                    else:
+                        Common.log(None, Common.CORE_INFO, 6, "No hostnames in cache, no update needed;")
             time.sleep(sleep_sec)
 
 def run(foreground, log_verbosity, user, group, manage_caps):
