@@ -73,11 +73,15 @@ v4_lookup_instance_bind_address(const struct kz_dispatcher *dpt,
 	const struct kz_bind *bind = kz_instance_bind_lookup_v4(dpt->instance, l4proto,
 								      iph->saddr, sport,
 								      iph->daddr, dport);
+	struct tcphdr _hdr, *hp;
+	hp = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_hdr), &_hdr);
+
 	if (bind) {
 		__be16 proxy_port = htons(bind->port);
 		__be32 proxy_addr = bind->addr.in.s_addr;
 
-		sk = nf_tproxy_get_sock_v4(&init_net, l4proto,
+		sk = nf_tproxy_get_sock_v4(&init_net, (struct sk_buff *)skb, hp,
+					   l4proto,
 					   iph->saddr, proxy_addr,
 					   sport, proxy_port,
 					   skb->dev, NFT_LOOKUP_LISTENER);
@@ -97,16 +101,17 @@ v4_get_socket_to_redirect_to(const struct kz_dispatcher *dpt,
 	const struct iphdr *iph = ip_hdr(skb);
 	const struct net_device *in = skb->dev;
 	struct sock *sk;
+	struct tcphdr _tcp_header;
+	struct tcphdr *tcp_header = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_tcp_header), &_tcp_header);
 
 	/* lookup established first */
-	sk = nf_tproxy_get_sock_v4(&init_net, iph->protocol, iph->saddr, iph->daddr,
+	sk = nf_tproxy_get_sock_v4(&init_net, (struct sk_buff *)skb, tcp_header,
+				   iph->protocol, iph->saddr, iph->daddr,
 				   sport, dport, in, NFT_LOOKUP_ESTABLISHED);
 
 	if (sk == NULL || sk->sk_state == TCP_TIME_WAIT)
 	{
 		struct sock *listener_sk = NULL;
-		struct tcphdr _tcp_header;
-		const struct tcphdr *tcp_header = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_tcp_header), &_tcp_header);
 
 		/* N-dimension dispatchers use the bind addresses registered for the instance */
 		listener_sk = v4_lookup_instance_bind_address(dpt, skb, l4proto, sport, dport);
@@ -224,7 +229,8 @@ relookup_time_wait6(struct sk_buff *skb, int l4proto, int thoff,
 		 * to a listener socket if there's one */
 		struct sock *sk2;
 
-		sk2 = nf_tproxy_get_sock_v6(dev_net(skb->dev), l4proto,
+		sk2 = nf_tproxy_get_sock_v6(dev_net(skb->dev), skb, thoff, hp,
+					    l4proto,
 					    &iph->saddr,
 					    tproxy_laddr6(skb, proxy_addr),
 					    hp->source,
@@ -272,7 +278,8 @@ redirect_v6(struct sk_buff *skb, u8 l4proto,
 	 * addresses, this happens if the redirect already happened
 	 * and the current packet belongs to an already established
 	 * connection */
-	sk = nf_tproxy_get_sock_v6(dev_net(skb->dev), tproto,
+	sk = nf_tproxy_get_sock_v6(dev_net(skb->dev), skb, thoff, hp,
+				   tproto,
 				   &iph->saddr, &iph->daddr,
 				   hp->source, hp->dest,
 				   skb->dev, NFT_LOOKUP_ESTABLISHED);
@@ -288,7 +295,8 @@ redirect_v6(struct sk_buff *skb, u8 l4proto,
 			if (sk == NULL)
 				/* no there's no established connection, check if
 				 * there's a listener on the redirected addr/port */
-				sk = nf_tproxy_get_sock_v6(dev_net(skb->dev), tproto,
+				sk = nf_tproxy_get_sock_v6(dev_net(skb->dev), skb, thoff, hp,
+							   tproto,
 							   &iph->saddr, proxy_addr,
 							   hp->source, proxy_port,
 							   skb->dev, NFT_LOOKUP_LISTENER);
