@@ -264,9 +264,10 @@ kz_extension_conntrack_destroy(struct nf_conntrack *nfct)
 	struct nf_conn *ct = (struct nf_conn *) nfct;
 	void (*destroy_orig)(struct nf_conntrack *);
 
+	rcu_read_lock();
+
 	kz_extension_destroy(ct);
 
-	rcu_read_lock();
 	destroy_orig = rcu_dereference(nf_ct_destroy_orig);
 	BUG_ON(destroy_orig == NULL);
 	destroy_orig(nfct);
