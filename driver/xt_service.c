@@ -35,7 +35,6 @@ service_mt(const struct sk_buff *skb, struct xt_action_param *par)
 
 	if ((p_svc = kzorp->svc) == NULL) {
 		/* no service for this packet => no match */
-		rcu_read_unlock();
 		goto ret_false;
 	}
 
