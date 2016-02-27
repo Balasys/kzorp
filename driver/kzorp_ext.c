@@ -173,11 +173,8 @@ static void kz_log_accounting(const struct kz_extension *kzorp, struct nf_conn *
 	if ((kzorp->svc != NULL) && (kzorp->sid != 0) &&
 	    (kzorp->svc->type == KZ_SERVICE_FORWARD)) {
 		if (kz_log_ratelimit()) {
-			struct nf_conn_acct *acct;
-
-			acct = nf_conn_acct_find(ct);
-			if (acct) {
-				struct nf_conn_counter *counter = acct->counter;
+			struct nf_conn_counter *counter = (struct nf_conn_counter *) nf_conn_acct_find(ct);
+			if (counter) {
 
 				printk(KERN_INFO "kzorp (svc/%s:%lu): Ending forwarded session; "
 				       "orig_bytes='%lld', orig_packets='%llu', "

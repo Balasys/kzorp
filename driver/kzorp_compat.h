@@ -20,8 +20,22 @@
  * Foundation,Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include <net/netfilter/nf_conntrack_zones.h>
+#include <net/genetlink.h>
+#ifdef genl_register_family_with_ops
+	static inline int
+	genl_register_family_with_ops_and_size(struct genl_family *family,
+					       const struct genl_ops *ops, size_t n_ops) {
+		return _genl_register_family_with_ops_grps(family, ops, n_ops, NULL, 0);
+	}
+#else
+	static inline int
+	genl_register_family_with_ops_and_size(struct genl_family *family,
+					       struct genl_ops *ops, size_t n_ops) {
+		return genl_register_family_with_ops(family, ops, n_ops);
+	}
+#endif
 
+#include <net/netfilter/nf_conntrack_zones.h>
 #ifdef NF_CT_DEFAULT_ZONE
 #define kz_nf_ct_zone_id(ct) nf_ct_zone((ct))
 #else
