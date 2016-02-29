@@ -11,7 +11,7 @@
 DAEMON_NAME="kzorpd"
 DAEMON="/usr/sbin/$DAEMON_NAME"
 DAEMONUSER="root"
-DAEMON_OPTS="-N -u root -g root"
+DAEMON_OPTS="-u zorp -g zorp"
 PIDFILE="/var/run/zorp/kzorpd.pid"
 
 PATH="/sbin:/bin:/usr/sbin:/usr/bin"
