@@ -22,16 +22,15 @@ service_mt(const struct sk_buff *skb, struct xt_action_param *par)
 {
 	struct xt_service_info *info = (struct xt_service_info *) par->matchinfo;
 	const struct kz_service *s_svc, *p_svc;
-	const struct kz_extension *kzorp;
-	struct kz_extension local_kzorp;
 	const struct kz_config *cfg = NULL;
+	struct kz_extension *kzorp;
 	bool res = true;
 
 	/* NOTE: unlike previous version, we provide match even for invalid and --notrack packets */
 
 	rcu_read_lock();
 
-	kz_extension_get_from_ct_or_lookup(skb, par->in, par->family, &local_kzorp, &kzorp, &cfg);
+	kzorp = kz_extension_find_or_evaluate(skb, par->in, par->family, &cfg);
 
 	if ((p_svc = kzorp->svc) == NULL) {
 		/* no service for this packet => no match */
@@ -53,6 +52,7 @@ service_mt(const struct sk_buff *skb, struct xt_action_param *par)
 			pr_debug("lookup done; id='%u'\n", info->service_id);
 		}
 	}
+	rcu_read_unlock();
 
 	pr_debug("service lookup done; type='%d', id='%u'\n", p_svc->type, p_svc->id);
 
@@ -69,9 +69,7 @@ service_mt(const struct sk_buff *skb, struct xt_action_param *par)
 ret_false:
 	res = false;
 done:
-	if (kzorp == &local_kzorp)
-		kz_destroy_kzorp(&local_kzorp);
-	rcu_read_unlock();
+	kz_extension_put(kzorp);
 	return res;
 }
 

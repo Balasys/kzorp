@@ -17,9 +17,9 @@ struct kz_config;
 
 struct kz_extension {
 	struct hlist_nulls_node hnnode;
-	struct rcu_head rcu;
 	struct nf_conntrack_tuple tuple_orig;
 	u16 zone_id;
+	atomic_t refcnt;
 	unsigned long sid;
 	/*  "lookup data" from here to end */
 	unsigned int generation; /* config version */
@@ -31,12 +31,11 @@ struct kz_extension {
 	u_int64_t session_start;
 };
 
-#define NF_CT_EXT_KZ_TYPE struct kz_extension
-
 extern int kz_extension_init(void);
 extern void kz_extension_cleanup(void);
 extern void kz_extension_fini(void);
-extern struct kz_extension *kz_extension_create(struct nf_conn *ct);
+extern struct kz_extension *kz_extension_create(void);
+extern void kz_extension_destroy(struct kz_extension *kzorp);
 /* handle kzorp extension in conntrack record
    an earlier version had the kzorp structure directly in nf_conn
    we changed that to use the extension API and add only on request
@@ -54,36 +53,13 @@ extern struct kz_extension *kz_extension_create(struct nf_conn *ct);
    sure to have have the first packet meet KZORP related lookup.
    
 */
-
 extern struct kz_extension *kz_extension_find(const struct nf_conn *ct);
+extern void kz_extension_add_to_cache(struct kz_extension *kzorp, const struct nf_conntrack_tuple *tuple, u16 zone_id);
+extern void kz_extension_remove_from_cache(struct kz_extension *kzorp);
 
-/* returns consolidated kzorp lookup info; caches it in ct, and uses 
-   the cache if valid;
-   returns NULL only if it's not possible to add kzorp extension to ct
-   rcu_dereferenced config is stored in p_cfg
-  call under rcu_read_lock() even if p_cfg==NULL!
-
-   the returned structure is placed in ct, and destroy will happen
-   when ct gets destroyed
-*/
-
-extern const struct kz_extension * kz_extension_update(
-	struct nf_conn *ct,
-	enum ip_conntrack_info ctinfo,
-	const struct sk_buff *skb,
-	const struct net_device * const in,
-	u8 l3proto,
-	const struct kz_config **p_cfg);
-
-/* unreferences stuff inside
-*/
-extern void kz_destroy_kzorp(struct kz_extension *kzorp);
-
-extern void
-kz_extension_get_from_ct_or_lookup(const struct sk_buff *skb,
-				   const struct net_device * const in,
-				   u8 l3proto,
-				   struct kz_extension *local_kzorp,
-				   const struct kz_extension **kzorp,
-				   const struct kz_config **cfg);
+extern struct kz_extension *
+kz_extension_find_or_evaluate(const struct sk_buff *skb,
+			      const struct net_device * const in,
+			      u8 l3proto,
+			      const struct kz_config **cfg);
 #endif

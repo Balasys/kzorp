@@ -336,7 +336,14 @@ kz_config_swap(struct kz_config * new_cfg)
  * Lookup
  ***********************************************************/
 
-void nfct_kzorp_lookup_rcu(struct kz_extension * kzorp,
+/* fills kzorp structure with lookup data
+   rcu_dereferenced config is stored in p_cfg
+   call under rcu_read_lock() even if p_cfg==NULL!
+   leaves non-lookup fields untouched!
+   pointers in the passed structure must be valid/NULL,
+   as they are released while the new ones addrefed
+*/
+static void kz_extension_fill_with_lookup_data_rcu(struct kz_extension * kzorp,
 	enum ip_conntrack_info ctinfo,
 	const struct sk_buff *skb,
 	const struct net_device * const in,
@@ -513,7 +520,6 @@ done:
 
 	return;
 }
-EXPORT_SYMBOL_GPL(nfct_kzorp_lookup_rcu);
 
 static struct kz_extension *
 kz_extension_add(struct nf_conn *ct,
@@ -548,17 +554,24 @@ kz_extension_add(struct nf_conn *ct,
 		return NULL;
 	}
 
-	kzorp = kz_extension_create(ct);
+	kzorp = kz_extension_create();
 	if (unlikely(!kzorp))
 		return NULL;
 
 	/* implicit:  kzorp->sid = 0; */
-	nfct_kzorp_lookup_rcu(kzorp, ctinfo, skb, in, l3proto, p_cfg);
+	kz_extension_fill_with_lookup_data_rcu(kzorp, ctinfo, skb, in, l3proto, p_cfg);
+	kz_extension_add_to_cache(kzorp, &ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple, kz_nf_ct_zone_id(ct));
 	return kzorp;
 }
 
-const struct kz_extension *
-kz_extension_update(struct nf_conn *ct,
+/* returns consolidated kzorp lookup info; caches it in ct, and uses
+   the cache if valid;
+   returns NULL only if it's not possible to add kzorp extension to ct
+   rcu_dereferenced config is stored in p_cfg
+  call under rcu_read_lock() even if p_cfg==NULL!
+*/
+static struct kz_extension *
+kz_extension_find_or_add(struct nf_conn *ct,
 		    enum ip_conntrack_info ctinfo,
 		    const struct sk_buff *skb,
 		    const struct net_device * const in,
@@ -572,7 +585,7 @@ kz_extension_update(struct nf_conn *ct,
 	kzorp = kz_extension_find(ct);
 	if (kzorp) {
 		if (unlikely(!kz_generation_valid(kzorp_config, kzorp->generation)))
-			nfct_kzorp_lookup_rcu(kzorp, ctinfo, skb, in, l3proto, &kzorp_config);
+			kz_extension_fill_with_lookup_data_rcu(kzorp, ctinfo, skb, in, l3proto, &kzorp_config);
 	} else {
 		kzorp = kz_extension_add(ct, ctinfo, skb, in, l3proto, &kzorp_config);
 	}
@@ -582,38 +595,36 @@ kz_extension_update(struct nf_conn *ct,
 
 	return kzorp;
 }
-EXPORT_SYMBOL_GPL(kz_extension_update);
 
-void
-kz_extension_get_from_ct_or_lookup(const struct sk_buff *skb,
+struct kz_extension *
+kz_extension_find_or_evaluate(const struct sk_buff *skb,
 				   const struct net_device * const in,
 				   u8 l3proto,
-				   struct kz_extension *local_kzorp,
-				   const struct kz_extension **kzorp,
 				   const struct kz_config **cfg)
 {
 	struct nf_conn *ct;
 	enum ip_conntrack_info ctinfo;
+	struct kz_extension *kzorp;
 
 	ct = nf_ct_get((struct sk_buff *)skb, &ctinfo);
 	if (ct && !nf_ct_is_untracked(ct)) {
 		// ctinfo filled by nf_ct_get
-		*kzorp = kz_extension_update(ct, ctinfo, skb, in, l3proto, cfg);
+		kzorp = kz_extension_find_or_add(ct, ctinfo, skb, in, l3proto, cfg);
 	} else {
 		ctinfo = IP_CT_NEW;
-		*kzorp = NULL;
+		kzorp = NULL;
 	}
 
-	if (*kzorp == NULL) {
+	if (kzorp == NULL) {
 		pr_debug("cannot add kzorp extension, doing local lookup\n");
 
-		memset(local_kzorp, 0, sizeof(struct kz_extension));
-		nfct_kzorp_lookup_rcu(local_kzorp, ctinfo, skb, in, l3proto, cfg);
-
-		*kzorp = local_kzorp;
+		kzorp = kz_extension_create();
+		kz_extension_fill_with_lookup_data_rcu(kzorp, ctinfo, skb, in, l3proto, cfg);
 	}
+
+	return kzorp;
 }
-EXPORT_SYMBOL_GPL(kz_extension_get_from_ct_or_lookup);
+EXPORT_SYMBOL_GPL(kz_extension_find_or_evaluate);
 
 /***********************************************************
  * Common macros
@@ -1747,25 +1758,6 @@ kz_log_session_verdict(enum kz_verdict verdict,
 }
 EXPORT_SYMBOL_GPL(kz_log_session_verdict);
 
-
-/***********************************************************
- * Conntrack extension
- ***********************************************************/
-
-void
-kz_destroy_kzorp(struct kz_extension *kzorp)
-{
-	if (kzorp->czone != NULL)
-		kz_zone_put(kzorp->czone);
-	if (kzorp->szone != NULL)
-		kz_zone_put(kzorp->szone);
-	if (kzorp->dpt != NULL)
-		kz_dispatcher_put(kzorp->dpt);
-	if (kzorp->svc != NULL)
-		kz_service_put(kzorp->svc);
-}
-
-EXPORT_SYMBOL_GPL(kz_destroy_kzorp);
 
 /***********************************************************
  * Initialization

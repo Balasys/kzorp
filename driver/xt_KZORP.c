@@ -1214,8 +1214,7 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	unsigned int verdict = NF_ACCEPT;
 	enum ip_conntrack_info ctinfo;
 	struct nf_conn *ct;
-	const struct kz_extension *kzorp;
-	struct kz_extension local_kzorp;
+	struct kz_extension *kzorp;
 	const struct kz_config *cfg = NULL;
 	u_int8_t l4proto = 0;
 	struct {
@@ -1292,7 +1291,7 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	}
 
 	rcu_read_lock();
-	kz_extension_get_from_ct_or_lookup(skb, in, par->family, &local_kzorp, &kzorp, &cfg);
+	kzorp = kz_extension_find_or_evaluate(skb, in, par->family, &cfg);
 
 	pr_debug("lookup data for kzorp hook; dpt='%s', client_zone='%s', server_zone='%s', svc='%s'\n",
 		 kzorp->dpt ? kzorp->dpt->name : kz_log_null,
@@ -1331,10 +1330,8 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 		BUG();
 		break;
 	}
-
-	if (kzorp == &local_kzorp)
-		kz_destroy_kzorp(&local_kzorp);
 	rcu_read_unlock();
+	kz_extension_put(kzorp);
 
 	return verdict;
 }

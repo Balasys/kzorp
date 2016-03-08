@@ -133,6 +133,7 @@ kzorp_getsockopt_results(u8 family, struct sock *sk, int optval, void __user *us
 		COPY_NUM_TO_USER(user, rule_id, kzorp->rule_id);
 error_put_ct:
 		rcu_read_unlock_bh();
+		kz_extension_put(kzorp);
 		nf_ct_put(ct);
 
 		return res;

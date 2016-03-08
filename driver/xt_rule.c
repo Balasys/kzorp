@@ -20,21 +20,16 @@
 static bool
 rule_mt_v0_eval(const struct sk_buff *skb, const struct ipt_rule_info_v0 *info, const struct xt_action_param *par)
 {
-	const struct kz_extension *kzorp;
-	struct kz_extension local_kzorp;
+	struct kz_extension *kzorp;
 	bool res = true;
 
-	rcu_read_lock();
-	kz_extension_get_from_ct_or_lookup(skb, par->in, par->family, &local_kzorp, &kzorp, NULL);
+	kzorp = kz_extension_find_or_evaluate(skb, par->in, par->family, NULL);
 
 	res &= (kzorp->rule_id == info->id);
 	if (res && (info->flags & IPT_RULE_NOCOUNT) == 0)
 		kz_rule_count_inc(kzorp->dpt->rule);
+	kz_extension_put(kzorp);
 	pr_debug("match calculation has finished; flags='%x', rule_id='%d', result='%d'", info->flags, info->id, res);
-
-	if (kzorp == &local_kzorp)
-		kz_destroy_kzorp(&local_kzorp);
-	rcu_read_unlock();
 
 	return res;
 }
