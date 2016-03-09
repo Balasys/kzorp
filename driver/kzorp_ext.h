@@ -36,6 +36,21 @@ extern void kz_extension_cleanup(void);
 extern void kz_extension_fini(void);
 extern struct kz_extension *kz_extension_create(void);
 extern void kz_extension_destroy(struct kz_extension *kzorp);
+
+static inline struct kz_extension *kz_extension_get(struct kz_extension *object_name)
+{
+	if (atomic_inc_not_zero(&object_name->refcnt) == 0)
+		return NULL;
+
+	return object_name;
+}
+
+static inline void kz_extension_put(struct kz_extension *object_name)
+{
+	if (atomic_dec_and_test(&object_name->refcnt))
+		kz_extension_destroy(object_name);
+}
+
 /* handle kzorp extension in conntrack record
    an earlier version had the kzorp structure directly in nf_conn
    we changed that to use the extension API and add only on request

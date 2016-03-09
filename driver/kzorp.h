@@ -479,7 +479,6 @@ static inline void kz_##object_name##_put(struct kz_##object_name *object_name) 
 kz_object_declare_ref_funcs(zone)
 kz_object_declare_ref_funcs(service)
 kz_object_declare_ref_funcs(dispatcher)
-kz_object_declare_ref_funcs(extension)
 
 /***********************************************************
  * Conntrack structure extension
