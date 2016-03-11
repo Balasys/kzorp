@@ -234,19 +234,30 @@ kz_extension_prepare_to_cache_addition(struct kz_extension *kzorp,
 	kzorp->zone_id = zone_id;
 }
 
-void
+struct kz_extension *
 kz_extension_add_to_cache(struct kz_extension *kzorp, const struct nf_conntrack_tuple *tuple, u16 zone_id)
 {
 	const u32 hash_index = kz_extension_get_hash_index(tuple, zone_id);
         const u32 lock_index = kz_hash_get_lock_index(hash_index);
+	struct hlist_nulls_node *n;
+	struct kz_extension *kzorp_find;
 
 	kz_extension_prepare_to_cache_addition(kzorp, tuple, zone_id);
 	spin_lock(&kz_hash_locks[lock_index]);
+
+	hlist_nulls_for_each_entry_rcu(kzorp_find, n, &kz_hash[hash_index], hnnode) {
+		if (__kz_extension_key_equal(kzorp_find, tuple, zone_id)) {
+			pr_err("Duplicate kzorp entry found in cache;\n");
+			spin_unlock(&kz_hash_locks[lock_index]);
+			return kz_extension_get(kzorp_find);
+		}
+	}
+
 	hlist_nulls_add_head_rcu(&kzorp->hnnode, &kz_hash[hash_index]);
 	atomic_inc(&kz_hash_lengths[hash_index]);
 	spin_unlock(&kz_hash_locks[lock_index]);
 
-	kz_extension_get(kzorp);
+	return kz_extension_get(kzorp);
 }
 
 struct kz_extension *kz_extension_create(void)
@@ -471,6 +482,34 @@ static struct pernet_operations kz_extension_net_ops = {
 	.exit_batch     = kz_extension_net_exit_batch,
 };
 
+static inline void kz_ct_dump_tuple_ip(const struct nf_conntrack_tuple *t, const u16 zone_id)
+{
+	pr_err_ratelimited("existing item in kzorp hash with the same tuple %p: %u %pI4:%hu -> %pI4:%hu\n",
+			   t, t->dst.protonum,
+			   &t->src.u3.ip, ntohs(t->src.u.all),
+			   &t->dst.u3.ip, ntohs(t->dst.u.all));
+}
+
+static inline void kz_ct_dump_tuple_ipv6(const struct nf_conntrack_tuple *t, const u16 zone_id)
+{
+	pr_err_ratelimited("existing item in kzorp hash with the same tuple %p: %u %pI6 %hu -> %pI6 %hu\n",
+			   t, t->dst.protonum,
+			   t->src.u3.all, ntohs(t->src.u.all),
+			   t->dst.u3.all, ntohs(t->dst.u.all));
+}
+
+static inline void kz_ct_dump_tuple(const struct nf_conntrack_tuple *t, const u16 zone_id)
+{
+	switch (t->src.l3num) {
+	case AF_INET:
+		kz_ct_dump_tuple_ip(t, zone_id);
+		break;
+	case AF_INET6:
+		kz_ct_dump_tuple_ipv6(t, zone_id);
+		break;
+	}
+}
+
 /* deallocate entries in the hashtable */
 static void clean_hash(void)
 {
@@ -480,6 +519,7 @@ static void clean_hash(void)
 		while (!hlist_nulls_empty(&kz_hash[i])) {
 			struct kz_extension *kzorp = kz_extension_get_from_node(kz_hash[i].first);
 			kz_extension_remove_from_cache(kzorp);
+			kz_ct_dump_tuple(&kzorp->tuple_orig, kzorp->zone_id);
 			kz_extension_put(kzorp);
 		}
 	}

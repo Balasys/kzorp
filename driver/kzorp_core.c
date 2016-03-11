@@ -529,7 +529,7 @@ kz_extension_add(struct nf_conn *ct,
 		 const u8 l3proto,
 		 const struct kz_config **p_cfg)
 {
-	struct kz_extension *kzorp;
+	struct kz_extension *kzorp, *kzorp_in_cache;
 
 	/* if the conntrack is confirmed extension must not be added */
 	if (unlikely(nf_ct_is_confirmed(ct))) {
@@ -560,7 +560,11 @@ kz_extension_add(struct nf_conn *ct,
 
 	/* implicit:  kzorp->sid = 0; */
 	kz_extension_fill_with_lookup_data_rcu(kzorp, ctinfo, skb, in, l3proto, p_cfg);
-	kz_extension_add_to_cache(kzorp, &ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple, kz_nf_ct_zone_id(ct));
+	kzorp_in_cache = kz_extension_add_to_cache(kzorp, &ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple, kz_nf_ct_zone_id(ct));
+	if (unlikely(kzorp != kzorp_in_cache)) {
+		kz_extension_put(kzorp);
+		kzorp = kzorp_in_cache;
+	}
 	return kzorp;
 }
 

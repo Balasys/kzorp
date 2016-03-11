@@ -69,7 +69,7 @@ static inline void kz_extension_put(struct kz_extension *object_name)
    
 */
 extern struct kz_extension *kz_extension_find(const struct nf_conn *ct);
-extern void kz_extension_add_to_cache(struct kz_extension *kzorp, const struct nf_conntrack_tuple *tuple, u16 zone_id);
+extern struct kz_extension *kz_extension_add_to_cache(struct kz_extension *kzorp, const struct nf_conntrack_tuple *tuple, u16 zone_id);
 extern void kz_extension_remove_from_cache(struct kz_extension *kzorp);
 
 extern struct kz_extension *
