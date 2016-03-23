@@ -1056,7 +1056,7 @@ kznl_dump_service_nat_entry(struct kza_service_nat_params *a, struct nf_nat_rang
 static struct genl_family kznl_family = {
 	.id = GENL_ID_GENERATE,
 	.name = "kzorp",
-	.version = 1,
+	.version = 2,
 	.maxattr = KZNL_ATTR_TYPE_COUNT,
 };
 
