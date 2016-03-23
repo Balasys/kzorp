@@ -2053,34 +2053,43 @@ EXPORT_SYMBOL_GPL(kz_instance_bind_lookup_v6);
  * NAT rule lookup
  ***********************************************************/
 
+static inline int
+iprange_ipv6_lt(const struct in6_addr *a, const struct in6_addr *b)
+{
+	unsigned int i;
+
+	for (i = 0; i < 4; ++i) {
+		if (a->s6_addr32[i] != b->s6_addr32[i])
+			return ntohl(a->s6_addr32[i]) < ntohl(b->s6_addr32[i]);
+	}
+
+	return 0;
+}
+
 /* FIXME: this is _heavily_ dependent on TCP and UDP port numbers
  * being mapped to the same offset in the ip_nat_range structure */
 static inline int
 nat_in_range(const struct nf_nat_range *r,
-	 const __be32 addr, const __be16 port,
-	 const u_int8_t proto)
+	     const union nf_inet_addr *addr, const u_int8_t l3proto)
 {
 	/* log messages: the IP addresses are in host-endian format due to usage of "<" and ">" relations */
-	pr_debug("comparing range; flags='%x', start_ip='%pI4', end_ip='%pI4', start_port='%u', end_port='%u'\n",
-		 r->flags,
-	         kz_nat_range_get_min_ip(r),
-	         kz_nat_range_get_max_ip(r),
-	         ntohs(*kz_nat_range_get_min_port(r)),
-	         ntohs(*kz_nat_range_get_max_port(r)));
-	pr_debug("with packet; proto='%d', ip='%pI4', port='%u'\n",
-		 proto, &addr, ntohs(port));
-
-	if (r->flags & NF_NAT_RANGE_MAP_IPS) {
-		if ((*kz_nat_range_get_min_ip(r) && ntohl(addr) < ntohl(*kz_nat_range_get_min_ip(r))) ||
-		    (*kz_nat_range_get_max_ip(r) && ntohl(addr) > ntohl(*kz_nat_range_get_max_ip(r))))
+	switch (l3proto) {
+	case NFPROTO_IPV4:
+		pr_debug("comparing range; start_ip='%pI4', end_ip='%pI4'\n",
+			 &r->min_addr.ip, &r->max_addr.ip);
+		pr_debug("with packet; ip='%pI4'\n", &addr->ip);
+		if (ntohl(addr->ip) < ntohl(r->min_addr.ip)
+		    || ntohl(addr->ip) > ntohl(r->max_addr.ip))
 			return 0;
-	}
-
-	if ((r->flags & NF_NAT_RANGE_PROTO_SPECIFIED) &&
-	    ((proto == IPPROTO_TCP) || (proto == IPPROTO_UDP))) {
-		if ((*kz_nat_range_get_min_port(r) && ntohs(port) < ntohs(*kz_nat_range_get_min_port(r))) ||
-		    (*kz_nat_range_get_max_port(r) && ntohs(port) > ntohs(*kz_nat_range_get_max_port(r))))
+		break;
+	case NFPROTO_IPV6:
+		pr_debug("comparing range; start_ip='%pI6c', end_ip='%pI6c'\n",
+			 &r->min_addr.ip6, &r->max_addr.ip6);
+		pr_debug("with packet; ip='%pI6c'\n", &addr->ip6);
+		if (iprange_ipv6_lt(&addr->in6, &r->min_addr.in6)
+		    || iprange_ipv6_lt(&r->max_addr.in6, &addr->in6))
 			return 0;
+		break;
 	}
 
 	pr_debug("match\n");
