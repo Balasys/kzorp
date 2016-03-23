@@ -237,6 +237,7 @@ struct kz_service_nat_entry {
 	struct nf_nat_range src;
 	struct nf_nat_range dst;
 	struct nf_nat_range map;
+	uint8_t l3proto;
 };
 
 struct kz_service_info_fwd {
@@ -457,8 +458,10 @@ extern void kz_service_destroy(struct kz_service *service);
 extern struct kz_service *__kz_service_lookup_name(const struct list_head * const head,
 						   const char *name);
 extern struct kz_service *kz_service_lookup_name(const struct kz_config *cfg, const char *name);
-extern int kz_service_add_nat_entry(struct list_head *head, struct nf_nat_range *src,
-				    struct nf_nat_range *dst, struct nf_nat_range *map);
+extern int kz_service_add_nat_entry(struct list_head *head,
+				    struct nf_nat_range *src,
+				    struct nf_nat_range *dst,
+				    struct nf_nat_range *map, uint8_t l3proto);
 extern struct kz_service *kz_service_clone(const struct kz_service * const o);
 extern long kz_service_lock(struct kz_service * const service);
 extern void kz_service_unlock(struct kz_service * const service);
