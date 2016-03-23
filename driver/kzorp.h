@@ -628,10 +628,13 @@ extern struct kz_zone * kz_head_zone_lookup(const struct kz_head_z *h, const uni
 extern int kz_add_zone(struct kz_zone *zone);
 extern int kz_add_zone_subnet(struct kz_zone *zone, const struct kz_subnet * const zone_subnet);
 
-extern const struct nf_nat_range *kz_service_nat_lookup(const struct list_head * const head,
-						    const __be32 saddr, const __be32 daddr,
-						    const __be16 sport, const __be16 dport,
-						    const u_int8_t proto);
+extern const struct nf_nat_range *kz_service_nat_lookup(const struct list_head
+							*const head,
+							const union nf_inet_addr
+							*saddr,
+							const union nf_inet_addr
+							*daddr,
+							const u_int8_t l3proto);
 
 struct kz_traffic_props {
 	sa_family_t l3proto;

@@ -2088,23 +2088,31 @@ nat_in_range(const struct nf_nat_range *r,
 	return 1;
 }
 
-const struct nf_nat_range *
-kz_service_nat_lookup(const struct list_head * const head,
-		      const __be32 saddr, const __be32 daddr,
-		      const __be16 sport, const __be16 dport,
-		  const u_int8_t proto)
+const struct nf_nat_range *kz_service_nat_lookup(const struct list_head *const
+						 head,
+						 const union nf_inet_addr
+						 *saddr,
+						 const union nf_inet_addr
+						 *daddr, const u_int8_t l3proto)
 {
 	struct kz_service_nat_entry *i;
 
-	pr_debug("proto='%u', src='%pI4:%u', dst='%pI4:%u'\n",
-		 proto, &saddr, ntohs(sport), &daddr, ntohs(dport));
+	switch (l3proto) {
+	case NFPROTO_IPV4:
+		pr_debug("src='%pI4', dst='%pI4'\n", &saddr->ip, &daddr->ip);
+		break;
+	case NFPROTO_IPV6:
+		pr_debug("src='%pI6c', dst='%pI6c'\n",
+			 &saddr->ip6, &daddr->ip6);
+		break;
+	}
 
 	list_for_each_entry(i, head, list) {
 		/* source range _must_ match, destination either matches or
 		 * the destination range is empty in the rule */
-		if (nat_in_range(&i->src, saddr, sport, proto) &&
-		    (((*kz_nat_range_get_min_ip(&i->dst) == 0) && (*kz_nat_range_get_max_ip(&i->dst) == 0)) ||
-		    nat_in_range(&i->dst, daddr, dport, proto))) {
+		if (l3proto == i->l3proto &&
+		    nat_in_range(&i->src, saddr, l3proto) &&
+		    nat_in_range(&i->dst, daddr, l3proto)) {
 			return &i->map;
 		}
 	}

@@ -840,9 +840,8 @@ service_clone_nat_list(const struct list_head * const src, struct list_head *dst
 	int res = 0;
 
 	list_for_each_entry(i, src, list) {
-		res =
-		    kz_service_add_nat_entry(dst, &i->src, &i->dst, &i->map,
-					     i->l3proto);
+		res = kz_service_add_nat_entry(dst, &i->src, &i->dst, &i->map,
+					       i->l3proto);
 		if (res < 0)
 			break;
 	}
