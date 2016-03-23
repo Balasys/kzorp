@@ -393,7 +393,7 @@ def parse_rule_entry_attrs(attr):
     if attr.has_key(KZNL_ATTR_DPT_NAME):
         dpt_name = parse_name_attr(attr[KZNL_ATTR_DPT_NAME])
     else:
-        raise AttributeRequiredError, "KZNL_ATTR_DPT_NAME"
+        raise KeyError("KZNL_ATTR_DPT_NAME")
 
     rule_id = parse_rule_id(attr)
     rule_entries = {}
@@ -531,7 +531,7 @@ class KZorpAddServiceMessage(GenericNetlinkMessage):
         if service_type in service_types:
             return service_types[service_type].parse(version, data)
         else:
-            raise AttributeRequiredError, "KZNL_ATTR_SVC_PARAMS"
+            raise KeyError("KZNL_ATTR_SVC_PARAMS")
 
     @classmethod
     def parse_base_attrs(cls, version, data):
@@ -737,7 +737,7 @@ class KZorpAddServiceNATMappingMessage(GenericNetlinkMessage):
         if attrs.has_key(KZNL_ATTR_SVC_NAME):
             name = parse_name_attr(attrs[KZNL_ATTR_SVC_NAME])
         else:
-            raise AttributeRequiredError, "KZNL_ATTR_SVC_NAME"
+            raise KeyError("KZNL_ATTR_SVC_NAME")
 
         if version == 1:
             if attrs.has_key(KZNL_ATTR_SVC_NAT_SRC):
@@ -870,7 +870,7 @@ class KZorpAddZoneMessage(GenericNetlinkMessage):
         if attrs.has_key(KZNL_ATTR_ZONE_NAME):
             name = parse_name_attr(attrs[KZNL_ATTR_ZONE_NAME])
         else:
-            raise AttributeRequiredError, "KZNL_ATTR_ZONE_NAME"
+            raise KeyError("KZNL_ATTR_ZONE_NAME")
 
         if attrs.has_key(KZNL_ATTR_ZONE_PNAME):
             kw['pname'] = parse_name_attr(attrs[KZNL_ATTR_ZONE_PNAME])
@@ -913,7 +913,7 @@ class KZorpObjectSubnetEntryMessage(KZorpObjectEntryMessage):
             elif family == socket.AF_INET6:
                 self.mask = '\xff' * 16
             else:
-                raise AttributeRequiredError, "KZNL_ATTR_ZONE_SUBNET"
+                raise KeyError("KZNL_ATTR_ZONE_SUBNET")
 
         self._build_payload()
 
@@ -929,7 +929,7 @@ class KZorpObjectSubnetEntryMessage(KZorpObjectEntryMessage):
         if attrs.has_key(KZNL_ATTR_ZONE_NAME):
             kw['zone_name']= parse_name_attr(attrs[KZNL_ATTR_ZONE_NAME])
         else:
-            raise AttributeRequiredError, "KZNL_ATTR_ZONE_NAME"
+            raise KeyError("KZNL_ATTR_ZONE_NAME")
 
         if attrs.has_key(KZNL_ATTR_ZONE_SUBNET):
             (family, address, mask) = parse_inet_range_attr(attrs[KZNL_ATTR_ZONE_SUBNET])
@@ -937,7 +937,7 @@ class KZorpObjectSubnetEntryMessage(KZorpObjectEntryMessage):
             kw['address'] = address
             kw['mask'] = mask
         else:
-            raise AttributeRequiredError, "KZNL_ATTR_ZONE_SUBNET"
+            raise KeyError("KZNL_ATTR_ZONE_SUBNET")
 
         return KZorpAddZoneSubnetMessage(**kw)
 
@@ -992,12 +992,12 @@ class KZorpAddDispatcherMessage(GenericNetlinkMessage):
         if attrs.has_key(KZNL_ATTR_DPT_NAME):
             name = parse_name_attr(attrs[KZNL_ATTR_DPT_NAME])
         else:
-            raise AttributeRequiredError, "KZNL_ATTR_DPT_NAME"
+            raise KeyError("KZNL_ATTR_DPT_NAME")
 
         if attrs.has_key(KZNL_ATTR_DISPATCHER_N_DIMENSION_PARAMS):
             num_rules = parse_n_dimension_attr(attrs[KZNL_ATTR_DISPATCHER_N_DIMENSION_PARAMS])
         else:
-            raise AttributeRequiredError, "KZNL_ATTR_DISPATCHER_N_DIMENSION_PARAMS"
+            raise KeyError("KZNL_ATTR_DISPATCHER_N_DIMENSION_PARAMS")
 
         return KZorpAddDispatcherMessage(name, num_rules)
 
