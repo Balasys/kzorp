@@ -139,19 +139,6 @@ struct kza_service_params {
 	__u8 type;
 } __attribute__ ((packed));
 
-enum kzf_service_nat_params_flags {
-	KZF_SERVICE_NAT_MAP_IPS		   = 1 << 0,
-	KZF_SERVICE_NAT_MAP_PROTO_SPECIFIC = 1 << 1,
-	KZF_SERVICE_NAT_MAP_PUBLIC_FLAGS   = KZF_SERVICE_NAT_MAP_IPS |
-					     KZF_SERVICE_NAT_MAP_PROTO_SPECIFIC
-};
-
-struct kza_service_nat_params {
-	__be32 flags;
-	__be32 min_ip, max_ip;
-	__be16 min_port, max_port;
-} __attribute__ ((packed));
-
 enum kz_service_ipv4_deny_method {
 	KZ_SERVICE_DENY_METHOD_V4_DROP,
 	KZ_SERVICE_DENY_METHOD_V4_TCP_RESET,

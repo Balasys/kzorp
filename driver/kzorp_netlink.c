@@ -698,28 +698,6 @@ error:
 }
 
 static inline int
-kznl_parse_service_nat_params(const struct nlattr *attr, struct nf_nat_range *range)
-{
-	const struct kza_service_nat_params *a = nla_data(attr);
-	u_int32_t flags = ntohl(a->flags);
-
-	if ((flags | KZF_SERVICE_NAT_MAP_PUBLIC_FLAGS) != KZF_SERVICE_NAT_MAP_PUBLIC_FLAGS)
-		return -EINVAL;
-
-	if (flags & KZF_SERVICE_NAT_MAP_IPS)
-		range->flags |= NF_NAT_RANGE_MAP_IPS;
-	if (flags & KZF_SERVICE_NAT_MAP_PROTO_SPECIFIC)
-		range->flags |= NF_NAT_RANGE_PROTO_SPECIFIED;
-
-	kz_nat_range_set_min_ip(range, a->min_ip);
-	kz_nat_range_set_max_ip(range, a->max_ip);
-	kz_nat_range_set_min_port(range, a->min_port);
-	kz_nat_range_set_max_port(range, a->max_port);
-
-	return 0;
-}
-
-static inline int
 kznl_parse_service_deny_method(const struct nlattr *attr, unsigned int *type)
 {
 	*type = nla_get_u8(attr);
@@ -1030,23 +1008,6 @@ kznl_dump_service_deny_method(struct sk_buff *skb, unsigned int attr,
 
 nla_put_failure:
 	return -1;
-}
-
-static inline int
-kznl_dump_service_nat_entry(struct kza_service_nat_params *a, struct nf_nat_range *range)
-{
-	if (range->flags & NF_NAT_RANGE_MAP_IPS)
-		a->flags |= KZF_SERVICE_NAT_MAP_IPS;
-	if (range->flags & NF_NAT_RANGE_PROTO_SPECIFIED)
-		a->flags |= KZF_SERVICE_NAT_MAP_PROTO_SPECIFIC;
-
-	a->flags = htons(a->flags);
-	a->min_ip = *kz_nat_range_get_min_ip(range);
-	a->max_ip = *kz_nat_range_get_max_ip(range);
-	a->min_port = *kz_nat_range_get_min_port(range);
-	a->max_port = *kz_nat_range_get_max_port(range);
-
-	return 0;
 }
 
 /***********************************************************

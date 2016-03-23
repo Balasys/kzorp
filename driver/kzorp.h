@@ -513,15 +513,6 @@ kz_dispatcher_put(struct kz_dispatcher *dispatcher)
 int kz_log_ratelimit(void);
 bool kz_log_session_verdict_enabled(void);
 
-static inline const __be32 *kz_nat_range_get_min_ip(const struct nf_nat_range *r) { return &r->min_addr.ip; }
-static inline const __be32 *kz_nat_range_get_max_ip(const struct nf_nat_range *r) { return &r->max_addr.ip; }
-static inline const __be16 *kz_nat_range_get_min_port(const struct nf_nat_range *r) { return &r->min_proto.udp.port; }
-static inline const __be16 *kz_nat_range_get_max_port(const struct nf_nat_range *r) { return &r->max_proto.udp.port; }
-static inline void kz_nat_range_set_min_ip(struct nf_nat_range *r, __be32 min_ip) { r->min_addr.ip = min_ip; }
-static inline void kz_nat_range_set_max_ip(struct nf_nat_range *r, __be32 max_ip) { r->max_addr.ip = max_ip; }
-static inline void kz_nat_range_set_min_port(struct nf_nat_range *r, __be16 min_port) { r->min_proto.udp.port = min_port; }
-static inline void kz_nat_range_set_max_port(struct nf_nat_range *r, __be16 max_port) { r->max_proto.udp.port = max_port; }
-
 /***********************************************************
  * Conntrack structure extension
  ***********************************************************/
