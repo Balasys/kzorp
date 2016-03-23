@@ -1,6 +1,8 @@
 import struct
 import socket
 from netlink import *
+from netaddr.fbsocket import inet_ntop
+from netaddr import IPRange, IPNetwork
 
 # message types
 KZNL_MSG_INVALID                = 0
@@ -681,28 +683,53 @@ class KZorpGetServiceMessage(GenericNetlinkMessage):
 
 class KZorpAddServiceNATMappingMessage(GenericNetlinkMessage):
 
-    def __init__(self, name, nat_src, nat_map, nat_dst=None):
-        super(KZorpAddServiceNATMappingMessage, self).__init__(self.command, version = 1)
+    def __init__(self, name, nat_src, nat_map, nat_dst, version):
+        super(KZorpAddServiceNATMappingMessage, self).__init__(self.command, version=version)
 
         self.name = name
         self.nat_src = nat_src
         self.nat_dst = nat_dst
         self.nat_map = nat_map
+        self.version = version
 
         self._build_payload()
 
     def _build_payload(self):
         self.append_attribute(create_name_attr(KZNL_ATTR_SVC_NAME, self.name))
 
-        (flags, min_ip, max_ip, min_port, max_port) = self.nat_src
-        self.append_attribute(create_nat_range_attr(KZNL_ATTR_SVC_NAT_SRC, flags, min_ip, max_ip, min_port, max_port))
+        if self.nat_src.version != self.nat_dst.version or self.nat_src.version != self.nat_map.version:
+            raise ValueError("Inconsistent IP version: nat_src='%s', nat_dst='%s', nat_map='%s'" % (self.nat_src, self.nat_dst, nat_map))
 
-        (flags, min_ip, max_ip, min_port, max_port) = self.nat_map
-        self.append_attribute(create_nat_range_attr(KZNL_ATTR_SVC_NAT_MAP, flags, min_ip, max_ip, min_port, max_port))
+        ip_version = self.nat_src.version
 
-        if self.nat_dst:
-            (flags, min_ip, max_ip, min_port, max_port) = self.nat_dst
-            self.append_attribute(create_nat_range_attr(KZNL_ATTR_SVC_NAT_DST, flags, min_ip, max_ip, min_port, max_port))
+        if self.version == 1:
+            if ip_version == 6:
+                raise ValueError("PFService with a NATPolicy using IPv6 addresses isn't supported in this version of KZorp")
+            self.append_attribute(create_nat_range_attr(
+                KZNL_ATTR_SVC_NAT_SRC, KZ_SVC_NAT_MAP_IPS,
+                min_ip=self.nat_src[0].value, max_ip=self.nat_src[-1].value,
+                min_port=0, max_port=0
+            ))
+            self.append_attribute(create_nat_range_attr(
+                KZNL_ATTR_SVC_NAT_DST, KZ_SVC_NAT_MAP_IPS,
+                min_ip=self.nat_dst[0].value, max_ip=self.nat_dst[-1].value,
+                min_port=0, max_port=0
+            ))
+            self.append_attribute(create_nat_range_attr(
+                KZNL_ATTR_SVC_NAT_MAP, KZ_SVC_NAT_MAP_IPS,
+                min_ip=self.nat_map[0].value, max_ip=self.nat_map[-1].value,
+                min_port=0, max_port=0
+            ))
+        elif self.version == 2:
+            family = socket.AF_INET if ip_version == 4 else socket.AF_INET6
+            self.append_attribute(create_inet_addr_attr(KZNL_ATTR_SVC_NAT_SRC_MIN_IP, family, self.nat_src[0].packed))
+            self.append_attribute(create_inet_addr_attr(KZNL_ATTR_SVC_NAT_SRC_MAX_IP, family, self.nat_src[-1].packed))
+
+            self.append_attribute(create_inet_addr_attr(KZNL_ATTR_SVC_NAT_MAP_MIN_IP, family, self.nat_map[0].packed))
+            self.append_attribute(create_inet_addr_attr(KZNL_ATTR_SVC_NAT_MAP_MAX_IP, family, self.nat_map[-1].packed))
+
+            self.append_attribute(create_inet_addr_attr(KZNL_ATTR_SVC_NAT_DST_MIN_IP, family, self.nat_dst[0].packed))
+            self.append_attribute(create_inet_addr_attr(KZNL_ATTR_SVC_NAT_DST_MAX_IP, family, self.nat_dst[-1].packed))
 
     @classmethod
     def parse(cls, version, data):
@@ -712,35 +739,72 @@ class KZorpAddServiceNATMappingMessage(GenericNetlinkMessage):
         else:
             raise AttributeRequiredError, "KZNL_ATTR_SVC_NAME"
 
-        if attrs.has_key(KZNL_ATTR_SVC_NAT_SRC):
-            nat_src = parse_nat_range_attr(attrs[KZNL_ATTR_SVC_NAT_SRC])
-        else:
-            raise AttributeRequiredError, "KZNL_ATTR_SVC_NAT_SRC"
+        if version == 1:
+            if attrs.has_key(KZNL_ATTR_SVC_NAT_SRC):
+                flags, min_ip, max_ip, min_port, max_port = parse_nat_range_attr(attrs[KZNL_ATTR_SVC_NAT_SRC])
+                nat_src = IPRange(min_ip, max_ip)
+            else:
+                raise KeyError("KZNL_ATTR_SVC_NAT_SRC")
 
-        if attrs.has_key(KZNL_ATTR_SVC_NAT_DST):
-            nat_dst = parse_nat_range_attr(attrs[KZNL_ATTR_SVC_NAT_DST])
-        else:
-            nat_dst = None
+            if attrs.has_key(KZNL_ATTR_SVC_NAT_DST):
+                flags, min_ip, max_ip, min_port, max_port = parse_nat_range_attr(attrs[KZNL_ATTR_SVC_NAT_DST])
+                nat_dst = IPRange(min_ip, max_ip)
+            else:
+                nat_dst = IPRange('0.0.0.0', '255.255.255.255')
 
-        if attrs.has_key(KZNL_ATTR_SVC_NAT_MAP):
-            nat_map = parse_nat_range_attr(attrs[KZNL_ATTR_SVC_NAT_MAP])
-        else:
-            raise AttributeRequiredError, "KZNL_ATTR_SVC_NAT_MAP"
+            if attrs.has_key(KZNL_ATTR_SVC_NAT_MAP):
+                flags, min_ip, max_ip, min_port, max_port = parse_nat_range_attr(attrs[KZNL_ATTR_SVC_NAT_MAP])
+                nat_map = IPRange(min_ip, max_ip)
+            else:
+                raise KeyError("KZNL_ATTR_SVC_NAT_MAP")
 
-        return cls(name, nat_src, nat_map, nat_dst)
+        elif version == 2:
+            if attrs.has_key(KZNL_ATTR_SVC_NAT_SRC_MIN_IP):
+                family, nat_src_min_ip = parse_inet_addr_attr(attrs[KZNL_ATTR_SVC_NAT_SRC_MIN_IP])
+                nat_src_min_ip = inet_ntop(family, nat_src_min_ip)
+            else:
+                raise KeyError("KZNL_ATTR_SVC_NAT_SRC_MIN_IP")
+            if attrs.has_key(KZNL_ATTR_SVC_NAT_SRC_MAX_IP):
+                family, nat_src_max_ip = parse_inet_addr_attr(attrs[KZNL_ATTR_SVC_NAT_SRC_MAX_IP])
+                nat_src_max_ip = inet_ntop(family, nat_src_max_ip)
+            else:
+                raise KeyError("KZNL_ATTR_SVC_NAT_SRC_MAX_IP")
+            nat_src = IPRange(nat_src_min_ip, nat_src_max_ip)
+
+            if attrs.has_key(KZNL_ATTR_SVC_NAT_DST_MIN_IP):
+                family, nat_dst_min_ip = parse_inet_addr_attr(attrs[KZNL_ATTR_SVC_NAT_DST_MIN_IP])
+                nat_dst_min_ip = inet_ntop(family, nat_dst_min_ip)
+            else:
+                raise KeyError("KZNL_ATTR_SVC_NAT_DST_MIN_IP")
+            if attrs.has_key(KZNL_ATTR_SVC_NAT_DST_MAX_IP):
+                family, nat_dst_max_ip = parse_inet_addr_attr(attrs[KZNL_ATTR_SVC_NAT_DST_MAX_IP])
+                nat_dst_max_ip = inet_ntop(family, nat_dst_max_ip)
+            else:
+                raise KeyError("KZNL_ATTR_SVC_NAT_DST_MAX_IP")
+            nat_dst = IPRange(nat_dst_min_ip, nat_dst_max_ip)
+
+            if attrs.has_key(KZNL_ATTR_SVC_NAT_MAP_MIN_IP):
+                family, nat_map_min_ip = parse_inet_addr_attr(attrs[KZNL_ATTR_SVC_NAT_MAP_MIN_IP])
+                nat_map_min_ip = inet_ntop(family, nat_map_min_ip)
+            else:
+                raise KeyError("KZNL_ATTR_SVC_NAT_MAP_MIN_IP")
+            if attrs.has_key(KZNL_ATTR_SVC_NAT_MAP_MAX_IP):
+                family, nat_map_max_ip = parse_inet_addr_attr(attrs[KZNL_ATTR_SVC_NAT_MAP_MAX_IP])
+                nat_map_max_ip = inet_ntop(family, nat_map_max_ip)
+            else:
+                raise KeyError("KZNL_ATTR_SVC_NAT_MAP_MAX_IP")
+            nat_map = IPRange(nat_map_min_ip, nat_map_max_ip)
+
+        return cls(name, nat_src, nat_map, nat_dst, version)
 
     def __str__(self):
 
         def nat_range_str(nat):
-
-            def inet_ntoa(a):
-                return "%s.%s.%s.%s" % ((a >> 24) & 0xff, (a >> 16) & 0xff, (a >> 8) & 0xff, a & 0xff)
-
-            flags, ip1, ip2, p1, p2 = nat
+            ip1, ip2 = nat[0], nat[-1]
             if ip1 == ip2:
-                return "%s" % (inet_ntoa(ip1),)
+                return "%s" % ip1
             else:
-                return "(%s - %s)" % (inet_ntoa(ip1), inet_ntoa(ip2))
+                return "(%s - %s)" % (ip1, ip2)
 
         if self.command == KZNL_MSG_ADD_SERVICE_NAT_SRC:
             msg = "        SNAT: "
