@@ -96,7 +96,13 @@ KZNL_ATTR_ZONE_SUBNET                   = 56
 KZNL_ATTR_ZONE_SUBNET_NUM               = 57
 KZNL_ATTR_ZONE_LOOKUP_PARAM_IP          = 58
 KZNL_ATTR_ACCOUNTING_COUNTER_NUM        = 59
-KZNL_ATTR_MAX                           = 60
+KZNL_ATTR_SVC_NAT_SRC_MIN_IP            = 60
+KZNL_ATTR_SVC_NAT_SRC_MAX_IP            = 61
+KZNL_ATTR_SVC_NAT_DST_MIN_IP            = 62
+KZNL_ATTR_SVC_NAT_DST_MAX_IP            = 63
+KZNL_ATTR_SVC_NAT_MAP_MIN_IP            = 64
+KZNL_ATTR_SVC_NAT_MAP_MAX_IP            = 65
+KZNL_ATTR_MAX                           = 66
 
 # list of attributes in an N dimension rule
 N_DIMENSION_ATTRS = [

@@ -2802,6 +2802,12 @@ kznl_recv_add_n_dimension_rule(struct sk_buff *skb, struct genl_info *info)
 		case KZNL_ATTR_ZONE_SUBNET:
 		case KZNL_ATTR_ZONE_SUBNET_NUM:
 		case KZNL_ATTR_ZONE_IP:
+		case KZNL_ATTR_SERVICE_NAT_SRC_MIN_IP:
+		case KZNL_ATTR_SERVICE_NAT_SRC_MAX_IP:
+		case KZNL_ATTR_SERVICE_NAT_DST_MIN_IP:
+		case KZNL_ATTR_SERVICE_NAT_DST_MAX_IP:
+		case KZNL_ATTR_SERVICE_NAT_MAP_MIN_IP:
+		case KZNL_ATTR_SERVICE_NAT_MAP_MAX_IP:
 		case KZNL_ATTR_TYPE_COUNT:
 			pr_err_ratelimited("invalid attribute type; attr_type='%d'", attr_type);
 			res = -EINVAL;
@@ -3076,6 +3082,12 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 		case KZNL_ATTR_ZONE_SUBNET_NUM:
 		case KZNL_ATTR_ZONE_IP:
 		case KZNL_ATTR_ACCOUNTING_COUNTER_NUM:
+		case KZNL_ATTR_SERVICE_NAT_SRC_MIN_IP:
+		case KZNL_ATTR_SERVICE_NAT_SRC_MAX_IP:
+		case KZNL_ATTR_SERVICE_NAT_DST_MIN_IP:
+		case KZNL_ATTR_SERVICE_NAT_DST_MAX_IP:
+		case KZNL_ATTR_SERVICE_NAT_MAP_MIN_IP:
+		case KZNL_ATTR_SERVICE_NAT_MAP_MAX_IP:
 		case KZNL_ATTR_TYPE_COUNT:
 			pr_err_ratelimited("invalid attribute type; attr_type='%d'", attr_type);
 			res = -EINVAL;
