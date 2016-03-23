@@ -401,7 +401,16 @@ process_forwarded_session(unsigned int hooknum, struct sk_buff *skb,
 			rport = htons(svc->a.fwd.router_dst_port);
 		}
 
-		pr_debug("processing forwarded session; remote_address='%pI4:%u'\n", &raddr, ntohs(rport));
+		switch (l3proto) {
+		case NFPROTO_IPV4:
+			pr_debug("processing forwarded session; remote_address='%pI4:%u'\n",
+				 &raddr.ip, ntohs(rport));
+			break;
+		case NFPROTO_IPV6:
+			pr_debug("processing forwarded session; remote_address='[%pI6c]:%u'\n",
+				 &raddr.ip6, ntohs(rport));
+			break;
+		}
 
 		switch (hooknum) {
 		case NF_INET_PRE_ROUTING:
@@ -432,8 +441,16 @@ process_forwarded_session(unsigned int hooknum, struct sk_buff *skb,
 					kz_nat_range_set_min_port(&fakemap, rport);
 					kz_nat_range_set_max_port(&fakemap, rport);
 					map = &fakemap;
-					pr_debug("setting up destination NAT for DirectedRouter; new_dst='%pI4:%u'\n",
-						 &raddr, ntohs(rport));
+					switch (l3proto) {
+					case NFPROTO_IPV4:
+						pr_debug("setting up destination NAT for DirectedRouter; new_dst='%pI4:%u'\n",
+							 &raddr.ip, ntohs(rport));
+						break;
+					case NFPROTO_IPV6:
+						pr_debug("setting up destination NAT for DirectedRouter; new_dst='[%pI6c]:%u'\n",
+							 &raddr.ip6, ntohs(rport));
+						break;
+					}
 				}
 			} else {
 				/* DNAT entry with no specified destination port */
@@ -452,12 +469,18 @@ process_forwarded_session(unsigned int hooknum, struct sk_buff *skb,
 			struct kz_zone *fzone = NULL;
 
 			/* mapping found */
-			pr_debug("NAT rule found; hooknum='%d', min_ip='%pI4', max_ip='%pI4', min_port='%u', max_port='%u'\n",
-				 hooknum,
-				 kz_nat_range_get_min_ip(map),
-				 kz_nat_range_get_max_ip(map),
-				 ntohs(*kz_nat_range_get_min_port(map)),
-				 ntohs(*kz_nat_range_get_max_port(map)));
+			switch (l3proto) {
+			case NFPROTO_IPV4:
+				pr_debug("NAT rule found; hooknum='%d', min_ip='%pI4', max_ip='%pI4'\n",
+					 hooknum, &map->min_addr.ip,
+					 &map->max_addr.ip);
+				break;
+			case NFPROTO_IPV6:
+				pr_debug("NAT rule found; hooknum='%d', min_ip='%pI6c', max_ip='%pI6c'\n",
+					 hooknum, &map->min_addr.ip6,
+					 &map->max_addr.ip6);
+				break;
+			}
 
 			if (hooknum == NF_INET_PRE_ROUTING) {
 				/* XXX: Assumed: map->min_ip == map->max_ip */
@@ -487,19 +510,43 @@ process_forwarded_session(unsigned int hooknum, struct sk_buff *skb,
 				__be32 laddr;
 
 				rt = skb_rtable(skb);
-				laddr = inet_select_addr(out, rt->rt_gateway, RT_SCOPE_UNIVERSE);
-				if (!laddr) {
-					pr_debug("failed to select source address; out_iface='%s'\n",
-						 out ? out->name : kz_log_null);
-					goto done;
+				range.flags = NF_NAT_RANGE_MAP_IPS;
+				if (l3proto == NFPROTO_IPV4) {
+					laddr.ip = inet_select_addr(out,
+								    rt->rt_gateway,
+								    RT_SCOPE_UNIVERSE);
+					if (!laddr.ip) {
+						pr_debug("failed to select source address; out_iface='%s'\n",
+							 out ? out->
+							 name : kz_log_null);
+						goto done;
+					}
+				} else {
+					if (ipv6_dev_get_saddr
+					    (dev_net(out), out, &raddr.in6, 0,
+					     &laddr.in6)) {
+						pr_debug("failed to select source address; out_iface='%s'\n",
+							 out ? out->
+							 name : kz_log_null);
+						goto done;
+					}
 				}
 
-				range.flags = NF_NAT_RANGE_MAP_IPS;
-				kz_nat_range_set_min_ip(&range, laddr);
-				kz_nat_range_set_max_ip(&range, laddr);
+				range.min_addr = laddr;
+				range.max_addr = laddr;
 
-				pr_debug("setting up implicit SNAT as FORGE_ADDR is off; new_src='%pI4'\n", &laddr);
-				verdict = nf_nat_setup_info(ct, &range, HOOK2MANIP(hooknum));
+				switch (l3proto) {
+				case NFPROTO_IPV4:
+					pr_debug("setting up implicit SNAT as FORGE_ADDR is off; new_src='%pI4'\n",
+						 &laddr.ip);
+					break;
+				case NFPROTO_IPV6:
+					pr_debug("setting up implicit SNAT as FORGE_ADDR is off; new_src='%pI6c'\n",
+						 &laddr.ip6);
+					break;
+				}
+				verdict = nf_nat_setup_info(ct, &range,
+						            HOOK2MANIP(hooknum));
 			}
 		}
 	}

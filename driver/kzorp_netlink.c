@@ -2255,43 +2255,121 @@ kznl_recv_add_service_nat(struct sk_buff *skb, struct genl_info *info, bool snat
 	struct kz_transaction *tr;
 	char *service_name = NULL;
 	struct nf_nat_range src, dst, map;
+	sa_family_t family;
+	sa_family_t tmp_family;
 
-	if (!info->attrs[KZNL_ATTR_SERVICE_NAME] || !info->attrs[KZNL_ATTR_SERVICE_NAT_SRC] ||
-	    !info->attrs[KZNL_ATTR_SERVICE_NAT_MAP]) {
-		pr_err_ratelimited("required attributes missing\n");
+	if (info->genlhdr->version != 2) {
+		pr_err_ratelimited("Version %d of KZNL_MSG_ADD_SERVICE_NAT_* is not supported in this version of KZorp\n", info->genlhdr->version);
 		res = -EINVAL;
 		goto error;
 	}
 
-	/* parse attributes */
-	res = kznl_parse_name_alloc(info->attrs[KZNL_ATTR_SERVICE_NAME], &service_name);
+	/* SERVICE_NAME */
+	if (!info->attrs[KZNL_ATTR_SERVICE_NAME]) {
+		pr_err_ratelimited("required attribute SERVICE_NAME missing\n");
+		res = -EINVAL;
+		goto error;
+	}
+	res = kznl_parse_name_alloc(info->attrs[KZNL_ATTR_SERVICE_NAME],
+				    &service_name);
 	if (res < 0) {
-		pr_err_ratelimited("failed to parse service name\n");
+		pr_err_ratelimited("failed to parse SERVICE_NAME\n");
 		goto error;
 	}
 
+	/* SERVICE_NAT_SRC_* */
+	if (!info->attrs[KZNL_ATTR_SERVICE_NAT_SRC_MIN_IP] ||
+	    !info->attrs[KZNL_ATTR_SERVICE_NAT_SRC_MAX_IP]) {
+		pr_err_ratelimited
+		    ("required attribute SERVICE_NAT_SRC_{MIN,MAX} missing\n");
+		res = -EINVAL;
+		goto error;
+	}
 	memset(&src, 0, sizeof(src));
-	res = kznl_parse_service_nat_params(info->attrs[KZNL_ATTR_SERVICE_NAT_SRC], &src);
+	res = kznl_parse_inet_addr(info->attrs[KZNL_ATTR_SERVICE_NAT_SRC_MIN_IP],
+				   &src.min_addr, &family);
 	if (res < 0) {
-		pr_err_ratelimited("failed to parse source IP range\n");
+		pr_err_ratelimited("failed to parse SERVICE_NAT_SRC_MIN_IP\n");
 		goto error;
 	}
+	res = kznl_parse_inet_addr(info->attrs[KZNL_ATTR_SERVICE_NAT_SRC_MAX_IP],
+				   &src.max_addr, &tmp_family);
+	if (res < 0) {
+		pr_err_ratelimited("failed to parse SERVICE_NAT_SRC_MAX_IP\n");
+		goto error;
+	}
+	if (tmp_family != family) {
+		pr_err_ratelimited("inconsistent IP version\n");
+		goto error;
+	}
+	family = tmp_family;
+	src.flags = NF_NAT_RANGE_MAP_IPS;
 
+	/* SERVICE_NAT_DST_* */
 	memset(&dst, 0, sizeof(dst));
-	if (info->attrs[KZNL_ATTR_SERVICE_NAT_DST]) {
-		res = kznl_parse_service_nat_params(info->attrs[KZNL_ATTR_SERVICE_NAT_DST], &dst);
-		if (res < 0) {
-			pr_err_ratelimited("failed to parse destination IP range\n");
-			goto error;
-		}
-	}
-
-	memset(&map, 0, sizeof(map));
-	res = kznl_parse_service_nat_params(info->attrs[KZNL_ATTR_SERVICE_NAT_MAP], &map);
-	if (res < 0) {
-		pr_err_ratelimited("failed to parse IP range to map to\n");
+	if (!info->attrs[KZNL_ATTR_SERVICE_NAT_DST_MIN_IP] ||
+	    !info->attrs[KZNL_ATTR_SERVICE_NAT_DST_MAX_IP]) {
+		pr_err_ratelimited
+		    ("required attribute SERVICE_NAT_DST_{MIN,MAX} missing\n");
+		res = -EINVAL;
 		goto error;
 	}
+	res = kznl_parse_inet_addr(info->attrs[KZNL_ATTR_SERVICE_NAT_DST_MIN_IP],
+				   &dst.min_addr, &tmp_family);
+	if (res < 0) {
+		pr_err_ratelimited("failed to parse SERVICE_NAT_DST_MIN_IP\n");
+		goto error;
+	}
+	if (tmp_family != family) {
+		pr_err_ratelimited("inconsistent IP version\n");
+		goto error;
+	}
+	family = tmp_family;
+	res = kznl_parse_inet_addr(info->attrs[KZNL_ATTR_SERVICE_NAT_DST_MAX_IP],
+				   &dst.max_addr, &tmp_family);
+	if (res < 0) {
+		pr_err_ratelimited("failed to parse SERVICE_NAT_DST_MAX_IP\n");
+		goto error;
+	}
+	if (tmp_family != family) {
+		pr_err_ratelimited("inconsistent IP version\n");
+		goto error;
+	}
+	family = tmp_family;
+	dst.flags = NF_NAT_RANGE_MAP_IPS;
+
+	/* SERVICE_NAT_MAP_* */
+	if (!info->attrs[KZNL_ATTR_SERVICE_NAT_MAP_MIN_IP] ||
+	    !info->attrs[KZNL_ATTR_SERVICE_NAT_MAP_MAX_IP]) {
+		pr_err_ratelimited
+		    ("required attribute SERVICE_NAT_MAP_{MIN,MAX} missing\n");
+		res = -EINVAL;
+		goto error;
+	}
+	memset(&map, 0, sizeof(map));
+	res = kznl_parse_inet_addr(info->attrs[KZNL_ATTR_SERVICE_NAT_MAP_MIN_IP],
+				   &map.min_addr, &tmp_family);
+	if (res < 0) {
+		pr_err_ratelimited("failed to parse SERVICE_NAT_MAP_MIN_IP\n");
+		goto error;
+	}
+	if (tmp_family != family) {
+		pr_err_ratelimited("inconsistent IP version\n");
+		goto error;
+	}
+	family = tmp_family;
+	res = kznl_parse_inet_addr(info->attrs[KZNL_ATTR_SERVICE_NAT_MAP_MAX_IP],
+				   &map.max_addr, &tmp_family);
+	if (res < 0) {
+		pr_err_ratelimited("failed to parse SERVICE_NAT_MAP_MAX_IP\n");
+		goto error;
+	}
+	if (tmp_family != family) {
+		pr_err_ratelimited("inconsistent IP version\n");
+		goto error;
+	}
+	family = tmp_family;
+	map.flags = NF_NAT_RANGE_MAP_IPS;
 
 	/* look up transaction */
 	LOCK_TRANSACTIONS();
@@ -2308,26 +2386,24 @@ kznl_recv_add_service_nat(struct sk_buff *skb, struct genl_info *info, bool snat
 	if (svc == NULL) {
 		pr_err_ratelimited("no such service found; name='%s'\n", service_name);
 		res = -ENOENT;
-		goto error_unlock_svc;
+		goto error_unlock_tr;
 	}
 
 	if (snat)
 		res = kz_service_add_nat_entry(&svc->a.fwd.snat, &src,
-					       info->attrs[KZNL_ATTR_SERVICE_NAT_DST] ? &dst : NULL,
-					       &map);
+					       &dst, &map,
+					       family == AF_INET ? NFPROTO_IPV4 : NFPROTO_IPV6);
 	else
 		res = kz_service_add_nat_entry(&svc->a.fwd.dnat, &src,
-					       info->attrs[KZNL_ATTR_SERVICE_NAT_DST] ? &dst : NULL,
-					       &map);
+					       &dst, &map,
+					       family == AF_INET ? NFPROTO_IPV4 : NFPROTO_IPV6);
 
-error_unlock_svc:
 error_unlock_tr:
 	UNLOCK_TRANSACTIONS();
 
+error:
 	if (service_name != NULL)
 		kfree(service_name);
-
-error:
 	return res;
 }
 
@@ -2344,14 +2420,12 @@ kznl_recv_add_service_nat_dst(struct sk_buff *skb, struct genl_info *info)
 }
 
 static int
-kznl_build_service_add_nat(struct sk_buff *skb, netlink_port_t pid, u_int32_t seq, int flags,
-			   enum kznl_msg_types msg,
-			   const struct kz_service *svc, struct kz_service_nat_entry *entry)
+kznl_build_service_add_nat(struct sk_buff *skb, netlink_port_t pid,
+			   u_int32_t seq, int flags, enum kznl_msg_types msg,
+			   const struct kz_service *svc,
+			   struct kz_service_nat_entry *entry)
 {
 	void *hdr;
-	struct kza_service_nat_params nat;
-
-	memset(&nat, 0, sizeof(nat));
 
 	hdr = genlmsg_put(skb, pid, seq, &kznl_family, flags, msg);
 	if (!hdr)
@@ -2360,22 +2434,32 @@ kznl_build_service_add_nat(struct sk_buff *skb, netlink_port_t pid, u_int32_t se
 	if (kznl_dump_name(skb, KZNL_ATTR_SERVICE_NAME, svc->name) < 0)
 		goto nlmsg_failure;
 
-	if (kznl_dump_service_nat_entry(&nat, &entry->src) < 0)
+	if (kznl_dump_inet_addr(skb, KZNL_ATTR_SERVICE_NAT_SRC_MIN_IP,
+				entry->l3proto == NFPROTO_IPV4 ? AF_INET : AF_INET6,
+				&entry->src.min_addr))
 		goto nlmsg_failure;
-	if (nla_put(skb, KZNL_ATTR_SERVICE_NAT_SRC, sizeof(nat), &nat))
-		goto nla_put_failure;
-
-	if (*kz_nat_range_get_min_ip(&entry->dst) != 0) {
-		if (kznl_dump_service_nat_entry(&nat, &entry->dst) < 0)
-			goto nlmsg_failure;
-		if (nla_put(skb, KZNL_ATTR_SERVICE_NAT_DST, sizeof(nat), &nat))
-			goto nla_put_failure;
-	}
-
-	if (kznl_dump_service_nat_entry(&nat, &entry->map) < 0)
+	if (kznl_dump_inet_addr(skb, KZNL_ATTR_SERVICE_NAT_SRC_MAX_IP,
+				entry->l3proto == NFPROTO_IPV4 ? AF_INET : AF_INET6,
+				&entry->src.max_addr))
 		goto nlmsg_failure;
-	if (nla_put(skb, KZNL_ATTR_SERVICE_NAT_MAP, sizeof(nat), &nat))
-		goto nla_put_failure;
+
+	if (kznl_dump_inet_addr(skb, KZNL_ATTR_SERVICE_NAT_DST_MIN_IP,
+				entry->l3proto == NFPROTO_IPV4 ? AF_INET : AF_INET6,
+				&entry->dst.min_addr))
+		goto nlmsg_failure;
+	if (kznl_dump_inet_addr(skb, KZNL_ATTR_SERVICE_NAT_DST_MAX_IP,
+				entry->l3proto == NFPROTO_IPV4 ? AF_INET : AF_INET6,
+				&entry->dst.max_addr))
+		goto nlmsg_failure;
+
+	if (kznl_dump_inet_addr(skb, KZNL_ATTR_SERVICE_NAT_MAP_MIN_IP,
+				entry->l3proto == NFPROTO_IPV4 ? AF_INET : AF_INET6,
+				&entry->map.min_addr))
+		goto nlmsg_failure;
+	if (kznl_dump_inet_addr(skb, KZNL_ATTR_SERVICE_NAT_MAP_MAX_IP,
+				entry->l3proto == NFPROTO_IPV4 ? AF_INET : AF_INET6,
+				&entry->map.max_addr))
+		goto nlmsg_failure;
 
 	genlmsg_end(skb, hdr);
 	return 0;
