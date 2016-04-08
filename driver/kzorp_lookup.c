@@ -308,7 +308,7 @@ zone_depth_cmp(const void *_a, const void *_b)
 	if (res == 0)
 		res = strcmp(a->name, b->name);
 
-	kz_debug("a='%s', b='%s', res='%d'\n", a->name, b->name, res);
+	pr_debug("a='%s', b='%s', res='%d'\n", a->name, b->name, res);
 
 	return res;
 }
@@ -335,7 +335,7 @@ dpt_ndim_rule_sort(struct kz_rule *rule)
 {
 	int res;
 
-	kz_debug("sorting rule; id='%u'\n", rule->id);
+	pr_debug("sorting rule; id='%u'\n", rule->id);
 
 	res = dpt_ndim_rule_sort_ports(rule->num_src_port, rule->src_port);
 	if (res < 0)
@@ -376,7 +376,7 @@ dpt_ndim_sort(struct kz_dispatcher *dispatcher)
 	unsigned int i;
 	int res;
 
-	kz_debug("sorting dispatcher; name='%s'\n", dispatcher->name);
+	pr_debug("sorting dispatcher; name='%s'\n", dispatcher->name);
 
 	for (i = 0; i < dispatcher->num_rule; i++) {
 		res = dpt_ndim_rule_sort(&dispatcher->rule[i]);
@@ -424,7 +424,7 @@ kz_head_dispatcher_build(struct kz_head_d *h)
 	return res;
 
 cleanup:
-	kz_debug("problem, cleaning up\n");
+	pr_debug("problem, cleaning up\n");
 
 	return res;
 }
@@ -558,7 +558,7 @@ kz_ndim_eval_reqid_match(const struct kz_reqids * const reqids,
 	for (idx = 0; idx < reqids->len; idx++) {
 		const u_int32_t reqid = reqids->vec[idx];
 		for (reqid_idx = 0; reqid_idx < n_reqids; reqid_idx++) {
-			kz_debug("comparing reqids; id='%d', r_reqid='%d'\n", reqid, r_reqids[reqid_idx]);
+			pr_debug("comparing reqids; id='%d', r_reqid='%d'\n", reqid, r_reqids[reqid_idx]);
 			if (reqid == r_reqids[reqid_idx])
 				return 1;
 		}
@@ -591,7 +591,7 @@ kz_ndim_eval_rule_iface(const u_int32_t n_reqids, const u_int32_t * const r_reqi
 	unsigned int i;
 	int score = 0;
 
-	kz_debug("n_ifaces='%u', n_ifgroups='%u', iface='%s'\n",
+	pr_debug("n_ifaces='%u', n_ifgroups='%u', iface='%s'\n",
 		 n_ifaces, n_ifgroups, iface ? iface->name : kz_log_null);
 
 	if (n_reqids == 0 && n_ifaces == 0 && n_ifgroups == 0)
@@ -601,7 +601,7 @@ kz_ndim_eval_rule_iface(const u_int32_t n_reqids, const u_int32_t * const r_reqi
 		return -1;
 
 	for (i = 0; i < n_ifgroups; i++) {
-		kz_debug("comparing groups; id='%u', r_id='%u'\n", iface->group, r_ifgroups[i]);
+		pr_debug("comparing groups; id='%u', r_id='%u'\n", iface->group, r_ifgroups[i]);
 		if (iface->group == r_ifgroups[i]) {
 			score = 1;
 			break;
@@ -609,7 +609,7 @@ kz_ndim_eval_rule_iface(const u_int32_t n_reqids, const u_int32_t * const r_reqi
 	}
 
 	for (i = 0; i < n_ifaces; i++) {
-		kz_debug("comparing names; name='%s', r_name='%s'\n", iface->name, (char *) (r_ifaces + i));
+		pr_debug("comparing names; name='%s', r_name='%s'\n", iface->name, (char *) (r_ifaces + i));
 		if (iface_name_cmp(iface->name, (char *) (r_ifaces + i))) {
 			score |= 2;
 			break;
@@ -646,13 +646,13 @@ kz_ndim_eval_rule_dst_if(const u_int32_t n_ifaces, ifname_t * r_ifaces,
 #define KZ_NDIM_EVAL_RULE_NUMERIC_DIMENSION(dim_name, format_specifier) \
 	unsigned int i; \
 	\
-	kz_debug("n_##dim_name##s='%u', dim_name='%u'\n", n_##dim_name##s, dim_name); \
+	pr_debug("n_##dim_name##s='%u', dim_name='%u'\n", n_##dim_name##s, dim_name); \
 	\
 	if (n_##dim_name##s == 0) \
 		return 0; \
 	\
 	for (i = 0; i < n_##dim_name##s; i++) { \
-		kz_debug("comparing dim_name; dim_name='%u', r_##dim_name='%u'\n", dim_name, r_##dim_name##s[i]); \
+		pr_debug("comparing dim_name; dim_name='%u', r_##dim_name='%u'\n", dim_name, r_##dim_name##s[i]); \
 		if (dim_name == r_##dim_name##s[i]) \
 			return 1; \
 	} \
@@ -675,13 +675,13 @@ kz_ndim_eval_rule_proto(const u_int32_t n_protos, const u_int8_t * const r_proto
 {
 	unsigned int i;
 
-	kz_debug("n_protos='%u', proto='%u'\n", n_protos, proto);
+	pr_debug("n_protos='%u', proto='%u'\n", n_protos, proto);
 
 	if (n_protos == 0)
 		return 0;
 
 	for (i = 0; i < n_protos; i++) {
-		kz_debug("comparing protocol; proto='%u', r_proto='%u'\n", proto, r_protos[i]);
+		pr_debug("comparing protocol; proto='%u', r_proto='%u'\n", proto, r_protos[i]);
 		if (proto == r_protos[i])
 			return 1;
 	}
@@ -745,13 +745,13 @@ kz_ndim_eval_rule_port(const u_int32_t n_ports, const struct kz_port_range * con
 {
 	unsigned int i;
 
-	kz_debug("n_ports='%u', port='%u'\n", n_ports, port);
+	pr_debug("n_ports='%u', port='%u'\n", n_ports, port);
 
 	if (n_ports == 0)
 		return 0;
 
 	for (i = 0; i < n_ports; i++) {
-		kz_debug("comparing port range; port='%u', r_from='%u', r_to='%u'\n", port,
+		pr_debug("comparing port range; port='%u', r_from='%u', r_to='%u'\n", port,
 			 r_ports[i].from, r_ports[i].to);
 
 		/* if port is less than 'from' we can be sure that
@@ -797,7 +797,7 @@ kz_ndim_eval_rule_subnet(const u_int32_t n_subnets, const struct kz_in_subnet *c
 {
 	unsigned int i;
 
-	kz_debug("n_subnets='%u', n_subnets6='%u'\n", n_subnets, n_subnets6);
+	pr_debug("n_subnets='%u', n_subnets6='%u'\n", n_subnets, n_subnets6);
 
 	if (n_subnets == 0 && n_subnets6 == 0)
 		return 0;
@@ -806,7 +806,7 @@ kz_ndim_eval_rule_subnet(const u_int32_t n_subnets, const struct kz_in_subnet *c
 	{
 	case NFPROTO_IPV4:
 		for (i = 0; i < n_subnets; i++) {
-			kz_debug("comparing subnet; ip='%pI4', network='%pI4', mask='%pI4'\n",
+			pr_debug("comparing subnet; ip='%pI4', network='%pI4', mask='%pI4'\n",
 				 &addr->in, &r_subnets[i].addr, &r_subnets[i].mask);
 
 			if (!ipv4_masked_addr_cmp(&addr->in, &r_subnets[i].mask, &r_subnets[i].addr))
@@ -815,7 +815,7 @@ kz_ndim_eval_rule_subnet(const u_int32_t n_subnets, const struct kz_in_subnet *c
 		break;
 	case NFPROTO_IPV6:
 		for (i = 0; i < n_subnets6; i++) {
-			kz_debug("comparing subnet; ip='%pI6c', network='%pI6c', mask='%pI6c'\n",
+			pr_debug("comparing subnet; ip='%pI6c', network='%pI6c', mask='%pI6c'\n",
 				 &addr->in6, &r_subnets6[i].addr, &r_subnets6[i].mask);
 
 			if (!ipv6_masked_addr_cmp(&addr->in6, &r_subnets6[i].mask, &r_subnets6[i].addr))
@@ -854,7 +854,7 @@ kz_ndim_eval_rule_zone(const u_int32_t n_zones, struct zone_lookup_t * const r_z
 	unsigned int i;
 	int zscore = -1;
 
-	kz_debug("n_zones='%u', zone='%s'\n", n_zones, zone ? zone->name : kz_log_null);
+	pr_debug("n_zones='%u', zone='%s'\n", n_zones, zone ? zone->name : kz_log_null);
 
 	if (n_zones == 0)
 		return 0;
@@ -863,7 +863,7 @@ kz_ndim_eval_rule_zone(const u_int32_t n_zones, struct zone_lookup_t * const r_z
 		return -1;
 
 	for (i = 0; i < n_zones; i++) {
-		//kz_debug("comparing zone; zone='%s', r_zone='%s'\n", zone->name, r_zones[i]->name);
+		//pr_debug("comparing zone; zone='%s', r_zone='%s'\n", zone->name, r_zones[i]->name);
 
 		zscore = zone_score(&r_zones[i], mask);
 
@@ -1242,17 +1242,17 @@ kz_ndim_get_better_rule(const struct kz_rule *actual_rule, int64_t actual_score,
 	const bool worse_match = *best_score > actual_score;
 	const bool better_match = *best_score < actual_score;
 
-	kz_debug("perform score comparision; id='%u', score='%lld', best_score='%lld'\n",
+	pr_debug("perform score comparision; id='%u', score='%lld', best_score='%lld'\n",
 		 actual_rule->id, actual_score, *best_score);
 
 	if (no_match || worse_match) {
 		/* nothing to do */
 	} else if (better_match) {
-		kz_debug("found rule with better score; id='%u', score='%llx'\n", actual_rule->id, actual_score);
+		pr_debug("found rule with better score; id='%u', score='%llx'\n", actual_rule->id, actual_score);
 		*best_rule = actual_rule;
 		*best_score = actual_score;
 	} else /* if (equal_match) */ {
-		kz_err("found rules with same score; "
+		pr_err_ratelimited("found rules with same score; "
 		       "last_rule_id='%u', last_score='%llx', actual_rule_id='%u', actual_score='%llx'\n",
 		       (*best_rule)->id, *best_score, actual_rule->id, actual_score);
 
@@ -1292,7 +1292,7 @@ kz_ndim_eval(const struct kz_traffic_props * const traffic_props,
 	lenv->best_rule = NULL;
 
 	if (!dispatchers || list_empty(&dispatchers->head)) {
-		kz_debug("no dispatchers to evaluate\n");
+		pr_debug("no dispatchers to evaluate\n");
 		return;
 	}
 
@@ -1344,7 +1344,7 @@ kz_ndim_lookup(const struct kz_head_d * const dispatchers,
 	struct kz_percpu_env *lenv;
 	u_int32_t rule_id;
 
-	kz_debug("src_zone='%s', dst_zone='%s'\n",
+	pr_debug("src_zone='%s', dst_zone='%s'\n",
 		 traffic_props->src_zone ? traffic_props->src_zone->name : kz_log_null,
 		 traffic_props->dst_zone ? traffic_props->dst_zone->name : kz_log_null);
 
@@ -1659,14 +1659,14 @@ zone_lookup_tree_add(struct kz_zone_lookup *zone_lookup, struct kz_zone * zone, 
 	switch (subnet->family) {
 	case NFPROTO_IPV4:
 		prefix_len = mask_to_size_v4(&subnet->mask.in);
-		kz_debug("adding zone to radix tree; name='%s', address='%pI4', mask='%pI4', prefix_len='%u'\n",
+		pr_debug("adding zone to radix tree; name='%s', address='%pI4', mask='%pI4', prefix_len='%u'\n",
 			 zone->name, &subnet->addr.in, &subnet->mask.in, prefix_len);
 		root = zone_lookup->ipv4_root_node;
 		addr_prefix_equal = ipv4_addr_prefix_equal;
 		break;
 	case NFPROTO_IPV6:
 		prefix_len = mask_to_size_v6(&subnet->mask.in6);
-		kz_debug("adding zone to radix tree; name='%s', address='%pI6c', mask='%pI6c', prefix_len='%u'\n",
+		pr_debug("adding zone to radix tree; name='%s', address='%pI6c', mask='%pI6c', prefix_len='%u'\n",
 			 zone->name, &subnet->addr.in6, &subnet->mask.in6, prefix_len);
 		root = zone_lookup->ipv6_root_node;
 		addr_prefix_equal = ipv6_addr_prefix_equal;
@@ -1678,12 +1678,12 @@ zone_lookup_tree_add(struct kz_zone_lookup *zone_lookup, struct kz_zone * zone, 
 
 	node = zone_lookup_node_insert(root, &subnet->addr, prefix_len, subnet->family);
 	if (node == NULL) {
-		kz_err("error allocating node structure\n");
+		pr_err_ratelimited("error allocating node structure\n");
 		return -ENOMEM;
 	}
 
 	if (node->zone != NULL) {
-		kz_err("duplicate subnet detected; zone1='%s', zone2='%s'\n", zone->name, node->zone->name);
+		pr_err_ratelimited("duplicate subnet detected; zone1='%s', zone2='%s'\n", zone->name, node->zone->name);
 		return -EEXIST;
 	}
 
@@ -1700,11 +1700,11 @@ kz_head_zone_lookup(const struct kz_head_z *h, const union nf_inet_addr * addr, 
 
 	switch (proto) {
 	case NFPROTO_IPV4:
-		kz_debug("lookup zone in radix tree; addr='%pI4'\n", &addr->in);
+		pr_debug("lookup zone in radix tree; addr='%pI4'\n", &addr->in);
 		root = h->zone_lookup.ipv4_root_node;
 		break;
 	case NFPROTO_IPV6:
-		kz_debug("lookup zone in radix tree; addr='%pI6c'\n", &addr->in6);
+		pr_debug("lookup zone in radix tree; addr='%pI6c'\n", &addr->in6);
 		root = h->zone_lookup.ipv6_root_node;
 		break;
 	default:
@@ -1768,7 +1768,7 @@ kz_head_zone_build(struct kz_head_z *h)
 	}
 
 	if (index > KZ_ZONE_MAX) {
-		kz_err("maximum number of zones exceeded; supported='%d', present='%d'\n",
+		pr_err_ratelimited("maximum number of zones exceeded; supported='%d', present='%d'\n",
 		       KZ_ZONE_MAX, index);
 		return -EINVAL;
 	}
@@ -1991,16 +1991,16 @@ kz_instance_bind_lookup_v4(const struct kz_instance const *instance, u8 l4proto,
 	enum kz_bind_l4proto bind_l4proto = bind_lookup_get_l4proto(l4proto);
 	const struct kz_bind const *bind;
 
-	kz_debug("lookup bind; l4proto='%d', saddr='%pI4', sport='%d', daddr='%pI4', dport='%d'\n", l4proto, &saddr, htons(sport), &daddr, htons(dport));
+	pr_debug("lookup bind; l4proto='%d', saddr='%pI4', sport='%d', daddr='%pI4', dport='%d'\n", l4proto, &saddr, htons(sport), &daddr, htons(dport));
 
 	bind_num = instance->bind_lookup->bind_nums[KZ_BIND_L3PROTO_IPV4][bind_l4proto];
 	if (bind_num == 0) {
-		kz_debug("no potential bind found;\n");
+		pr_debug("no potential bind found;\n");
 		return NULL;
 	}
 
 	lookup_bind_num = bind_lookup_hash_v4(saddr, sport, daddr, dport) % bind_num;
-	kz_debug("potential bind found; bind_num='%d', selected_bind_num='%d'\n", bind_num, lookup_bind_num);
+	pr_debug("potential bind found; bind_num='%d', selected_bind_num='%d'\n", bind_num, lookup_bind_num);
 
 	bind = instance->bind_lookup->binds_by_type[KZ_BIND_L3PROTO_IPV4][bind_l4proto][lookup_bind_num];
 
@@ -2030,16 +2030,16 @@ kz_instance_bind_lookup_v6(const struct kz_instance const *instance, u8 l4proto,
 	enum kz_bind_l4proto bind_l4proto = bind_lookup_get_l4proto(l4proto);
 	const struct kz_bind const *bind;
 
-	kz_debug("lookup bind; l4proto='%d', saddr='%pI6c', sport='%d', daddr='%pI6c', dport='%d'\n", l4proto, saddr, htons(sport), daddr, htons(dport));
+	pr_debug("lookup bind; l4proto='%d', saddr='%pI6c', sport='%d', daddr='%pI6c', dport='%d'\n", l4proto, saddr, htons(sport), daddr, htons(dport));
 
 	bind_num = instance->bind_lookup->bind_nums[KZ_BIND_L3PROTO_IPV6][bind_l4proto];
 	if (bind_num == 0) {
-		kz_debug("no potential bind found;\n");
+		pr_debug("no potential bind found;\n");
 		return NULL;
 	}
 
 	lookup_bind_num = bind_lookup_hash_v6(saddr, sport, daddr, dport) % bind_num;
-	kz_debug("potential bind found; bind_num='%d', selected_bind_num='%d'\n", bind_num, lookup_bind_num);
+	pr_debug("potential bind found; bind_num='%d', selected_bind_num='%d'\n", bind_num, lookup_bind_num);
 
 	bind = instance->bind_lookup->binds_by_type[KZ_BIND_L3PROTO_IPV6][bind_l4proto][lookup_bind_num];
 
@@ -2061,13 +2061,13 @@ nat_in_range(const struct nf_nat_range *r,
 	 const u_int8_t proto)
 {
 	/* log messages: the IP addresses are in host-endian format due to usage of "<" and ">" relations */
-	kz_debug("comparing range; flags='%x', start_ip='%pI4', end_ip='%pI4', start_port='%u', end_port='%u'\n",
+	pr_debug("comparing range; flags='%x', start_ip='%pI4', end_ip='%pI4', start_port='%u', end_port='%u'\n",
 		 r->flags,
 	         kz_nat_range_get_min_ip(r),
 	         kz_nat_range_get_max_ip(r),
 	         ntohs(*kz_nat_range_get_min_port(r)),
 	         ntohs(*kz_nat_range_get_max_port(r)));
-	kz_debug("with packet; proto='%d', ip='%pI4', port='%u'\n",
+	pr_debug("with packet; proto='%d', ip='%pI4', port='%u'\n",
 		 proto, &addr, ntohs(port));
 
 	if (r->flags & NF_NAT_RANGE_MAP_IPS) {
@@ -2083,7 +2083,7 @@ nat_in_range(const struct nf_nat_range *r,
 			return 0;
 	}
 
-	kz_debug("match\n");
+	pr_debug("match\n");
 
 	return 1;
 }
@@ -2096,7 +2096,7 @@ kz_service_nat_lookup(const struct list_head * const head,
 {
 	struct kz_service_nat_entry *i;
 
-	kz_debug("proto='%u', src='%pI4:%u', dst='%pI4:%u'\n",
+	pr_debug("proto='%u', src='%pI4:%u', dst='%pI4:%u'\n",
 		 proto, &saddr, ntohs(sport), &daddr, ntohs(dport));
 
 	list_for_each_entry(i, head, list) {
@@ -2131,11 +2131,11 @@ kz_lookup_session(const struct kz_config *cfg,
 
 	switch (traffic_props->l3proto) {
 	case NFPROTO_IPV4:
-		kz_debug("in='%s', l3proto='%u', l4proto='%u', src='%pI4:%u', dst='%pI4:%u'\n",
+		pr_debug("in='%s', l3proto='%u', l4proto='%u', src='%pI4:%u', dst='%pI4:%u'\n",
 			 traffic_props->iface ? traffic_props->iface->name : "(NULL)", traffic_props->l3proto, traffic_props->proto, &traffic_props->src_addr->in, traffic_props->src_port, &traffic_props->dst_addr->in, traffic_props->dst_port);
 		break;
 	case NFPROTO_IPV6:
-		kz_debug("in='%s', l3proto='%u', l4proto='%u', src='%pI6c:%u', dst='%pI6c:%u'\n",
+		pr_debug("in='%s', l3proto='%u', l4proto='%u', src='%pI6c:%u', dst='%pI6c:%u'\n",
 			 traffic_props->iface ? traffic_props->iface->name : "(NULL)", traffic_props->l3proto, traffic_props->proto, &traffic_props->src_addr->in6, traffic_props->src_port, &traffic_props->dst_addr->in6, traffic_props->dst_port);
 		break;
 	default:
@@ -2147,13 +2147,13 @@ kz_lookup_session(const struct kz_config *cfg,
 	addr = reply ? traffic_props->dst_addr : traffic_props->src_addr;
 	traffic_props->src_zone = kz_head_zone_lookup(zones, addr, traffic_props->l3proto);
 	if (traffic_props->src_zone != NULL) {
-		kz_debug("found client zone; name='%s'\n", traffic_props->src_zone->name);
+		pr_debug("found client zone; name='%s'\n", traffic_props->src_zone->name);
 	}
 
 	addr = reply ? traffic_props->src_addr : traffic_props->dst_addr;
 	traffic_props->dst_zone = kz_head_zone_lookup(zones, addr, traffic_props->l3proto);
 	if (traffic_props->dst_zone != NULL) {
-		kz_debug("found server zone; name='%s'\n", traffic_props->dst_zone->name);
+		pr_debug("found server zone; name='%s'\n", traffic_props->dst_zone->name);
 	}
 
 	*clientzone = traffic_props->src_zone;

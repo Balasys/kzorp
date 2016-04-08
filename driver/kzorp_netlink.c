@@ -81,11 +81,11 @@ transaction_lookup(int peer_pid)
 static struct kz_transaction *
 transaction_create(const netlink_port_t peer_pid, const unsigned int instance_id, u_int64_t config_cookie)
 {
-	kz_debug("pid='%d', instance_id='%d', config_cookie='%llu'\n",
+	pr_debug("pid='%d', instance_id='%d', config_cookie='%llu'\n",
 		 peer_pid, instance_id, config_cookie);
 
 	if (transaction_open) {
-		kz_err("transaction already exists;\n");
+		pr_err_ratelimited("transaction already exists;\n");
 		return NULL;
 	}
 
@@ -105,7 +105,7 @@ static void transaction_cleanup_op(struct kz_transaction *);
 static void
 transaction_destroy(struct kz_transaction *t)
 {
-	kz_debug("transaction='%p'\n", t);
+	pr_debug("transaction='%p'\n", t);
 
 	BUG_ON(t != &transaction);
 
@@ -140,7 +140,7 @@ transaction_add_op(struct kz_transaction *tr,
 	o->data = data;
 	o->data_destroy = cleanup_func;
 	list_add(&o->list, &tr->op);
-	kz_debug("add op; type='%d'\n", type);
+	pr_debug("add op; type='%d'\n", type);
 
 	return 0;
 }
@@ -301,7 +301,7 @@ transaction_rule_lookup(const struct kz_transaction * const tr,
 {
 	const struct kz_operation *i;
 
-	kz_debug("dispatcher_name='%s', id='%u'\n", dispatcher_name, id);
+	pr_debug("dispatcher_name='%s', id='%u'\n", dispatcher_name, id);
 
 	list_for_each_entry(i, &tr->op, list) {
 		if (i->type == KZNL_OP_ADD_DISPATCHER) {
@@ -387,7 +387,7 @@ kznl_parse_name(const struct nlattr *attr, char *name, unsigned long nsize)
 
 	length = (unsigned long) ntohs(a->length);
 	if (nsize < length + 1) {
-		kz_err("invalid target length; dst_size='%lu', len='%lu'\n", nsize, length);
+		pr_err_ratelimited("invalid target length; dst_size='%lu', len='%lu'\n", nsize, length);
 		return -EINVAL;
 	}
 
@@ -436,7 +436,7 @@ kznl_parse_in_addr(const struct nlattr *attr, struct in_addr *addr)
 
 	addr->s_addr = a->addr.s_addr;
 
-	kz_debug("parsed IPv4 address='%pI4'\n", addr);
+	pr_debug("parsed IPv4 address='%pI4'\n", addr);
 
 	return 0;
 }
@@ -448,7 +448,7 @@ kznl_parse_in6_addr(const struct nlattr *attr, struct in6_addr *addr)
 
 	*addr = a->addr;
 
-	kz_debug("parsed IPv6 address='%pI6c'\n", addr);
+	pr_debug("parsed IPv6 address='%pI6c'\n", addr);
 
 	return 0;
 }
@@ -466,15 +466,15 @@ kznl_parse_inet_addr(const struct nlattr *attr, union nf_inet_addr *addr, sa_fam
 
 	res = nla_parse_nested(tb, KZNL_ATTR_TYPE_COUNT, attr, inet_addr_nla_policy);
 	if (res < 0) {
-		kz_err("failed to parse nested attribute\n");
+		pr_err_ratelimited("failed to parse nested attribute\n");
 		return res;
 	}
 
-	kz_debug ("nested attributes: %p %p", tb[KZNL_ATTR_INET_ADDR], tb[KZNL_ATTR_INET6_ADDR]);
+	pr_debug ("nested attributes: %p %p", tb[KZNL_ATTR_INET_ADDR], tb[KZNL_ATTR_INET6_ADDR]);
 	if (tb[KZNL_ATTR_INET_ADDR]) {
 		res = kznl_parse_in_addr(tb[KZNL_ATTR_INET_ADDR], &addr->in);
 		if (res < 0) {
-			kz_err("failed to parse IPv4 address\n");
+			pr_err_ratelimited("failed to parse IPv4 address\n");
 			return res;
 		} else {
 			*family = AF_INET;
@@ -483,13 +483,13 @@ kznl_parse_inet_addr(const struct nlattr *attr, union nf_inet_addr *addr, sa_fam
 	else if (tb[KZNL_ATTR_INET6_ADDR]) {
 		res = kznl_parse_in6_addr(tb[KZNL_ATTR_INET6_ADDR], &addr->in6);
 		if (res < 0) {
-			kz_err("failed to parse IPv6 address\n");
+			pr_err_ratelimited("failed to parse IPv6 address\n");
 			return res;
 		} else {
 			*family = AF_INET6;
 		}
 	} else {
-		kz_err("required attributes missing: address\n");
+		pr_err_ratelimited("required attributes missing: address\n");
 		res = -EINVAL;
 	}
 
@@ -507,7 +507,7 @@ kznl_parse_in_subnet(const struct nlattr *attr, struct in_addr *subnet_addr, str
 	subnet_addr->s_addr = a->addr.s_addr;
 	subnet_mask->s_addr = a->mask.s_addr;
 
-	kz_debug("address='%pI4', mask='%pI4'\n", subnet_addr, subnet_mask);
+	pr_debug("address='%pI4', mask='%pI4'\n", subnet_addr, subnet_mask);
 
 	mask = ntohl(subnet_mask->s_addr);
 	for (i = 1 << 31; i && (mask & i); i >>= 1)
@@ -528,7 +528,7 @@ kznl_parse_in6_subnet(const struct nlattr *attr, struct in6_addr *addr, struct i
 	*addr = a->addr;
 	*mask = a->mask;
 
-	kz_debug("address='%pI6c', mask='%pI6c'\n", addr, mask);
+	pr_debug("address='%pI6c', mask='%pI6c'\n", addr, mask);
 
 	ipv6_addr_set(&pfx, 0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff);
 	prefixlen = ipv6_addr_diff(mask, &pfx);
@@ -552,14 +552,14 @@ kznl_parse_inet_subnet(const struct nlattr *attr, union nf_inet_addr *addr, unio
 
 	res = nla_parse_nested(tb, KZNL_ATTR_TYPE_COUNT, attr, inet_subnet_nla_policy);
 	if (res < 0) {
-		kz_err("failed to parse nested attribute\n");
+		pr_err_ratelimited("failed to parse nested attribute\n");
 		return res;
 	}
 
 	if (tb[KZNL_ATTR_INET_SUBNET]) {
 		res = kznl_parse_in_subnet(tb[KZNL_ATTR_INET_SUBNET], &addr->in, &mask->in);
 		if (res < 0) {
-			kz_err("failed to parse IPv4 subnet\n");
+			pr_err_ratelimited("failed to parse IPv4 subnet\n");
 			return res;
 		} else {
 			*family = AF_INET;
@@ -568,13 +568,13 @@ kznl_parse_inet_subnet(const struct nlattr *attr, union nf_inet_addr *addr, unio
 	else if (tb[KZNL_ATTR_INET6_SUBNET]) {
 		res = kznl_parse_in6_subnet(tb[KZNL_ATTR_INET6_SUBNET], &addr->in6, &mask->in6);
 		if (res < 0) {
-			kz_err("failed to parse IPv6 subnet\n");
+			pr_err_ratelimited("failed to parse IPv6 subnet\n");
 			return res;
 		} else {
 			*family = AF_INET6;
 		}
 	} else {
-		kz_err("required attributes missing: subnet\n");
+		pr_err_ratelimited("required attributes missing: subnet\n");
 		res = -EINVAL;
 	}
 
@@ -588,7 +588,7 @@ kznl_parse_port(const struct nlattr *attr, __u16 *_port)
 
 	port = ntohs(nla_get_be16(attr));
 	if (port == 0) {
-		kz_err("invalid port number received; port='%hu'", port);
+		pr_err_ratelimited("invalid port number received; port='%hu'", port);
 		return -EINVAL;
 	}
 
@@ -634,7 +634,7 @@ kznl_parse_proto_type(const struct nlattr *attr, u_int8_t proto, __u32 *proto_ty
 {
 	const u_int32_t _proto_type = ntohl(nla_get_be32(attr));
 	if ((proto == IPPROTO_ICMP || proto == IPPROTO_ICMPV6) && _proto_type > 255) {
-		kz_err("invalid protocol type received; proto_type='%hu'", _proto_type);
+		pr_err_ratelimited("invalid protocol type received; proto_type='%hu'", _proto_type);
 		return -EINVAL;
 	}
 
@@ -648,7 +648,7 @@ kznl_parse_proto_subtype(const struct nlattr *attr, u_int8_t proto, __u32 *proto
 {
 	const u_int32_t _proto_subtype = ntohl(nla_get_be32(attr));
 	if ((proto == IPPROTO_ICMP || proto == IPPROTO_ICMPV6) && _proto_subtype > 255) {
-		kz_err("invalid protocol type received; proto_subtype='%hu'", _proto_subtype);
+		pr_err_ratelimited("invalid protocol type received; proto_subtype='%hu'", _proto_subtype);
 		return -EINVAL;
 	}
 
@@ -683,12 +683,12 @@ kznl_parse_service_router_dst(struct nlattr *cda[], struct kz_service *svc)
 
 	res = kznl_parse_inet_addr(cda[KZNL_ATTR_SERVICE_ROUTER_DST_ADDR], &svc->a.fwd.router_dst_addr, &svc->a.fwd.router_dst_addr_family);
 	if (res < 0) {
-		kz_err("failed to parse dst ip nested attribute\n");
+		pr_err_ratelimited("failed to parse dst ip nested attribute\n");
 		goto error;
 	}
 	res = kznl_parse_port(cda[KZNL_ATTR_SERVICE_ROUTER_DST_PORT], &svc->a.fwd.router_dst_port);
 	if (res < 0) {
-		kz_err("failed to parse dst port attribute\n");
+		pr_err_ratelimited("failed to parse dst port attribute\n");
 		goto error;
 	}
 
@@ -791,7 +791,7 @@ kznl_parse_rule_id(struct nlattr *attrs[],
 	u_int32_t _rule_id;
 
 	if ((_rule_id = ntohl(nla_get_be32(attrs[KZNL_ATTR_N_DIMENSION_RULE_ID]))) == 0) {
-		kz_err("invalid rule id; id='%u'\n", _rule_id);
+		pr_err_ratelimited("invalid rule id; id='%u'\n", _rule_id);
 		return -EINVAL;
 	}
 
@@ -812,7 +812,7 @@ kznl_parse_dispatcher_n_dimension_rule(struct nlattr *attrs[],
 
 	if (attrs[KZNL_ATTR_ACCOUNTING_COUNTER_NUM]) {
 		if (kznl_parse_count(attrs[KZNL_ATTR_ACCOUNTING_COUNTER_NUM], &count) < 0) {
-			kz_err("failed to parse rule acoouting counter\n");
+			pr_err_ratelimited("failed to parse rule acoouting counter\n");
 			return -EINVAL;
 		}
 		atomic64_set(&rule->count, count);
@@ -966,13 +966,13 @@ kznl_dump_inet_subnet(struct sk_buff *skb, unsigned int attr,
 		return -1;
 
 	if (family == AF_INET) {
-		kz_debug("dump inet subnet; address='%pI4', mask='%pI4'\n", &addr->in, &mask->in);
+		pr_debug("dump inet subnet; address='%pI4', mask='%pI4'\n", &addr->in, &mask->in);
 		res = kznl_dump_in_subnet(skb, KZNL_ATTR_INET_SUBNET, &addr->in, &mask->in);
 		if (res < 0)
 			goto nla_put_failure;
 	}
 	else if (family == AF_INET6) {
-		kz_debug("dump inet subnet; address='%pI6c', mask='%pI6c'\n", &addr->in6, &mask->in6);
+		pr_debug("dump inet subnet; address='%pI6c', mask='%pI6c'\n", &addr->in6, &mask->in6);
 		res = kznl_dump_in6_subnet(skb, KZNL_ATTR_INET6_SUBNET, &addr->in6, &mask->in6);
 		if (res < 0)
 			goto nla_put_failure;
@@ -999,13 +999,13 @@ kznl_dump_inet_addr(struct sk_buff *skb, unsigned int attr,
 		return -1;
 
 	if (family == AF_INET) {
-		kz_debug("dump inet addr; address='%pI4'\n", &addr->in);
+		pr_debug("dump inet addr; address='%pI4'\n", &addr->in);
 		res = nla_put(skb, KZNL_ATTR_INET_ADDR, sizeof(struct in_addr), &addr->in);
 		if (res < 0)
 			goto nla_put_failure;
 	}
 	else if (family == AF_INET6) {
-		kz_debug("dump inet addr; address='%pI6c'\n", &addr->in6);
+		pr_debug("dump inet addr; address='%pI6c'\n", &addr->in6);
 		res = nla_put(skb, KZNL_ATTR_INET6_ADDR, sizeof(struct in6_addr), &addr->in6);
 		if (res < 0)
 			goto nla_put_failure;
@@ -1070,14 +1070,14 @@ kznl_recv_start(struct sk_buff *skb, struct genl_info *info)
 	u_int64_t config_cookie = 0UL;
 
 	if (!info->attrs[KZNL_ATTR_INSTANCE_NAME]) {
-		kz_err("required attributes missing\n");
+		pr_err_ratelimited("required attributes missing\n");
 		res = -EINVAL;
 		goto error;
 	}
 
 	/* parse attributes */
 	if (kznl_parse_name_alloc(info->attrs[KZNL_ATTR_INSTANCE_NAME], &ins_name) < 0) {
-		kz_err("error while parsing name attribute\n");
+		pr_err_ratelimited("error while parsing name attribute\n");
 		res = -EINVAL;
 		goto error;
 	}
@@ -1093,7 +1093,7 @@ kznl_recv_start(struct sk_buff *skb, struct genl_info *info)
 	tr = transaction_lookup(info->snd_portid);
 	if (tr != NULL) {
 		/* problem: we already have a transaction running with this PID as peer */
-		kz_err("transaction pending for this PID\n");
+		pr_err_ratelimited("transaction pending for this PID\n");
 		res = -EINVAL;
 		goto error_unlock_tr;
 	}
@@ -1103,7 +1103,7 @@ kznl_recv_start(struct sk_buff *skb, struct genl_info *info)
 	if (ins == NULL) {
 		ins = kz_instance_create(ins_name, strlen(ins_name), info->snd_portid);
 		if (ins == NULL) {
-			kz_err("failed to create new instance\n");
+			pr_err_ratelimited("failed to create new instance\n");
 			res = -EINVAL;
 			goto error_unlock_tr;
 		}
@@ -1111,7 +1111,7 @@ kznl_recv_start(struct sk_buff *skb, struct genl_info *info)
 
 	if (ins->flags & KZF_INSTANCE_TRANS) {
 		/* the instance already has an associated transaction */
-		kz_err("the instance already has a pending transaction\n");
+		pr_err_ratelimited("the instance already has a pending transaction\n");
 		res = -EEXIST;
 		goto error_unlock_tr;
 	}
@@ -1119,7 +1119,7 @@ kznl_recv_start(struct sk_buff *skb, struct genl_info *info)
 	/* create transaction */
 	tr = transaction_create(info->snd_portid, ins->id, config_cookie);
 	if (tr == NULL) {
-		kz_err("failed to create transaction\n");
+		pr_err_ratelimited("failed to create transaction\n");
 		res = -EINVAL;
 		goto error_unlock_tr;
 	}
@@ -1127,7 +1127,7 @@ kznl_recv_start(struct sk_buff *skb, struct genl_info *info)
 	/* mark instance */
 	ins->flags |= KZF_INSTANCE_TRANS;
 
-	kz_debug("transaction started; transaction='%p'\n", tr);
+	pr_debug("transaction started; transaction='%p'\n", tr);
 
 error_unlock_tr:
 	UNLOCK_TRANSACTIONS();
@@ -1151,7 +1151,7 @@ kz_commit_transaction_check(const struct kz_transaction *tr)
 			const struct kz_dispatcher *dispatcher = (struct kz_dispatcher *) io->data;
 
 			if (dispatcher->num_rule != dispatcher->alloc_rule) {
-				kz_err("rule number mismatch; dispatcher='%s', alloc_rules='%u', num_rules='%u'\n",
+				pr_err_ratelimited("rule number mismatch; dispatcher='%s', alloc_rules='%u', num_rules='%u'\n",
 					dispatcher->name, dispatcher->alloc_rule, dispatcher->num_rule);
 				return -EINVAL;
 			}
@@ -1180,7 +1180,7 @@ kz_commit_transaction_process_services(const struct kz_transaction *tr, struct k
 		svc = kz_service_clone(i);
 		if (svc == NULL)
 			return -ENOMEM;
-		kz_debug("cloned service; name='%s'\n", svc->name);
+		pr_debug("cloned service; name='%s'\n", svc->name);
 		list_add_tail(&svc->list, &new->services.head);
 		atomic64_set(&svc->count, kz_service_lock(i));
 	}
@@ -1192,10 +1192,10 @@ kz_commit_transaction_process_services(const struct kz_transaction *tr, struct k
 			list_del(&io->list);
 			list_add_tail(&svc->list, &new->services.head);
 			kfree(io);
-			kz_debug("add service; name='%s'\n", svc->name);
+			pr_debug("add service; name='%s'\n", svc->name);
 			orig = kz_service_lookup_name(old, svc->name);
 			if (orig != NULL) {
-				kz_debug("migrate service session count\n");
+				pr_debug("migrate service session count\n");
 				atomic64_set(&svc->count, kz_service_lock(orig));
 				svc->id = orig->id; /* use the original ID! */
 			}
@@ -1233,19 +1233,19 @@ kz_commit_transaction_delete_zones(const struct kz_transaction *tr, struct kz_co
 	if (tr->flags & KZF_TRANSACTION_FLUSH_ZONES) {
 		list_for_each_entry(io, &tr->op, list) {
 			if (io->type == KZNL_OP_DELETE_ZONE) {
-				kz_err("transaction problem: zone delete cannot be used with flush\n");
+				pr_err_ratelimited("transaction problem: zone delete cannot be used with flush\n");
 				return -EINVAL;
 			}
 		}
 	} else {
 		list_for_each_entry(i, &old->zones.head, list) {
 			if (kznl_zone_apply_delete_operation(i, &tr->op)) {
-				kz_debug("not cloned zone; name='%s', depth='%u'\n", i->name, i->depth);
+				pr_debug("not cloned zone; name='%s', depth='%u'\n", i->name, i->depth);
 			} else {
 				zone = kz_zone_clone(i);
 				if (zone == NULL)
 					return -ENOMEM;
-				kz_debug("clone zone; name='%s', depth='%u'\n", zone->name, zone->depth);
+				pr_debug("cloned zone; name='%s', depth='%u'\n", zone->name, zone->depth);
 				list_add_tail(&zone->list, &new->zones.head);
 			}
 		}
@@ -1254,7 +1254,7 @@ kz_commit_transaction_delete_zones(const struct kz_transaction *tr, struct kz_co
 	list_for_each_entry(io, &tr->op, list) {
 		if (io->type == KZNL_OP_DELETE_ZONE) {
 			const struct kz_zone const * deletable_zone = (const struct kz_zone const *) io->data;
-			kz_err("transaction problem: unapplied zone delete operation found; name='%s' depth='%u'\n",
+			pr_err_ratelimited("transaction problem: unapplied zone delete operation found; name='%s' depth='%u'\n",
 			       deletable_zone->name, deletable_zone->depth);
 			return -EINVAL;
 		}
@@ -1277,14 +1277,14 @@ kz_commit_transaction_add_zones(const struct kz_transaction *tr, struct kz_confi
 
 			existing_zone = __kz_zone_lookup_name(&new->zones.head, zone->name);
 			if (existing_zone != NULL) {
-				kz_err("zone with the same name already exists; name='%s'\n", existing_zone->name);
+				pr_err_ratelimited("zone with the same name already exists; name='%s'\n", existing_zone->name);
 				return -EEXIST;
 			}
 
 			list_del(&io->list);
 			list_add_tail(&zone->list, &new->zones.head);
 			kfree(io);
-			kz_debug("add zone; name='%s', depth='%u'\n", zone->name, zone->depth);
+			pr_debug("add zone; name='%s', depth='%u'\n", zone->name, zone->depth);
 		}
 	}
 
@@ -1305,14 +1305,14 @@ kz_commit_transaction_consolidate_zones(const struct kz_transaction *tr, struct 
 			if (parent == NULL) {
 				/* oops, its admin parent was deleted, this is an
 				 * internal error */
-				kz_err("transaction problem: internal error, aborting\n");
+				pr_err_ratelimited("transaction problem: internal error, aborting\n");
 				return -EINVAL;
 			}
 
 			kz_zone_get(parent);
 			kz_zone_put(i->admin_parent);
 			i->admin_parent = parent;
-			kz_debug("set admin-parent for zone; name='%s' parent='%s', depth='%u', parent_depth='%u'\n", i->name, parent->name, i->depth, parent->depth);
+			pr_debug("set admin-parent for zone; name='%s' parent='%s', depth='%u', parent_depth='%u'\n", i->name, parent->name, i->depth, parent->depth);
 		}
 	}
 
@@ -1350,7 +1350,7 @@ kz_commit_transaction_process_dispatchers(const struct kz_transaction *tr, struc
 		    (i->instance->id == tr->instance_id))
 			continue;
 
-		kz_debug("cloning dispatcher; name='%s', alloc_rules='%u'\n", i->name, i->alloc_rule);
+		pr_debug("cloning dispatcher; name='%s', alloc_rules='%u'\n", i->name, i->alloc_rule);
 
 		dpt = kz_dispatcher_clone(i);
 		if (dpt == NULL)
@@ -1362,7 +1362,7 @@ kz_commit_transaction_process_dispatchers(const struct kz_transaction *tr, struc
 	list_for_each_entry_safe(io, po, &tr->op, list) {
 		if (io->type == KZNL_OP_ADD_DISPATCHER) {
 			struct kz_dispatcher *dispatcher = (struct kz_dispatcher *) io->data;
-			kz_debug("add dispatcher; name='%s', alloc_rules='%u', num_rules='%u'\n", dispatcher->name, dispatcher->alloc_rule, dispatcher->num_rule);
+			pr_debug("add dispatcher; name='%s', alloc_rules='%u', num_rules='%u'\n", dispatcher->name, dispatcher->alloc_rule, dispatcher->num_rule);
 			list_del(&io->list);
 			list_add_tail(&dispatcher->list, &new->dispatchers.head);
 			kfree(io);
@@ -1446,25 +1446,25 @@ kznl_recv_commit_transaction(struct kz_instance *instance, struct kz_transaction
 	/* build lookup structures */
 	res = kz_head_zone_build(&new->zones);
 	if (res < 0) {
-		kz_err("failed to build zone lookup data structures, aborting\n");
+		pr_err_ratelimited("failed to build zone lookup data structures, aborting\n");
 		goto error;
 	}
 
 	res = kz_head_dispatcher_build(&new->dispatchers);
 	if (res < 0) {
-		kz_err("error building dispatcher lookup structures\n");
+		pr_err_ratelimited("error building dispatcher lookup structures\n");
 		goto error;
 	}
 
 	/* all ok, commit finally */
-	kz_debug("install new config\n");
+	pr_debug("install new config\n");
 	kz_config_swap(new);
 	res = 0;
 	goto free_locals;
 
 error:
 	if (res == -ENOMEM)
-		kz_err("memory exhausted during kzorp config commit");
+		pr_err_ratelimited("memory exhausted during kzorp config commit");
 
 	/* unlock services in old */
 	{
@@ -1492,7 +1492,7 @@ kznl_recv_commit(struct sk_buff *skb, struct genl_info *info)
 	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
 		/* we have no transaction associated with this peer */
-		kz_err("no transaction found; pid='%d'\n", info->snd_portid);
+		pr_err_ratelimited("no transaction found; pid='%d'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -1520,7 +1520,7 @@ kznl_recv_setflag(struct sk_buff *skb, struct genl_info *info, unsigned int flag
 	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
 		/* we have no transaction associated with this peer */
-		kz_err("no transaction found; pid='%d'\n", info->snd_portid);
+		pr_err_ratelimited("no transaction found; pid='%d'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -1567,13 +1567,13 @@ kznl_parse_add_zone_params(struct nlattr * const * const attrs, struct kz_zone *
 
 	/* parse attributes */
 	if (!attrs[KZNL_ATTR_ZONE_SUBNET_NUM]) {
-		kz_err("required attribute missing: subnet num\n");
+		pr_err_ratelimited("required attribute missing: subnet num\n");
 		res = -EINVAL;
 		goto error;
 	}
 
 	if (!attrs[KZNL_ATTR_ZONE_NAME]) {
-		kz_err("required attribute missing: name\n");
+		pr_err_ratelimited("required attribute missing: name\n");
 		res = -EINVAL;
 		goto error;
 	}
@@ -1581,7 +1581,7 @@ kznl_parse_add_zone_params(struct nlattr * const * const attrs, struct kz_zone *
 	/* allocate zone structure */
 	zone = kz_zone_new();
 	if (zone == NULL) {
-		kz_err("failed to allocate zone structure\n");
+		pr_err_ratelimited("failed to allocate zone structure\n");
 		res = -ENOMEM;
 		goto error;
 	}
@@ -1590,7 +1590,7 @@ kznl_parse_add_zone_params(struct nlattr * const * const attrs, struct kz_zone *
 	if (attrs[KZNL_ATTR_ACCOUNTING_COUNTER_NUM]) {
 		res = kznl_parse_count(attrs[KZNL_ATTR_ACCOUNTING_COUNTER_NUM], &count);
 		if (res < 0) {
-			kz_err("failed to parse service acoouting counter\n");
+			pr_err_ratelimited("failed to parse service acoouting counter\n");
 			goto error_put_zone;
 		}
 		atomic64_set(&zone->count, count);
@@ -1598,14 +1598,14 @@ kznl_parse_add_zone_params(struct nlattr * const * const attrs, struct kz_zone *
 
 	res = kznl_parse_name_alloc(attrs[KZNL_ATTR_ZONE_NAME], &zone->name);
 	if (res < 0) {
-		kz_err("failed to parse zone name\n");
+		pr_err_ratelimited("failed to parse zone name\n");
 		goto error_put_zone;
 	}
 
 	if (attrs[KZNL_ATTR_ZONE_PNAME]) {
 		res = kznl_parse_name_alloc(attrs[KZNL_ATTR_ZONE_PNAME], parent_name);
 		if (res < 0) {
-			kz_err("failed to parse parent name\n");
+			pr_err_ratelimited("failed to parse parent name\n");
 			goto error_put_zone;
 		}
 	}
@@ -1637,7 +1637,7 @@ kznl_zone_set_from_parent(struct kz_zone *zone,
 	if (parent_name != NULL) {
 		parent_zone = lookup_zone_merged(tr, parent_name);
 		if (parent_zone == NULL) {
-			kz_err("parent zone not found; name='%s'\n", parent_name);
+			pr_err_ratelimited("parent zone not found; name='%s'\n", parent_name);
 			return -ENOENT;
 		}
 
@@ -1660,7 +1660,7 @@ kznl_lock_transaction(u32 snd_pid, struct kz_transaction **_tr)
 
 	tr = transaction_lookup(snd_pid);
 	if (tr == NULL) {
-		kz_err("no transaction found; pid='%d'\n", snd_pid);
+		pr_err_ratelimited("no transaction found; pid='%d'\n", snd_pid);
 		return -ENOENT;
 	}
 
@@ -1679,26 +1679,26 @@ kznl_recv_add_zone_subnet(struct sk_buff *skb, struct genl_info *info)
 	struct kz_transaction *tr;
 
 	if (!info->attrs[KZNL_ATTR_ZONE_NAME]) {
-		kz_err("required attribtues missing; attr='zone name'\n");
+		pr_err_ratelimited("required attribtues missing; attr='zone name'\n");
 		res = -EINVAL;
 		goto error;
 	}
 
 	if (!info->attrs[KZNL_ATTR_ZONE_SUBNET]) {
-		kz_err("required attribtues missing; attr='zone subnet'\n");
+		pr_err_ratelimited("required attribtues missing; attr='zone subnet'\n");
 		res = -EINVAL;
 		goto error;
 	}
 
 	res = kznl_parse_name_alloc(info->attrs[KZNL_ATTR_ZONE_NAME], &zone_name);
 	if (res < 0) {
-		kz_err("failed to parse zone name\n");
+		pr_err_ratelimited("failed to parse zone name\n");
 		goto error;
 	}
 
 	kznl_parse_inet_subnet(info->attrs[KZNL_ATTR_ZONE_SUBNET], &zone_subnet.addr, &zone_subnet.mask, &zone_subnet.family);
 	if (res < 0) {
-		kz_err("failed to parse zone subnet\n");
+		pr_err_ratelimited("failed to parse zone subnet\n");
 		goto error_free_names;
 	}
 
@@ -1707,7 +1707,7 @@ kznl_recv_add_zone_subnet(struct sk_buff *skb, struct genl_info *info)
 
 	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
-		kz_err("no transaction found; pid='%d'\n", info->snd_portid);
+		pr_err_ratelimited("no transaction found; pid='%d'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -1715,14 +1715,14 @@ kznl_recv_add_zone_subnet(struct sk_buff *skb, struct genl_info *info)
 	/* look up zone */
 	zone = lookup_zone_merged(tr, zone_name);
 	if (zone == NULL) {
-		kz_err("zone not found; name='%s'\n", zone_name);
+		pr_err_ratelimited("zone not found; name='%s'\n", zone_name);
 		res = -ENOENT;
 		goto error_unlock_zone;
 	}
 
 	res = kz_add_zone_subnet(zone, &zone_subnet);
 	if (res < 0) {
-		kz_err("failed to add subnet to zone; zone_name='%s'", zone_name);
+		pr_err_ratelimited("failed to add subnet to zone; zone_name='%s'", zone_name);
 		goto error_unlock_zone;
 	}
 
@@ -1759,7 +1759,7 @@ kznl_recv_add_zone(struct sk_buff *skb, struct genl_info *info)
 		goto error_unlock_op;
 
 	if ((res = transaction_add_op(tr, KZNL_OP_ADD_ZONE, kz_zone_get(zone), transaction_destroy_zone)) < 0)
-		kz_err("failed to queue transaction operation\n");
+		pr_err_ratelimited("failed to queue transaction operation\n");
 
 error_unlock_op:
 error_unlock_tr:
@@ -1779,7 +1779,7 @@ kznl_validate_update_zone_params(struct kz_zone *zone,
 {
 	/* check that we don't yet have a zone with the same name */
 	if (lookup_zone_merged(tr, zone->name) == NULL) {
-		kz_err("zone with the given name not found; name='%s'\n", zone->name);
+		pr_err_ratelimited("zone with the given name not found; name='%s'\n", zone->name);
 		return -ENOENT;
 	}
 
@@ -1793,7 +1793,7 @@ kznl_parse_delete_zone_params(struct nlattr * const * const attrs, struct kz_zon
 	struct kz_zone *zone;
 
 	if (!attrs[KZNL_ATTR_ZONE_NAME]) {
-		kz_err("required attribute missing: name\n");
+		pr_err_ratelimited("required attribute missing: name\n");
 		res = -EINVAL;
 		goto error;
 	}
@@ -1801,13 +1801,13 @@ kznl_parse_delete_zone_params(struct nlattr * const * const attrs, struct kz_zon
 	/* allocate zone structure */
 	zone = kz_zone_new();
 	if (zone == NULL) {
-		kz_err("failed to allocate zone structure\n");
+		pr_err_ratelimited("failed to allocate zone structure\n");
 		res = -ENOMEM;
 		goto error;
 	}
 
 	if ((res = kznl_parse_name_alloc(attrs[KZNL_ATTR_ZONE_NAME], &zone->name)) < 0) {
-		kz_err("failed to parse name\n");
+		pr_err_ratelimited("failed to parse name\n");
 		goto error_put_zone;
 	}
 
@@ -1847,7 +1847,7 @@ kznl_recv_delete_zone(struct sk_buff *skb, struct genl_info *info)
 		goto error_unlock_op;
 
 	if ((res = transaction_add_op(tr, KZNL_OP_DELETE_ZONE, kz_zone_get(zone), transaction_destroy_zone)) < 0)
-		kz_err("failed to queue transaction operation\n");
+		pr_err_ratelimited("failed to queue transaction operation\n");
 
 error_unlock_op:
 error_unlock_tr:
@@ -1943,7 +1943,7 @@ kznl_build_zone(struct sk_buff *skb, u_int32_t pid, u_int32_t seq, int flags,
 	msg_start = skb_tail_pointer(skb);
 	msg_rollback = msg_start;
 
-	kz_debug("part_idx=%ld, num_subnet=%d", *part_idx, zone->num_subnet);
+	pr_debug("part_idx=%ld, num_subnet=%d", *part_idx, zone->num_subnet);
 	if (*part_idx == ZONE_DUMP_STATE_FIRST_CALL) {
 		msg_rollback = skb_tail_pointer(skb);
 		/* *part_idx and *entry_idx is left pointing the failed item */
@@ -1953,10 +1953,10 @@ kznl_build_zone(struct sk_buff *skb, u_int32_t pid, u_int32_t seq, int flags,
 	}
 
 	/* dump rule structures */
-	kz_debug("part_idx=%ld, num_subnet=%d", *part_idx, zone->num_subnet);
+	pr_debug("part_idx=%ld, num_subnet=%d", *part_idx, zone->num_subnet);
 	for (; (*part_idx) <= (long) zone->num_subnet; ++(*part_idx)) {
 		const struct kz_subnet const * subnet = &zone->subnet[(*part_idx) - 1];
-		kz_debug("part_idx=%ld", *part_idx);
+		pr_debug("part_idx=%ld", *part_idx);
 
 		msg_rollback = skb_tail_pointer(skb);
 		if (kznl_build_zone_add_subnet(skb, pid, seq, flags,
@@ -2003,7 +2003,7 @@ kznl_dump_zones(struct sk_buff *skb, struct netlink_callback *cb)
 
 	list_find_or_first(i, &cfg->zones.head, list, (struct kz_zone *) cb->args[ZONE_DUMP_ARG_CURRENT_ZONE]);
 	list_for_each_entry_from(i, &cfg->zones.head, list) {
-		kz_debug("zone name: '%s'", i->name);
+		pr_debug("zone name: '%s'", i->name);
 		if (kznl_build_zone(skb, NETLINK_CB(cb->skb).portid,
 				   cb->nlh->nlmsg_seq, 0, i, &cb->args[ZONE_DUMP_ARG_SUBNET_SUBPART]) < 0) {
 			/* zone dump failed, try to continue from here next time */
@@ -2033,14 +2033,14 @@ kznl_recv_get_zone(struct sk_buff *skb, struct genl_info *info)
 
 	/* parse attributes */
 	if (!info->attrs[KZNL_ATTR_ZONE_UNAME]) {
-		kz_err("required name attribute missing\n");
+		pr_err_ratelimited("required name attribute missing\n");
 		res = -EINVAL;
 		goto error;
 	}
 
 	res = kznl_parse_name_alloc(info->attrs[KZNL_ATTR_ZONE_UNAME], &zone_name);
 	if (res < 0) {
-		kz_err("failed to parse zone name\n");
+		pr_err_ratelimited("failed to parse zone name\n");
 		goto error;
 	}
 
@@ -2049,7 +2049,7 @@ kznl_recv_get_zone(struct sk_buff *skb, struct genl_info *info)
 
 	zone = kz_zone_lookup_name(cfg, zone_name);
 	if (zone == NULL) {
-		kz_debug("no such zone found\n");
+		pr_debug("no such zone found\n");
 		res = -ENOENT;
 		goto error_unlock_zone;
 	}
@@ -2057,7 +2057,7 @@ kznl_recv_get_zone(struct sk_buff *skb, struct genl_info *info)
 	/* create skb and dump */
 	nskb = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
 	if (!nskb) {
-		kz_err("failed to allocate reply message\n");
+		pr_err_ratelimited("failed to allocate reply message\n");
 		res = -ENOMEM;
 		goto error_unlock_zone;
 	}
@@ -2066,7 +2066,7 @@ kznl_recv_get_zone(struct sk_buff *skb, struct genl_info *info)
 			    info->snd_seq, 0, zone, &idx) < 0) {
 		/* data did not fit in a single entry -- for now no support of continuation
 		   we could loop and multicast; we chose not to send the partial info */
-		kz_err("failed to create zone messages\n");
+		pr_err_ratelimited("failed to create zone messages\n");
 		nlmsg_free(nskb);
 		res = -ENOMEM;
 	} else {
@@ -2092,7 +2092,7 @@ kznl_recv_add_service(struct sk_buff *skb, struct genl_info *info)
 	u_int64_t count;
 
 	if (!info->attrs[KZNL_ATTR_SERVICE_PARAMS] || !info->attrs[KZNL_ATTR_SERVICE_NAME]) {
-		kz_err("required attributes missing\n");
+		pr_err_ratelimited("required attributes missing\n");
 		res = -EINVAL;
 		goto error;
 	}
@@ -2100,7 +2100,7 @@ kznl_recv_add_service(struct sk_buff *skb, struct genl_info *info)
 	/* allocate service structure */
 	svc = kz_service_new();
 	if (svc == NULL) {
-		kz_err("failed to allocate service structure\n");
+		pr_err_ratelimited("failed to allocate service structure\n");
 		res = -ENOMEM;
 		goto error;
 	}
@@ -2109,19 +2109,19 @@ kznl_recv_add_service(struct sk_buff *skb, struct genl_info *info)
 	res = kznl_parse_service_params(info->attrs[KZNL_ATTR_SERVICE_PARAMS], svc);
 	if (res < 0 ||
 	    (svc->type != KZ_SERVICE_PROXY && svc->type != KZ_SERVICE_FORWARD && svc->type != KZ_SERVICE_DENY)) {
-		kz_err("failed to parse service parameters\n");
+		pr_err_ratelimited("failed to parse service parameters\n");
 		goto error_put_svc;
 	}
 
 	/* forwarded service, not transparent -> we need router destination */
 	if (svc->type == KZ_SERVICE_FORWARD && !(svc->flags & KZF_SERVICE_TRANSPARENT)) {
 		if (!info->attrs[KZNL_ATTR_SERVICE_ROUTER_DST_PORT]) {
-			kz_err("required router destination port attribute missing\n");
+			pr_err_ratelimited("required router destination port attribute missing\n");
 			res = -EINVAL;
 			goto error_put_svc;
 		}
 		if (!info->attrs[KZNL_ATTR_SERVICE_ROUTER_DST_ADDR]) {
-			kz_err("required router destination address attribute missing\n");
+			pr_err_ratelimited("required router destination address attribute missing\n");
 			res = -EINVAL;
 			goto error_put_svc;
 		}
@@ -2130,12 +2130,12 @@ kznl_recv_add_service(struct sk_buff *skb, struct genl_info *info)
 	/* for deny service we require the reject type to be specified */
 	if (svc->type == KZ_SERVICE_DENY) {
 		if (!info->attrs[KZNL_ATTR_SERVICE_DENY_IPV4_METHOD]) {
-			kz_err("required IPv4 reject method attribute missing\n");
+			pr_err_ratelimited("required IPv4 reject method attribute missing\n");
 			res = -EINVAL;
 			goto error_put_svc;
 		}
 		if (!info->attrs[KZNL_ATTR_SERVICE_DENY_IPV6_METHOD]) {
-			kz_err("required IPv6 reject method attribute missing\n");
+			pr_err_ratelimited("required IPv6 reject method attribute missing\n");
 			res = -EINVAL;
 			goto error_put_svc;
 		}
@@ -2143,14 +2143,14 @@ kznl_recv_add_service(struct sk_buff *skb, struct genl_info *info)
 
 	res = kznl_parse_name_alloc(info->attrs[KZNL_ATTR_SERVICE_NAME], &svc->name);
 	if (res < 0) {
-		kz_err("failed to parse service name\n");
+		pr_err_ratelimited("failed to parse service name\n");
 		goto error_put_svc;
 	}
 
 	if (info->attrs[KZNL_ATTR_ACCOUNTING_COUNTER_NUM]) {
 		res = kznl_parse_count(info->attrs[KZNL_ATTR_ACCOUNTING_COUNTER_NUM], &count);
 		if (res < 0) {
-			kz_err("failed to parse service acoouting counter\n");
+			pr_err_ratelimited("failed to parse service acoouting counter\n");
 			goto error_put_svc;
 		}
 		atomic64_set(&svc->count, count);
@@ -2158,7 +2158,7 @@ kznl_recv_add_service(struct sk_buff *skb, struct genl_info *info)
 
 	switch (svc->type) {
 	case KZ_SERVICE_PROXY:
-		kz_debug("service structure created, proxy type\n");
+		pr_debug("service structure created, proxy type\n");
 		break;
 
 	case KZ_SERVICE_FORWARD:
@@ -2169,34 +2169,34 @@ kznl_recv_add_service(struct sk_buff *skb, struct genl_info *info)
 		if (!(svc->flags & KZF_SERVICE_TRANSPARENT)) {
 			res = kznl_parse_service_router_dst(info->attrs, svc);
 			if (res < 0) {
-				kz_err("failed to parse router target address\n");
+				pr_err_ratelimited("failed to parse router target address\n");
 				goto error_put_svc;
 			}
 		}
 
-		kz_debug("service structure created, forwarded type\n");
+		pr_debug("service structure created, forwarded type\n");
 		break;
 
 	case KZ_SERVICE_DENY:
 		res = kznl_parse_service_ipv4_deny_method(info->attrs[KZNL_ATTR_SERVICE_DENY_IPV4_METHOD],
 							  &svc->a.deny.ipv4_reject_method);
 		if (res < 0) {
-			kz_err("failed to parse deny service IPv4 reject method\n");
+			pr_err_ratelimited("failed to parse deny service IPv4 reject method\n");
 			goto error_put_svc;
 		}
 
 		res = kznl_parse_service_ipv6_deny_method(info->attrs[KZNL_ATTR_SERVICE_DENY_IPV6_METHOD],
 							  &svc->a.deny.ipv6_reject_method);
 		if (res < 0) {
-			kz_err("failed to parse deny service IPv6 reject method\n");
+			pr_err_ratelimited("failed to parse deny service IPv6 reject method\n");
 			goto error_put_svc;
 		}
 
-		kz_debug("service structure created, deny type\n");
+		pr_debug("service structure created, deny type\n");
 		break;
 
 	default:
-		kz_err("invalid service type specified; type='%d'\n", svc->type);
+		pr_err_ratelimited("invalid service type specified; type='%d'\n", svc->type);
 		res = -EINVAL;
 		goto error_put_svc;
 	}
@@ -2206,7 +2206,7 @@ kznl_recv_add_service(struct sk_buff *skb, struct genl_info *info)
 
 	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
-		kz_err("no transaction found; pid='%d'\n", info->snd_portid);
+		pr_err_ratelimited("no transaction found; pid='%d'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -2216,7 +2216,7 @@ kznl_recv_add_service(struct sk_buff *skb, struct genl_info *info)
 	/* check that we don't yet have a service with the same name */
 	p = transaction_service_lookup(tr, svc->name);
 	if (p != NULL) {
-		kz_err("service with the same name already present; name='%s'\n", svc->name);
+		pr_err_ratelimited("service with the same name already present; name='%s'\n", svc->name);
 		res = -EEXIST;
 		goto error_unlock_op;
 	}
@@ -2225,7 +2225,7 @@ kznl_recv_add_service(struct sk_buff *skb, struct genl_info *info)
 	if (p != NULL) {
 		if ((p->instance_id != tr->instance_id) ||
 		    !(tr->flags & KZF_TRANSACTION_FLUSH_SERVICES)) {
-			kz_err("service with the same name already present; name='%s'\n", svc->name);
+			pr_err_ratelimited("service with the same name already present; name='%s'\n", svc->name);
 			res = -EEXIST;
 			goto error_unlock_op;
 		}
@@ -2233,7 +2233,7 @@ kznl_recv_add_service(struct sk_buff *skb, struct genl_info *info)
 
 	res = transaction_add_op(tr, KZNL_OP_ADD_SERVICE, kz_service_get(svc), transaction_destroy_service);
 	if (res < 0) {
-		kz_err("failed to queue transaction operation\n");
+		pr_err_ratelimited("failed to queue transaction operation\n");
 	}
 
 error_unlock_op:
@@ -2258,7 +2258,7 @@ kznl_recv_add_service_nat(struct sk_buff *skb, struct genl_info *info, bool snat
 
 	if (!info->attrs[KZNL_ATTR_SERVICE_NAME] || !info->attrs[KZNL_ATTR_SERVICE_NAT_SRC] ||
 	    !info->attrs[KZNL_ATTR_SERVICE_NAT_MAP]) {
-		kz_err("required attributes missing\n");
+		pr_err_ratelimited("required attributes missing\n");
 		res = -EINVAL;
 		goto error;
 	}
@@ -2266,14 +2266,14 @@ kznl_recv_add_service_nat(struct sk_buff *skb, struct genl_info *info, bool snat
 	/* parse attributes */
 	res = kznl_parse_name_alloc(info->attrs[KZNL_ATTR_SERVICE_NAME], &service_name);
 	if (res < 0) {
-		kz_err("failed to parse service name\n");
+		pr_err_ratelimited("failed to parse service name\n");
 		goto error;
 	}
 
 	memset(&src, 0, sizeof(src));
 	res = kznl_parse_service_nat_params(info->attrs[KZNL_ATTR_SERVICE_NAT_SRC], &src);
 	if (res < 0) {
-		kz_err("failed to parse source IP range\n");
+		pr_err_ratelimited("failed to parse source IP range\n");
 		goto error;
 	}
 
@@ -2281,7 +2281,7 @@ kznl_recv_add_service_nat(struct sk_buff *skb, struct genl_info *info, bool snat
 	if (info->attrs[KZNL_ATTR_SERVICE_NAT_DST]) {
 		res = kznl_parse_service_nat_params(info->attrs[KZNL_ATTR_SERVICE_NAT_DST], &dst);
 		if (res < 0) {
-			kz_err("failed to parse destination IP range\n");
+			pr_err_ratelimited("failed to parse destination IP range\n");
 			goto error;
 		}
 	}
@@ -2289,7 +2289,7 @@ kznl_recv_add_service_nat(struct sk_buff *skb, struct genl_info *info, bool snat
 	memset(&map, 0, sizeof(map));
 	res = kznl_parse_service_nat_params(info->attrs[KZNL_ATTR_SERVICE_NAT_MAP], &map);
 	if (res < 0) {
-		kz_err("failed to parse IP range to map to\n");
+		pr_err_ratelimited("failed to parse IP range to map to\n");
 		goto error;
 	}
 
@@ -2298,7 +2298,7 @@ kznl_recv_add_service_nat(struct sk_buff *skb, struct genl_info *info, bool snat
 
 	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
-		kz_err("no transaction found; pid='%u'\n", info->snd_portid);
+		pr_err_ratelimited("no transaction found; pid='%u'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -2306,7 +2306,7 @@ kznl_recv_add_service_nat(struct sk_buff *skb, struct genl_info *info, bool snat
 	/* look up service */
 	svc = transaction_service_lookup(tr, service_name);
 	if (svc == NULL) {
-		kz_err("no such service found; name='%s'\n", service_name);
+		pr_err_ratelimited("no such service found; name='%s'\n", service_name);
 		res = -ENOENT;
 		goto error_unlock_svc;
 	}
@@ -2569,14 +2569,14 @@ kznl_recv_get_service(struct sk_buff *skb, struct genl_info *info)
 
 	/* parse attributes */
 	if (!info->attrs[KZNL_ATTR_SERVICE_NAME]) {
-		kz_err("required name attribute missing\n");
+		pr_err_ratelimited("required name attribute missing\n");
 		res = -EINVAL;
 		goto error;
 	}
 
 	res = kznl_parse_name_alloc(info->attrs[KZNL_ATTR_SERVICE_NAME], &service_name);
 	if (res < 0) {
-		kz_err("failed to parse service name\n");
+		pr_err_ratelimited("failed to parse service name\n");
 		goto error;
 	}
 
@@ -2584,7 +2584,7 @@ kznl_recv_get_service(struct sk_buff *skb, struct genl_info *info)
 
 	svc = kz_service_lookup_name(rcu_dereference(kz_config_rcu), service_name);
 	if (svc == NULL) {
-		kz_debug("no such service found; name='%s'\n", service_name);
+		pr_debug("no such service found; name='%s'\n", service_name);
 		res = -ENOENT;
 		goto error_unlock_svc;
 	}
@@ -2592,14 +2592,14 @@ kznl_recv_get_service(struct sk_buff *skb, struct genl_info *info)
 	/* create skb and dump */
 	nskb = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
 	if (!nskb) {
-		kz_err("failed to allocate reply message\n");
+		pr_err_ratelimited("failed to allocate reply message\n");
 		res = -ENOMEM;
 		goto error_unlock_svc;
 	}
 
 	if (kznl_build_service(nskb, info->snd_portid,
 			       info->snd_seq, 0, svc) < 0) {
-		kz_err("failed to create service messages\n");
+		pr_err_ratelimited("failed to create service messages\n");
 		nlmsg_free(nskb);
 		res = -ENOMEM;
 	} else {
@@ -2624,7 +2624,7 @@ kznl_recv_add_dispatcher(struct sk_buff *skb, struct genl_info *info)
 	struct kz_transaction *tr;
 
 	if (!info->attrs[KZNL_ATTR_DISPATCHER_NAME]) {
-		kz_err("required attribtues missing\n");
+		pr_err_ratelimited("required attribtues missing\n");
 		res = -EINVAL;
 		goto error;
 	}
@@ -2632,7 +2632,7 @@ kznl_recv_add_dispatcher(struct sk_buff *skb, struct genl_info *info)
 	/* allocate dispatcher structure */
 	dpt = kz_dispatcher_new();
 	if (dpt == NULL) {
-		kz_err("failed to allocate dispatcher structure\n");
+		pr_err_ratelimited("failed to allocate dispatcher structure\n");
 		res = -ENOMEM;
 		goto error;
 	}
@@ -2640,19 +2640,19 @@ kznl_recv_add_dispatcher(struct sk_buff *skb, struct genl_info *info)
 	/* fill fields */
 	res = kznl_parse_name_alloc(info->attrs[KZNL_ATTR_DISPATCHER_NAME], &dpt->name);
 	if (res < 0) {
-		kz_err("failed to parse dispatcher name\n");
+		pr_err_ratelimited("failed to parse dispatcher name\n");
 		goto error_put_dpt;
 	}
 
 	if (!info->attrs[KZNL_ATTR_DISPATCHER_N_DIMENSION_PARAMS]) {
-		kz_err("required attribute missing: n dimension info\n");
+		pr_err_ratelimited("required attribute missing: n dimension info\n");
 		res = -EINVAL;
 		goto error_put_dpt;
 	}
 
 	res = kznl_parse_dispatcher_n_dimension(info->attrs[KZNL_ATTR_DISPATCHER_N_DIMENSION_PARAMS], dpt);
 	if (res < 0) {
-		kz_err("failed to parse n dimension attribute\n");
+		pr_err_ratelimited("failed to parse n dimension attribute\n");
 		goto error_put_dpt;
 	}
 
@@ -2661,7 +2661,7 @@ kznl_recv_add_dispatcher(struct sk_buff *skb, struct genl_info *info)
 
 	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
-		kz_err("no transaction found; pid='%d'\n", info->snd_portid);
+		pr_err_ratelimited("no transaction found; pid='%d'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -2671,14 +2671,14 @@ kznl_recv_add_dispatcher(struct sk_buff *skb, struct genl_info *info)
 	/* check that we don't yet have a dispatcher with the same name */
 	p = transaction_dispatcher_lookup(tr, dpt->name);
 	if (p != NULL) {
-		kz_err("dispatcher with the same name already present; name='%s'\n", dpt->name);
+		pr_err_ratelimited("dispatcher with the same name already present; name='%s'\n", dpt->name);
 		res = -EEXIST;
 		goto error_unlock_op;
 	}
 
 	res = transaction_add_op(tr, KZNL_OP_ADD_DISPATCHER, kz_dispatcher_get(dpt), transaction_destroy_dispatcher);
 	if (res < 0) {
-		kz_err("failed to queue transaction operation\n");
+		pr_err_ratelimited("failed to queue transaction operation\n");
 	}
 
 error_unlock_op:
@@ -2705,32 +2705,32 @@ kznl_recv_add_n_dimension_rule(struct sk_buff *skb, struct genl_info *info)
 	struct kz_rule rule;
 
 	if (!info->attrs[KZNL_ATTR_N_DIMENSION_RULE_ID]) {
-		kz_err("required attribtues missing; attr='rule id'\n");
+		pr_err_ratelimited("required attribtues missing; attr='rule id'\n");
 		res = -EINVAL;
 		goto error;
 	}
 
 	if (!info->attrs[KZNL_ATTR_DISPATCHER_NAME]) {
-		kz_err("required attribtues missing; attr='dispatcher name'\n");
+		pr_err_ratelimited("required attribtues missing; attr='dispatcher name'\n");
 		res = -EINVAL;
 		goto error;
 	}
 
 	if (!info->attrs[KZNL_ATTR_N_DIMENSION_RULE_SERVICE]) {
-		kz_err("required attribtues missing; attr='service name'\n");
+		pr_err_ratelimited("required attribtues missing; attr='service name'\n");
 		res = -EINVAL;
 		goto error;
 	}
 
 	res = kznl_parse_name_alloc(info->attrs[KZNL_ATTR_DISPATCHER_NAME], &dpt_name);
 	if (res < 0) {
-		kz_err("failed to parse dispatcher name\n");
+		pr_err_ratelimited("failed to parse dispatcher name\n");
 		goto error;
 	}
 
 	res = kznl_parse_name_alloc(info->attrs[KZNL_ATTR_N_DIMENSION_RULE_SERVICE], &svc_name);
 	if (res < 0) {
-		kz_err("failed to parse service name\n");
+		pr_err_ratelimited("failed to parse service name\n");
 		goto error_free_dpt_name;
 	}
 
@@ -2803,7 +2803,7 @@ kznl_recv_add_n_dimension_rule(struct sk_buff *skb, struct genl_info *info)
 		case KZNL_ATTR_ZONE_SUBNET_NUM:
 		case KZNL_ATTR_ZONE_IP:
 		case KZNL_ATTR_TYPE_COUNT:
-			kz_err("invalid attribute type; attr_type='%d'", attr_type);
+			pr_err_ratelimited("invalid attribute type; attr_type='%d'", attr_type);
 			res = -EINVAL;
 			goto error_free_svc_name;
 		}
@@ -2814,7 +2814,7 @@ kznl_recv_add_n_dimension_rule(struct sk_buff *skb, struct genl_info *info)
 
 	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
-		kz_err("no transaction found; pid='%d'\n", info->snd_portid);
+		pr_err_ratelimited("no transaction found; pid='%d'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -2822,27 +2822,27 @@ kznl_recv_add_n_dimension_rule(struct sk_buff *skb, struct genl_info *info)
 	/* check that we have a dispatcher with the same name */
 	dpt = transaction_dispatcher_lookup(tr, dpt_name);
 	if (dpt == NULL) {
-		kz_err("dispatcher not found for the rule; name='%s'\n", dpt_name);
+		pr_err_ratelimited("dispatcher not found for the rule; name='%s'\n", dpt_name);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
 
 	if (transaction_rule_lookup(tr, dpt_name, rule.id) != NULL) {
-		kz_err("rule with the same id already present; id='%u'\n", rule.id);
+		pr_err_ratelimited("rule with the same id already present; id='%u'\n", rule.id);
 		res = -EEXIST;
 		goto error_unlock_tr;
 	}
 
 	svc = lookup_service_merged(tr, svc_name);
 	if (svc == NULL) {
-		kz_err("service not found; name='%s'\n", svc_name);
+		pr_err_ratelimited("service not found; name='%s'\n", svc_name);
 		res = -ENOENT;
 		goto error_unlock_svc;
 	}
 
 	res = kz_dispatcher_add_rule(dpt, svc, &rule);
 	if (res < 0) {
-		kz_err("failed to add rule; dpt_name='%s', rule_id='%d'\n",
+		pr_err_ratelimited("failed to add rule; dpt_name='%s', rule_id='%d'\n",
 		       dpt_name, rule.id);
 		goto error_unlock_svc;
 	}
@@ -2878,20 +2878,20 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 	struct kz_rule_entry_params rule_entry;
 
 	if (!info->attrs[KZNL_ATTR_DISPATCHER_NAME]) {
-		kz_err("required attribtues missing; attr='dispatcher name'\n");
+		pr_err_ratelimited("required attribtues missing; attr='dispatcher name'\n");
 		res = -EINVAL;
 		goto error;
 	}
 
 	if (!info->attrs[KZNL_ATTR_N_DIMENSION_RULE_ID]) {
-		kz_err("required attribtues missing; attr='rule id'\n");
+		pr_err_ratelimited("required attribtues missing; attr='rule id'\n");
 		res = -EINVAL;
 		goto error;
 	}
 
 	res = kznl_parse_name_alloc(info->attrs[KZNL_ATTR_DISPATCHER_NAME], &dpt_name);
 	if (res < 0) {
-		kz_err("failed to parse dispatcher name\n");
+		pr_err_ratelimited("failed to parse dispatcher name\n");
 		goto error;
 	}
 
@@ -2908,7 +2908,7 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 		case KZNL_ATTR_N_DIMENSION_IFACE: {
 			res = kznl_parse_name(info->attrs[attr_type], (char *) &rule_entry.ifname, sizeof(rule_entry.ifname));
 			if (res < 0) {
-				kz_err("failed to parse interface name\n");
+				pr_err_ratelimited("failed to parse interface name\n");
 				goto error_free_names;
 			}
 			rule_entry.has_ifname = true;
@@ -2937,7 +2937,7 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 		case KZNL_ATTR_N_DIMENSION_SRC_PORT: {
 			res = kznl_parse_port_range(info->attrs[attr_type], &rule_entry.src_port.from, &rule_entry.src_port.to);
 			if (res < 0) {
-				kz_err("failed to parse source port range\n");
+				pr_err_ratelimited("failed to parse source port range\n");
 				goto error_free_names;
 			}
 			rule_entry.has_src_port = true;
@@ -2946,7 +2946,7 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 		case KZNL_ATTR_N_DIMENSION_DST_PORT: {
 			res = kznl_parse_port_range(info->attrs[attr_type], &rule_entry.dst_port.from, &rule_entry.dst_port.to);
 			if (res < 0) {
-				kz_err("failed to parse source port range\n");
+				pr_err_ratelimited("failed to parse source port range\n");
 				goto error_free_names;
 			}
 			rule_entry.has_dst_port = true;
@@ -2955,7 +2955,7 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 		case KZNL_ATTR_N_DIMENSION_SRC_IP: {
 			res = kznl_parse_in_subnet(info->attrs[attr_type], &rule_entry.src_in_subnet.addr, &rule_entry.src_in_subnet.mask);
 			if (res < 0) {
-				kz_err("failed to parse source subnet\n");
+				pr_err_ratelimited("failed to parse source subnet\n");
 				goto error_free_names;
 			}
 			rule_entry.has_src_in_subnet = true;
@@ -2964,7 +2964,7 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 		case KZNL_ATTR_N_DIMENSION_SRC_ZONE: {
 			res = kznl_parse_name_alloc(info->attrs[attr_type], &src_zone_name);
 			if (res < 0) {
-				kz_err("failed to parse source zone name\n");
+				pr_err_ratelimited("failed to parse source zone name\n");
 				goto error_free_names;
 			}
 			rule_entry.has_src_zone = true;
@@ -2973,7 +2973,7 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 		case KZNL_ATTR_N_DIMENSION_DST_IP: {
 			res = kznl_parse_in_subnet(info->attrs[attr_type], &rule_entry.dst_in_subnet.addr, &rule_entry.dst_in_subnet.mask);
 			if (res < 0) {
-				kz_err("failed to parse destination subnet\n");
+				pr_err_ratelimited("failed to parse destination subnet\n");
 				goto error_free_names;
 			}
 			rule_entry.has_dst_in_subnet = true;
@@ -2982,7 +2982,7 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 		case KZNL_ATTR_N_DIMENSION_DST_ZONE: {
 			res = kznl_parse_name_alloc(info->attrs[attr_type], &dst_zone_name);
 			if (res < 0) {
-				kz_err("failed to parse destination zone name\n");
+				pr_err_ratelimited("failed to parse destination zone name\n");
 				goto error_free_names;
 			}
 			rule_entry.has_dst_zone = true;
@@ -2991,7 +2991,7 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 		case KZNL_ATTR_N_DIMENSION_SRC_IP6: {
 			res = kznl_parse_in6_subnet(info->attrs[attr_type], &rule_entry.src_in6_subnet.addr, &rule_entry.src_in6_subnet.mask);
 			if (res < 0) {
-				kz_err("failed to parse source IPv6 subnet\n");
+				pr_err_ratelimited("failed to parse source IPv6 subnet\n");
 				goto error_free_names;
 			}
 			rule_entry.has_src_in6_subnet = true;
@@ -3000,7 +3000,7 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 		case KZNL_ATTR_N_DIMENSION_DST_IP6: {
 			res = kznl_parse_in6_subnet(info->attrs[attr_type], &rule_entry.dst_in6_subnet.addr, &rule_entry.dst_in6_subnet.mask);
 			if (res < 0) {
-				kz_err("failed to parse destination IPv6 subnet\n");
+				pr_err_ratelimited("failed to parse destination IPv6 subnet\n");
 				goto error_free_names;
 			}
 			rule_entry.has_dst_in6_subnet = true;
@@ -3009,7 +3009,7 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 		case KZNL_ATTR_N_DIMENSION_DST_IFACE: {
 			res = kznl_parse_name(info->attrs[attr_type], (char *) &rule_entry.dst_ifname, sizeof(rule_entry.dst_ifname));
 			if (res < 0) {
-				kz_err("failed to parse interface name\n");
+				pr_err_ratelimited("failed to parse interface name\n");
 				goto error_free_names;
 			}
 			rule_entry.has_dst_ifname = true;
@@ -3024,7 +3024,7 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 		case KZNL_ATTR_N_DIMENSION_REQID: {
 			res = kznl_parse_reqid(info->attrs[attr_type], &rule_entry.reqid);
 			if (res < 0) {
-				kz_err("failed to parse request id\n");
+				pr_err_ratelimited("failed to parse request id\n");
 				goto error_free_names;
 			}
 			rule_entry.has_reqid = true;
@@ -3077,7 +3077,7 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 		case KZNL_ATTR_ZONE_IP:
 		case KZNL_ATTR_ACCOUNTING_COUNTER_NUM:
 		case KZNL_ATTR_TYPE_COUNT:
-			kz_err("invalid attribute type; attr_type='%d'", attr_type);
+			pr_err_ratelimited("invalid attribute type; attr_type='%d'", attr_type);
 			res = -EINVAL;
 			goto error_free_names;
 		}
@@ -3088,14 +3088,14 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 
 	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
-		kz_err("no transaction found; pid='%d'\n", info->snd_portid);
+		pr_err_ratelimited("no transaction found; pid='%d'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
 
 	rule = transaction_rule_lookup(tr, dpt_name, rule_entry.rule_id);
 	if (rule == NULL) {
-		kz_err("rule not found; id='%d'\n", rule_entry.rule_id);
+		pr_err_ratelimited("rule not found; id='%d'\n", rule_entry.rule_id);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -3104,7 +3104,7 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 	if (src_zone_name != NULL) {
 		rule_entry.src_zone = lookup_zone_merged(tr, src_zone_name);
 		if (rule_entry.src_zone == NULL) {
-			kz_err("source zone not found; name='%s'\n", src_zone_name);
+			pr_err_ratelimited("source zone not found; name='%s'\n", src_zone_name);
 			res = -ENOENT;
 			goto error_unlock_zone;
 		}
@@ -3112,7 +3112,7 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 	if (dst_zone_name != NULL) {
 		rule_entry.dst_zone = lookup_zone_merged(tr, dst_zone_name);
 		if (rule_entry.dst_zone == NULL) {
-			kz_err("destination zone not found; name='%s'\n", dst_zone_name);
+			pr_err_ratelimited("destination zone not found; name='%s'\n", dst_zone_name);
 			res = -ENOENT;
 			goto error_unlock_zone;
 		}
@@ -3121,14 +3121,14 @@ kznl_recv_add_n_dimension_rule_entry(struct sk_buff *skb, struct genl_info *info
 	/* check that we have a dispatcher with the same name */
 	dpt = transaction_dispatcher_lookup(tr, dpt_name);
 	if (dpt == NULL) {
-		kz_err("dispatcher not found for the rule; name='%s'\n", dpt_name);
+		pr_err_ratelimited("dispatcher not found for the rule; name='%s'\n", dpt_name);
 		res = -ENOENT;
 		goto error_unlock_dpt;
 	}
 
 	res = kz_dispatcher_add_rule_entry(rule, &rule_entry);
 	if (res < 0) {
-		kz_err("failed to add rule; dpt_name='%s', rule_id='%d'\n",
+		pr_err_ratelimited("failed to add rule; dpt_name='%s', rule_id='%d'\n",
 		       dpt_name, rule_entry.rule_id);
 		goto error_unlock_dpt;
 	}
@@ -3174,44 +3174,44 @@ kznl_parse_bind_alloc(struct nlattr *attrs[], unsigned int instance_id, struct k
 	char *instance_name = NULL;
 
 	if (!attrs[KZNL_ATTR_INSTANCE_NAME]) {
-		kz_err("required attribtues missing; attr='instance'\n");
+		pr_err_ratelimited("required attribtues missing; attr='instance'\n");
 		res = -EINVAL;
 		goto error;
 	}
 
 	if (!attrs[KZNL_ATTR_BIND_PROTO]) {
-		kz_err("required attribtues missing; attr='protocol'\n");
+		pr_err_ratelimited("required attribtues missing; attr='protocol'\n");
 		res = -EINVAL;
 		goto error;
 	}
 
 	if (!attrs[KZNL_ATTR_BIND_ADDR]) {
-		kz_err("required attribtues missing; attr='bind addr'\n");
+		pr_err_ratelimited("required attribtues missing; attr='bind addr'\n");
 		res = -EINVAL;
 		goto error;
 	}
 
 	if (!attrs[KZNL_ATTR_BIND_PORT]) {
-		kz_err("required attribtues missing; attr='bind port'\n");
+		pr_err_ratelimited("required attribtues missing; attr='bind port'\n");
 		res = -EINVAL;
 		goto error;
 	}
 
 	res = kznl_parse_name_alloc(attrs[KZNL_ATTR_INSTANCE_NAME], &instance_name);
 	if (res < 0) {
-		kz_err("failed to parse instance name\n");
+		pr_err_ratelimited("failed to parse instance name\n");
 		goto error;
 	}
 
 	*instance = kz_instance_lookup(instance_name);
 	if (*instance == NULL) {
-		kz_debug("no such instance found; name='%s'\n", instance_name);
+		pr_debug("no such instance found; name='%s'\n", instance_name);
 		res = -ENOENT;
 		goto error_free_name;
 	}
 
 	if ((*instance)->id != instance_id) {
-		kz_debug("transaction instance id and instance id differs; instance_id='%d' tr_instance_id'%d'\n", (*instance)->id, instance_id);
+		pr_debug("transaction instance id and instance id differs; instance_id='%d' tr_instance_id'%d'\n", (*instance)->id, instance_id);
 		res = -EINVAL;
 		goto error_free_name;
 	}
@@ -3224,7 +3224,7 @@ kznl_parse_bind_alloc(struct nlattr *attrs[], unsigned int instance_id, struct k
 	}
 
 	if (bind->proto != IPPROTO_TCP && bind->proto != IPPROTO_UDP) {
-		kz_err("only TCP and UDP protocols are supported; proto='%d'\n", bind->proto);
+		pr_err_ratelimited("only TCP and UDP protocols are supported; proto='%d'\n", bind->proto);
 		res = -EINVAL;
 		goto error_free_bind;
 	}
@@ -3265,7 +3265,7 @@ kznl_recv_add_bind(struct sk_buff *skb, struct genl_info *info)
 
 	tr = transaction_lookup(info->snd_portid);
 	if (tr == NULL) {
-		kz_err("no transaction found; pid='%d'\n", info->snd_portid);
+		pr_err_ratelimited("no transaction found; pid='%d'\n", info->snd_portid);
 		res = -ENOENT;
 		goto error_unlock_tr;
 	}
@@ -3290,7 +3290,7 @@ kznl_recv_add_bind(struct sk_buff *skb, struct genl_info *info)
 
 	res = transaction_add_op(tr, KZNL_OP_ADD_BIND, bind, transaction_destroy_bind);
 	if (res < 0) {
-		kz_err("failed to queue transaction operation\n");
+		pr_err_ratelimited("failed to queue transaction operation\n");
 		goto error_free_bind;
 	} else {
 		kz_bind_debug(bind, "bind added to transaction operation queue");
@@ -3615,7 +3615,7 @@ kznl_build_dispatcher(struct sk_buff *skb, u_int32_t pid, u_int32_t seq, int fla
 	for (; (*part_idx) <= (long) dpt->num_rule; ++(*part_idx)) {
 		u_int32_t max_entry_num = 0;
 		const struct kz_rule *rule = &dpt->rule[(*part_idx) - 1];
-		kz_debug("part_idx=%ld, rule_entry_idx=%ld", *part_idx, *rule_entry_idx);
+		pr_debug("part_idx=%ld, rule_entry_idx=%ld", *part_idx, *rule_entry_idx);
 
 		if (*rule_entry_idx == 0) {
 			msg_rollback = skb_tail_pointer(skb);
@@ -3634,7 +3634,7 @@ kznl_build_dispatcher(struct sk_buff *skb, u_int32_t pid, u_int32_t seq, int fla
 #undef UPDATE_MAX_ENTRY_NUM
 
 		for (; (*rule_entry_idx) <= max_entry_num; ++(*rule_entry_idx)) {
-			kz_debug("rule_entry_idx=%ld", *rule_entry_idx);
+			pr_debug("rule_entry_idx=%ld", *rule_entry_idx);
 			msg_rollback = skb_tail_pointer(skb);
 			if (kznl_build_dispatcher_add_rule_entry(skb, pid, seq, flags,
 								 KZNL_MSG_ADD_RULE_ENTRY,
@@ -3764,14 +3764,14 @@ kznl_recv_get_dispatcher(struct sk_buff *skb, struct genl_info *info)
 
 	/* parse attributes */
 	if (!info->attrs[KZNL_ATTR_DISPATCHER_NAME]) {
-		kz_err("required name attribute missing\n");
+		pr_err_ratelimited("required name attribute missing\n");
 		res = -EINVAL;
 		goto error;
 	}
 
 	res = kznl_parse_name_alloc(info->attrs[KZNL_ATTR_DISPATCHER_NAME], &dpt_name);
 	if (res < 0) {
-		kz_err("failed to parse dispatcher name\n");
+		pr_err_ratelimited("failed to parse dispatcher name\n");
 		goto error;
 	}
 
@@ -3779,7 +3779,7 @@ kznl_recv_get_dispatcher(struct sk_buff *skb, struct genl_info *info)
 
 	dpt = kz_dispatcher_lookup_name(rcu_dereference(kz_config_rcu), dpt_name);
 	if (dpt == NULL) {
-		kz_debug("no such dispatcher found; name='%s'\n", dpt_name);
+		pr_debug("no such dispatcher found; name='%s'\n", dpt_name);
 		res = -ENOENT;
 		goto error_unlock_dpt;
 	}
@@ -3791,11 +3791,11 @@ kznl_recv_get_dispatcher(struct sk_buff *skb, struct genl_info *info)
 	 * always call netlink_unicast() on nskb.
 	 */
 	do {
-		kz_debug("dpt_item_idx=%ld, rule_entry_idx=%ld", dpt_item_idx, rule_entry_idx);
+		pr_debug("dpt_item_idx=%ld, rule_entry_idx=%ld", dpt_item_idx, rule_entry_idx);
 		/* create skb and dump */
 		nskb = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
 		if (!nskb) {
-			kz_err("failed to allocate reply message\n");
+			pr_err_ratelimited("failed to allocate reply message\n");
 			res = -ENOMEM;
 			goto error_unlock_dpt;
 		}
@@ -3846,7 +3846,7 @@ nfattr_failure:
 
 #define kznl_query_check_param_existence(PARAM_TYPE, PARAM_NAME) \
 if (!info->attrs[PARAM_TYPE]) { \
-	kz_err("required attribute missing: attr='%s'\n", #PARAM_NAME); \
+	pr_err_ratelimited("required attribute missing: attr='%s'\n", #PARAM_NAME); \
 	res = -EINVAL; \
 	goto error; \
 }
@@ -3878,19 +3878,19 @@ kznl_recv_query(struct sk_buff *skb, struct genl_info *info)
 	/* fill fields */
 	res = kznl_parse_inet_addr(info->attrs[KZNL_ATTR_QUERY_PARAMS_SRC_IP], &src_addr, &traffic_props.l3proto);
 	if (res < 0) {
-		kz_err("failed to parse src ip nested attribute\n");
+		pr_err_ratelimited("failed to parse src ip nested attribute\n");
 		goto error;
 	}
 
 	res = kznl_parse_inet_addr(info->attrs[KZNL_ATTR_QUERY_PARAMS_DST_IP], &dst_addr, &traffic_props.l3proto);
 	if (res < 0) {
-		kz_err("failed to parse src ip nested attribute\n");
+		pr_err_ratelimited("failed to parse src ip nested attribute\n");
 		goto error;
 	}
 
 	res = kznl_parse_query_params(info->attrs[KZNL_ATTR_QUERY_PARAMS], &traffic_props.proto, ifname);
 	if (res < 0) {
-		kz_err("failed to parse query parameters\n");
+		pr_err_ratelimited("failed to parse query parameters\n");
 		goto error;
 	}
 
@@ -3898,14 +3898,14 @@ kznl_recv_query(struct sk_buff *skb, struct genl_info *info)
 		kznl_query_check_param_existence(KZNL_ATTR_QUERY_PARAMS_SRC_PORT, src_port);
 		res = kznl_parse_port(info->attrs[KZNL_ATTR_QUERY_PARAMS_SRC_PORT], &traffic_props.src_port);
 		if (res < 0) {
-			kz_err("failed to parse query attribute; attr='src_port'\n");
+			pr_err_ratelimited("failed to parse query attribute; attr='src_port'\n");
 			goto error;
 		}
 
 		kznl_query_check_param_existence(KZNL_ATTR_QUERY_PARAMS_DST_PORT, dst_port);
 		res = kznl_parse_port(info->attrs[KZNL_ATTR_QUERY_PARAMS_DST_PORT], &traffic_props.dst_port);
 		if (res < 0) {
-			kz_err("failed to parse query attribute; attr='dst_port'\n");
+			pr_err_ratelimited("failed to parse query attribute; attr='dst_port'\n");
 			goto error;
 		}
 	}
@@ -3914,14 +3914,14 @@ kznl_recv_query(struct sk_buff *skb, struct genl_info *info)
 		kznl_query_check_param_existence(KZNL_ATTR_QUERY_PARAMS_PROTO_TYPE, proto_type);
 		res = kznl_parse_proto_type(info->attrs[KZNL_ATTR_QUERY_PARAMS_PROTO_TYPE], traffic_props.proto, &traffic_props.proto_type);
 		if (res < 0) {
-			kz_err("failed to parse query attribute; attr='proto_type'\n");
+			pr_err_ratelimited("failed to parse query attribute; attr='proto_type'\n");
 			goto error;
 		}
 
 		kznl_query_check_param_existence(KZNL_ATTR_QUERY_PARAMS_PROTO_SUBTYPE, proto_subtype);
 		res = kznl_parse_proto_subtype(info->attrs[KZNL_ATTR_QUERY_PARAMS_PROTO_SUBTYPE], traffic_props.proto, &traffic_props.proto_subtype);
 		if (res < 0) {
-			kz_err("failed to parse query attribute; attr='proto_subtype'\n");
+			pr_err_ratelimited("failed to parse query attribute; attr='proto_subtype'\n");
 			goto error;
 		}
 	}
@@ -3929,7 +3929,7 @@ kznl_recv_query(struct sk_buff *skb, struct genl_info *info)
 	/* look up interface */
 	dev = dev_get_by_name(&init_net, ifname);
 	if (dev == NULL) {
-		kz_err("failed to look up network device; ifname='%s'\n", ifname);
+		pr_err_ratelimited("failed to look up network device; ifname='%s'\n", ifname);
 		res = -ENOENT;
 		goto error;
 	}
@@ -3940,7 +3940,7 @@ kznl_recv_query(struct sk_buff *skb, struct genl_info *info)
 		reqids.len = 1;
 		res = kznl_parse_reqid(info->attrs[KZNL_ATTR_QUERY_PARAMS_REQID], &reqids.vec[0]);
 		if (res < 0) {
-			kz_err("failed to parse query attribute\n");
+			pr_err_ratelimited("failed to parse query attribute\n");
 			goto error;
 		}
 	}
@@ -3948,7 +3948,7 @@ kznl_recv_query(struct sk_buff *skb, struct genl_info *info)
 	/* create reply skb */
 	nskb = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
 	if (!nskb) {
-		kz_err("failed to allocate reply message\n");
+		pr_err_ratelimited("failed to allocate reply message\n");
 		res = -ENOMEM;
 		goto error_put_dev;
 	}
@@ -3993,7 +3993,7 @@ kznl_build_get_version_resp(struct sk_buff *skb, u_int32_t pid, u_int32_t seq, i
 	if (!hdr)
 		goto nla_put_failure;
 
-	kz_debug("dump version; major='%d', compat='%d'\n", KZ_MAJOR_VERSION, KZ_COMPAT_VERSION);
+	pr_debug("dump version; major='%d', compat='%d'\n", KZ_MAJOR_VERSION, KZ_COMPAT_VERSION);
 
 	if (nla_put_u8(skb, KZNL_ATTR_MAJOR_VERSION, KZ_MAJOR_VERSION))
 		goto nla_put_failure;
@@ -4017,7 +4017,7 @@ kznl_recv_get_version(struct sk_buff *skb, struct genl_info *info)
 	/* create skb and dump */
 	nskb = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
 	if (!nskb) {
-		kz_err("failed to allocate reply message\n");
+		pr_err_ratelimited("failed to allocate reply message\n");
 		res = -ENOMEM;
 		goto error;
 	}
@@ -4048,7 +4048,7 @@ kznl_recv_lookup_zone(struct sk_buff *skb, struct genl_info *info)
 
 	/* parse attributes */
 	if (!info->attrs[KZNL_ATTR_ZONE_IP]) {
-		kz_err("required IP attribute missing\n");
+		pr_err_ratelimited("required IP attribute missing\n");
 		res = -EINVAL;
 		goto error;
 	}
@@ -4056,7 +4056,7 @@ kznl_recv_lookup_zone(struct sk_buff *skb, struct genl_info *info)
 	/* fill fields */
 	res = kznl_parse_inet_addr(info->attrs[KZNL_ATTR_ZONE_IP], &addr, &l3proto);
 	if (res < 0) {
-		kz_err("failed to parse src ip nested attribute\n");
+		pr_err_ratelimited("failed to parse src ip nested attribute\n");
 		goto error;
 	}
 
@@ -4067,7 +4067,7 @@ kznl_recv_lookup_zone(struct sk_buff *skb, struct genl_info *info)
 
 	zone = kz_head_zone_lookup(zones, &addr, l3proto);
 	if (zone == NULL) {
-		kz_debug("no such zone found\n");
+		pr_debug("no such zone found\n");
 		res = -ENOENT;
 		goto error_unlock_zone;
 	}
@@ -4075,7 +4075,7 @@ kznl_recv_lookup_zone(struct sk_buff *skb, struct genl_info *info)
 	/* create skb and dump */
 	nskb = genlmsg_new(NLMSG_GOODSIZE, GFP_KERNEL);
 	if (!nskb) {
-		kz_err("failed to allocate reply message\n");
+		pr_err_ratelimited("failed to allocate reply message\n");
 		res = -ENOMEM;
 		goto error_unlock_zone;
 	}
@@ -4083,7 +4083,7 @@ kznl_recv_lookup_zone(struct sk_buff *skb, struct genl_info *info)
 	if (kznl_build_zone_add(nskb, info->snd_portid, info->snd_seq, 0, KZNL_MSG_ADD_ZONE, zone) < 0) {
 		/* data did not fit in a single entry -- for now no support of continuation
 		   we could loop and multicast; we chose not to send the partial info */
-		kz_err("failed to create zone messages\n");
+		pr_err_ratelimited("failed to create zone messages\n");
 		res = -ENOMEM;
 		goto error_free_skb;
 	}
@@ -4116,7 +4116,7 @@ kznl_netlink_event(struct notifier_block *n, unsigned long event, void *v)
 	if (event == NETLINK_URELEASE &&
 	    notify->protocol == NETLINK_GENERIC &&
 	    notify->portid != 0) {
-		kz_debug("netlink release event received, pid='%d'\n",
+		pr_debug("netlink release event received, pid='%d'\n",
 			 notify->portid);
 
 		/* remove pending transaction */
@@ -4124,7 +4124,7 @@ kznl_netlink_event(struct notifier_block *n, unsigned long event, void *v)
 
 		tr = transaction_lookup(notify->portid);
 		if (tr != NULL) {
-			kz_debug("transaction found, removing\n");
+			pr_debug("transaction found, removing\n");
 
 			instance = kz_instance_lookup_id(tr->instance_id);
 			if (instance != NULL)
@@ -4141,9 +4141,9 @@ kznl_netlink_event(struct notifier_block *n, unsigned long event, void *v)
 		 */
 		list_for_each_entry(instance, &kz_instances, list) {
 			if (instance->id == 0) {
-				kz_debug("no cleanup for global instance\n");
+				pr_debug("no cleanup for global instance\n");
 			} else {
-				kz_debug("cleaning up instance; id='%d'\n", instance->id);
+				pr_debug("cleaning up instance; id='%d'\n", instance->id);
 			}
 			kz_instance_remove_bind(instance, notify->portid, NULL);
 		}
@@ -4194,7 +4194,7 @@ int __init kz_netlink_init(void)
 	netlink_register_notifier(&kz_rtnl_notifier);
 	res = genl_register_family_with_ops(&kznl_family, kznl_ops);
 	if (res < 0) {
-		kz_err("failed to register generic netlink family; err='%d'\n", res);
+		pr_err_ratelimited("failed to register generic netlink family; err='%d'\n", res);
 		goto cleanup_notifier;
 	}
 

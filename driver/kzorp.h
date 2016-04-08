@@ -678,17 +678,19 @@ extern void kz_nfnetlink_cleanup(void);
  * Logging
  ***********************************************************/
 
-#define kz_debug(format, args...) pr_debug("%s: " format, __FUNCTION__, ##args)
-#define kz_err(format, args...) pr_err_ratelimited("kzorp:%s: " format, __FUNCTION__, ##args)
+#ifdef pr_fmt
+#undef pr_fmt
+#define pr_fmt(fmt) "kzorp:%s:%d: " fmt, __func__, __LINE__
+#endif
 
 #define kz_bind_debug(bind, msg) \
 { \
 	switch (bind->family) { \
 	case NFPROTO_IPV4: \
-		kz_debug("%s; address='%pI4', port='%d', proto='%d' pid='%d'\n", msg, &bind->addr.in, bind->port, bind->proto, bind->peer_pid); \
+		pr_debug("%s; address='%pI4', port='%d', proto='%d' pid='%d'\n", msg, &bind->addr.in, bind->port, bind->proto, bind->peer_pid); \
 		break; \
 	case NFPROTO_IPV6: \
-		kz_debug("%s; address='%pI6c', port='%d', proto='%d' pid='%d'\n", msg, &bind->addr.in6, bind->port, bind->proto, bind->peer_pid); \
+		pr_debug("%s; address='%pI6c', port='%d', proto='%d' pid='%d'\n", msg, &bind->addr.in6, bind->port, bind->proto, bind->peer_pid); \
 		break; \
 	default: \
 		BUG(); \

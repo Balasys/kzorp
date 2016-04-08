@@ -35,14 +35,13 @@ service_mt(const struct sk_buff *skb, struct xt_action_param *par)
 
 	if ((p_svc = kzorp->svc) == NULL) {
 		/* no service for this packet => no match */
-		rcu_read_unlock();
 		goto ret_false;
 	}
 
 	if (info->name_match == XT_SERVICE_NAME_MATCH) {
 		/* check cached service id validity */
 		if (unlikely(!kz_generation_valid(cfg, info->generation))) {
-			kz_debug("looking up service id; name='%s'\n", info->name);
+			pr_debug("looking up service id; name='%s'\n", info->name);
 			/* id invalid, try to look up again */
 			info->generation = kz_generation_get(cfg);
 			s_svc = kz_service_lookup_name(cfg, info->name);
@@ -51,11 +50,11 @@ service_mt(const struct sk_buff *skb, struct xt_action_param *par)
 			else
 				info->service_id = 0;
 
-			kz_debug("lookup done; id='%u'\n", info->service_id);
+			pr_debug("lookup done; id='%u'\n", info->service_id);
 		}
 	}
 
-	kz_debug("service lookup done; type='%d', id='%u'\n", p_svc->type, p_svc->id);
+	pr_debug("service lookup done; type='%d', id='%u'\n", p_svc->type, p_svc->id);
 
 	if (info->type != XT_SERVICE_TYPE_ANY && p_svc->type != info->type)
 		goto ret_false;
