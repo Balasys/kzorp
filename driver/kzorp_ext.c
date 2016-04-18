@@ -48,6 +48,8 @@ PRIVATE struct kmem_cache *kz_cachep;
 
 static void (*nf_ct_destroy_orig)(struct nf_conntrack *) __rcu __read_mostly;
 
+static unsigned int kz_ext_hashrnd __read_mostly;
+
 static inline u32
 kz_hash_get_lock_index(const u32 hash_index)
 {
@@ -59,7 +61,7 @@ kz_extension_get_hash_index(const struct nf_conn *ct)
 {
 	const u32 length = sizeof(ct) / sizeof(u32);
 	const u32 *key = (const u32 *) &ct;
-	const u32 hash = jhash2(key, length, nf_conntrack_hash_rnd);
+	const u32 hash = jhash2(key, length, kz_ext_hashrnd);
 	const u32 index = hash >> (32 - kz_hash_shift);
 
 	return index;
@@ -518,10 +520,11 @@ int kz_extension_init(void)
 {
 	int ret, i;
 
-       kz_cachep = kmem_cache_create("kzorp_slab",
-                                     sizeof(struct kz_extension), 0,
-                                     SLAB_DESTROY_BY_RCU, NULL);
+	kz_cachep = kmem_cache_create("kzorp_slab",
+				      sizeof(struct kz_extension), 0,
+				      SLAB_TYPESAFE_BY_RCU, NULL);
 
+	get_random_once(&kz_ext_hashrnd, sizeof(kz_ext_hashrnd));
 	kz_hash_size = init_net.ct.htable_size;
 	kz_hash_shift = ilog2(kz_hash_size);
 	kz_hash =
@@ -539,7 +542,7 @@ int kz_extension_init(void)
 		atomic_set(&kz_hash_lengths[i], 0);
 	}
 
-        ret = register_pernet_subsys(&kz_extension_net_ops);
+	ret = register_pernet_subsys(&kz_extension_net_ops);
 	if (ret < 0) {
 		pr_err_ratelimited("kz_extension_init: cannot register pernet operations\n");
 		goto error_cleanup_hash;
