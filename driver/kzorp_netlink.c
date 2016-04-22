@@ -856,7 +856,7 @@ nla_put_failure:
 static int
 kznl_dump_count(struct sk_buff *skb, unsigned int attr, u_int64_t count)
 {
-	if (nla_put_u64(skb, attr, cpu_to_be64(count)))
+	if (nla_put_u64(skb, attr, cpu_to_be64(count), KZNL_ATTR_TYPE_COUNT))
 		goto nla_put_failure;
 
 	return 0;
