@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 #
 # Copyright (C) 2006-2012, BalaBit IT Ltd.
 # This program/include file is free software; you can redistribute it and/or
