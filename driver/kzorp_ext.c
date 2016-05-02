@@ -525,7 +525,7 @@ int kz_extension_init(void)
 				      SLAB_TYPESAFE_BY_RCU, NULL);
 
 	get_random_once(&kz_ext_hashrnd, sizeof(kz_ext_hashrnd));
-	kz_hash_size = init_net.ct.htable_size;
+	kz_hash_size = nf_conntrack_htable_size;
 	kz_hash_shift = ilog2(kz_hash_size);
 	kz_hash =
 	    kzalloc(kz_hash_size * sizeof(struct hlist_nulls_head), GFP_KERNEL);
