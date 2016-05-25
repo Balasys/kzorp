@@ -105,7 +105,7 @@ static void transaction_cleanup_op(struct kz_transaction *);
 static void
 transaction_destroy(struct kz_transaction *t)
 {
-	pr_debug("transaction='%p'\n", t);
+	pr_debug("instance_id='%d' peer_id='%d'\n", t->instance_id, t->peer_pid);
 
 	BUG_ON(t != &transaction);
 
@@ -1457,7 +1457,7 @@ kznl_recv_commit_transaction(struct kz_instance *instance, struct kz_transaction
 	}
 
 	/* all ok, commit finally */
-	pr_debug("install new config\n");
+	pr_info("reloading configuration\n");
 	kz_config_swap(new);
 	res = 0;
 	goto free_locals;
