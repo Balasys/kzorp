@@ -336,6 +336,101 @@ kz_config_swap(struct kz_config * new_cfg)
  * Lookup
  ***********************************************************/
 
+static bool
+kz_extension_get_traffic_props_from_skb(const struct sk_buff *skb, int l3proto,
+					u8 *l4proto,
+					union nf_inet_addr **saddr, union nf_inet_addr **daddr,
+					u16 *_src_port, u16 *_dst_port,
+					u8 *proto_type, u8 *proto_subtype) {
+	struct {
+		u16 src;
+		u16 dst;
+	} __attribute__((packed)) *ports, _ports = { .src = 0, .dst = 0 };
+
+	ports = &_ports;
+	*proto_type = 0;
+	*proto_subtype = 0;
+
+	switch (l3proto) {
+	case NFPROTO_IPV4:
+	{
+		const struct iphdr * const iph = ip_hdr(skb);
+
+		*l4proto = iph->protocol;
+		*saddr = (union nf_inet_addr *) &iph->saddr;
+		*daddr = (union nf_inet_addr *) &iph->daddr;
+
+		if ((iph->protocol == IPPROTO_TCP) || (iph->protocol == IPPROTO_UDP)) {
+			ports = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_ports), &_ports);
+			if (unlikely(ports == NULL))
+				return false;
+			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI4:%u', dst='%pI4:%u'\n",
+				 iph->protocol, &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
+		}
+		else if (iph->protocol == IPPROTO_ICMP) {
+			const struct icmphdr *icmp;
+			struct icmphdr _icmp = { .type = 0, .code = 0 };
+			icmp = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_icmp), &_icmp);
+			if (unlikely(icmp == NULL))
+				return false;
+
+			*proto_type = icmp->type;
+			*proto_subtype = icmp->code;
+			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI4', dst='%pI4', type='%d', code='%d'\n", iph->protocol,
+				 &iph->saddr, &iph->daddr, icmp->type, icmp->code);
+		}
+	}
+		break;
+	case NFPROTO_IPV6:
+	{
+		const struct ipv6hdr * const iph = ipv6_hdr(skb);
+		int thoff;
+		u8 tproto = iph->nexthdr;
+
+		/* find transport header */
+		__be16 frag_offp;
+		thoff = ipv6_skip_exthdr(skb, sizeof(*iph), &tproto, &frag_offp);
+		if (unlikely(thoff < 0))
+			return false;
+
+		*l4proto = tproto;
+		*saddr = (union nf_inet_addr *) &iph->saddr;
+		*daddr = (union nf_inet_addr *) &iph->daddr;
+
+		if ((tproto == IPPROTO_TCP) || (tproto == IPPROTO_UDP)) {
+			/* get info from transport header */
+			ports = skb_header_pointer(skb, thoff, sizeof(_ports), &_ports);
+			if (unlikely(ports == NULL))
+				return false;
+			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI6c:%u', dst='%pI6c:%u'\n", tproto,
+				 &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
+		}
+		else if (tproto == IPPROTO_ICMPV6) {
+			const struct icmp6hdr *icmp;
+			struct icmp6hdr _icmp = { .icmp6_type = 0, .icmp6_code = 0 };
+			icmp = skb_header_pointer(skb, thoff, sizeof(_icmp), &_icmp);
+			if (unlikely(icmp == NULL))
+				return false;
+
+			*proto_type = icmp->icmp6_type;
+			*proto_subtype = icmp->icmp6_code;
+			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI6c', dst='%pI6c', type='%d', code='%d'\n", tproto,
+				 &iph->saddr, &iph->daddr, icmp->icmp6_type, icmp->icmp6_code);
+		}
+
+	}
+		break;
+	default:
+		BUG();
+		break;
+	}
+
+	*_src_port = ports->src;
+	*_dst_port = ports->dst;
+
+	return true;
+}
+
 /* fills kzorp structure with lookup data
    rcu_dereferenced config is stored in p_cfg
    call under rcu_read_lock() even if p_cfg==NULL!
@@ -357,18 +452,13 @@ static void kz_extension_fill_with_lookup_data_rcu(struct kz_extension * kzorp,
 	struct kz_zone *szone = NULL;
 	struct kz_dispatcher *dpt = NULL;
 	struct kz_service *svc = NULL;
-	struct {
-		u16 src;
-		u16 dst;
-	} __attribute__((packed)) *ports, _ports = { .src = 0, .dst = 0 };
+	u16 sport, dport;
 	const struct kz_config * loc_cfg;
 	u8 l4proto;
-	u_int32_t proto_type = 0, proto_subtype = 0;
+	u8 proto_type = 0, proto_subtype = 0;
 	union nf_inet_addr *saddr, *daddr;
         struct kz_reqids reqids;
 	int sp_idx;
-
-	ports = &_ports;
 
 	if (p_cfg == NULL)
 		p_cfg = &loc_cfg;
@@ -378,79 +468,11 @@ static void kz_extension_fill_with_lookup_data_rcu(struct kz_extension * kzorp,
 	BUG_ON(*p_cfg == NULL);
 	kzorp->generation = (*p_cfg)->generation;
 
-	switch (l3proto) {
-	case NFPROTO_IPV4:
-	{
-		const struct iphdr * const iph = ip_hdr(skb);
-
-		l4proto = iph->protocol;
-		saddr = (union nf_inet_addr *) &iph->saddr;
-		daddr = (union nf_inet_addr *) &iph->daddr;
-
-		if ((l4proto == IPPROTO_TCP) || (l4proto == IPPROTO_UDP)) {
-			ports = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_ports), &_ports);
-			if (unlikely(ports == NULL))
-				goto done;
-			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI4:%u', dst='%pI4:%u'\n",
-				 iph->protocol, &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
-		}
-		else if (l4proto == IPPROTO_ICMP) {
-			const struct icmphdr *icmp;
-			struct icmphdr _icmp = { .type = 0, .code = 0 };
-			icmp = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_icmp), &_icmp);
-			if (unlikely(icmp == NULL))
-				goto done;
-
-			proto_type = icmp->type;
-			proto_subtype = icmp->code;
-			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI4', dst='%pI4', type='%d', code='%d'\n", l4proto,
-				 &iph->saddr, &iph->daddr, icmp->type, icmp->code);
-		}
-	}
-		break;
-	case NFPROTO_IPV6:
-	{
-		const struct ipv6hdr * const iph = ipv6_hdr(skb);
-		int thoff;
-		u8 tproto = iph->nexthdr;
-
-		/* find transport header */
-		__be16 frag_offp;
-		thoff = ipv6_skip_exthdr(skb, sizeof(*iph), &tproto, &frag_offp);
-		if (unlikely(thoff < 0))
-			goto done;
-
-		l4proto = tproto;
-		saddr = (union nf_inet_addr *) &iph->saddr;
-		daddr = (union nf_inet_addr *) &iph->daddr;
-
-		if ((l4proto == IPPROTO_TCP) || (l4proto == IPPROTO_UDP)) {
-			/* get info from transport header */
-			ports = skb_header_pointer(skb, thoff, sizeof(_ports), &_ports);
-			if (unlikely(ports == NULL))
-				goto done;
-			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI6c:%u', dst='%pI6c:%u'\n", l4proto,
-				 &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
-		}
-		else if (l4proto == IPPROTO_ICMPV6) {
-			const struct icmp6hdr *icmp;
-			struct icmp6hdr _icmp = { .icmp6_type = 0, .icmp6_code = 0 };
-			icmp = skb_header_pointer(skb, thoff, sizeof(_icmp), &_icmp);
-			if (unlikely(icmp == NULL))
-				goto done;
-
-			proto_type = icmp->icmp6_type;
-			proto_subtype = icmp->icmp6_code;
-			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI6c', dst='%pI6c', type='%d', code='%d'\n", l4proto,
-				 &iph->saddr, &iph->daddr, icmp->icmp6_type, icmp->icmp6_code);
-		}
-
-	}
-		break;
-	default:
-		BUG();
-		break;
-	}
+	if (!kz_extension_get_traffic_props_from_skb(skb, l3proto, &l4proto,
+						     &saddr, &daddr,
+						     &sport, &dport,
+						     &proto_type, &proto_subtype))
+		goto done;
 
 	/* copy IPSEC reqids from secpath to our own structure */
 	if (skb->sp != NULL) {
@@ -471,8 +493,8 @@ static void kz_extension_fill_with_lookup_data_rcu(struct kz_extension * kzorp,
 	switch (l4proto) {
 	case IPPROTO_TCP:
 	case IPPROTO_UDP:
-		traffic_props.src_port = ntohs(ports->src);
-		traffic_props.dst_port = ntohs(ports->dst);
+		traffic_props.src_port = ntohs(sport);
+		traffic_props.dst_port = ntohs(dport);
 		break;
 
 	case IPPROTO_ICMP:
