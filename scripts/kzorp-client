@@ -68,18 +68,14 @@ class DumpBase():
     def __init__(self, quiet, msg):
         self.quiet = quiet
         self.msg = msg
-        self.replies = []
         self.handle = kzorp.communication.Handle()
 
-    def _fill_replies(self):
-        for reply in self.handle.dump(self.msg):
-            self.replies.append(reply)
+    def _get_replies(self):
+        return self.handle.dump(self.msg)
 
-    replies = []
     def dump(self):
         try:
-            self._fill_replies()
-            for reply in self.replies:
+            for reply in self._get_replies():
                 if self.quiet:
                     pass
                 else:
@@ -95,8 +91,8 @@ class DumpVersion(DumpBase):
     def __init__(self, quiet):
         DumpBase.__init__(self, quiet, kzorp.messages.KZorpGetVersionMessage())
 
-    def _fill_replies(self):
-        self.replies = [self.handle.exchange(self.msg), ]
+    def _get_replies(self):
+        return [self.handle.exchange(self.msg), ]
 
 class DumpZones(DumpBase):
     def __init__(self, quiet):
@@ -152,7 +148,7 @@ class DumpDispatchers(DumpBase):
         DumpBase.dump(self)
         if not self.__real_quiet:
             rule_entries = {}
-            for reply in self.replies:
+            for reply in self._get_replies():
                 if reply.command == kzorp.messages.KZorpAddRuleEntryMessage.command:
                     reply.aggregate_rule_entries(rule_entries)
                 elif reply.command == kzorp.messages.KZorpAddRuleMessage.command:
