@@ -24,7 +24,6 @@
 #include <net/netfilter/nf_nat.h>
 #include <net/netfilter/nf_conntrack_extend.h>
 #include "kzorp_netlink.h"
-#include <net/ip_vs.h>
 #include <net/xfrm.h>
 #include <linux/if.h>
 #include <linux/netdevice.h>
@@ -697,22 +696,48 @@ extern void kz_nfnetlink_cleanup(void);
 	} \
 }
 
-#define L4PROTOCOL_STRING_SIZE 20 /* same as ip_vs_proto_name buffer size */
+#define L4PROTOCOL_STRING_SIZE 20
 
 /**
- * l4proto_as_string() - return name of protocol from number
- * @protocol: protocol number
+ * l4proto_as_string() - return name of layer 4 protocol from number
+ * @l4proto: layer 4 protocol number
  * @buf: temporary buffer to use if no interned string representation is known
  *
- * Return a string representation of the protocol number: either the
- * protocol name for well-known protocols or the number itself
+ * Return a string representation of the layer 4 protocol number: either the
+ * layer 4 protocol name for well-known protocols or the number itself
  * converted to a string.
  */
 static inline const char *
-l4proto_as_string(u8 protocol, char buf[L4PROTOCOL_STRING_SIZE])
+l4proto_as_string(u8 l4proto, char buf[L4PROTOCOL_STRING_SIZE])
 {
-	strncpy(buf, ip_vs_proto_name(protocol), L4PROTOCOL_STRING_SIZE);
-	buf[L4PROTOCOL_STRING_SIZE - 1] = '\0';
+	const char *proto_name;
+
+	switch (l4proto) {
+	case IPPROTO_UDP:
+		proto_name = "UDP";
+		break;
+	case IPPROTO_TCP:
+		proto_name = "TCP";
+		break;
+	case IPPROTO_ICMP:
+		proto_name = "ICMP";
+		break;
+#ifdef CONFIG_IP_VS_IPV6
+	case IPPROTO_ICMPV6:
+		proto_name = "ICMPv6";
+		break;
+#endif
+	default:
+		proto_name = NULL;
+		break;
+	}
+
+	if (proto_name) {
+		strncpy(buf, proto_name, L4PROTOCOL_STRING_SIZE);
+		buf[L4PROTOCOL_STRING_SIZE - 1] = '\0';
+	} else {
+		sprintf(buf, "IP_%d", l4proto);
+	}
 
 	return buf;
 }
