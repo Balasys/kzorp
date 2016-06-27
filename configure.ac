@@ -16,7 +16,12 @@ AC_PROG_LIBTOOL
 KZORP_PYTHON_DIR="${pythondir}/kzorp"
 ZORP_PYTHON_DIR="${pythondir}/Zorp"
 
+KZORP_MUNIN_CONF_DIR="${sysconfdir}/munin/plugin-conf.d"
+KZORP_MUNIN_DIR="${prefix}/share/munin/plugins"
+
 AC_SUBST([PYTHON])
+AC_SUBST(KZORP_MUNIN_CONF_DIR)
+AC_SUBST(KZORP_MUNIN_DIR)
 AC_SUBST(KZORP_PYTHON_DIR)
 AC_SUBST(ZORP_PYTHON_DIR)
 
@@ -26,6 +31,7 @@ daemon/Makefile
 driver/tests/Makefile
 driver/tests/communication/Makefile
 driver/tests/query/Makefile
+munin_plugins/Makefile
 scripts/Makefile
 pylib/Makefile
 pylib/kzorp/Makefile

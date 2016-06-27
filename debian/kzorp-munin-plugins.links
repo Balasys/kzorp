@@ -1,0 +1,2 @@
+/usr/share/munin/plugins/kzorp_memory_usage /etc/munin/plugins/kzorp_memory_usage
+/usr/share/munin/plugins/nf_conntrack_count /etc/munin/plugins/nf_conntrack_count

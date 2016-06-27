@@ -1,4 +1,4 @@
-SUBDIRS = pylib daemon scripts
+SUBDIRS = munin_plugins pylib daemon scripts
 DIST_SUBDIRS = $(SUBDIRS) driver
 
 DRIVER_SUBDIR = driver

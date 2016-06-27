@@ -82,8 +82,20 @@ Depends: ${misc:Depends},
          python-zorp-base,
          python-prctl
 Description: Python bindings for kzorp.
- Zorp is a new generation firewall. It is essentially a transparent proxy
+ 2Zorp is a new generation firewall. It is essentially a transparent proxy
  firewall, with strict protocol analyzing proxies, a modular architecture,
  and fine-grained control over the mediated traffic. Configuration decisions
  .
  Standalone daemon that handles zones and updates dynamic zones.
+
+Package: kzorp-munin-plugins
+Architecture: any
+Depends: munin-node
+Recommends: kzorp-dkms | kzorp
+Description: An advanced protocol analyzing firewall
+ Zorp is a new generation firewall. It is essentially a transparent proxy
+ firewall, with strict protocol analyzing proxies, a modular architecture,
+ and fine-grained control over the mediated traffic. Configuration decisions
+ are scriptable with the Python based configuration language.
+ .
+ This package contains plugins for the Munin monitoring tool.
