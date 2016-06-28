@@ -52,7 +52,6 @@ service_mt(const struct sk_buff *skb, struct xt_action_param *par)
 			pr_debug("lookup done; id='%u'\n", info->service_id);
 		}
 	}
-	rcu_read_unlock();
 
 	pr_debug("service lookup done; type='%d', id='%u'\n", p_svc->type, p_svc->id);
 
@@ -69,6 +68,7 @@ service_mt(const struct sk_buff *skb, struct xt_action_param *par)
 ret_false:
 	res = false;
 done:
+	rcu_read_unlock();
 	kz_extension_put(kzorp);
 	return res;
 }
