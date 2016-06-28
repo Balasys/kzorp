@@ -100,9 +100,9 @@ struct kz_bind_lookup {
 	 */
 
 	/* array of pointers to all bind structures, ordered by l3proto and l4proto */
-	const struct kz_bind const **binds;
+	const struct kz_bind **binds;
 	/* array of pointers to the appropriate element of the binds array */
-	const struct kz_bind const **binds_by_type[KZ_BIND_L3PROTO_COUNT][KZ_BIND_L4PROTO_COUNT];
+	const struct kz_bind **binds_by_type[KZ_BIND_L3PROTO_COUNT][KZ_BIND_L4PROTO_COUNT];
 	unsigned int bind_nums[KZ_BIND_L3PROTO_COUNT][KZ_BIND_L4PROTO_COUNT];
 };
 
@@ -398,19 +398,19 @@ extern void kz_head_destroy_service(struct kz_head_s *h);
 extern void kz_head_destroy_dispatcher(struct kz_head_d *h);
 
 struct kz_bind * kz_bind_new(void);
-struct kz_bind * kz_bind_clone(const struct kz_bind const *_bind);
+struct kz_bind * kz_bind_clone(const struct kz_bind *_bind);
 void kz_bind_destroy(struct kz_bind *bind);
 
 const struct kz_bind * const
-kz_instance_bind_lookup_v4(const struct kz_instance const *instance, u8 l4proto,
+kz_instance_bind_lookup_v4(const struct kz_instance *instance, u8 l4proto,
 			   __be32 saddr, __be16 sport,
 			   __be32 daddr, __be16 dport);
 
 const struct kz_bind * const
-kz_instance_bind_lookup_v6(const struct kz_instance const *instance, u8 l4proto,
-			   const struct in6_addr const *saddr, __be16 sport,
-			   const struct in6_addr const *daddr, __be16 dport);
-void kz_instance_remove_bind(struct kz_instance *instance, const netlink_port_t pid_to_remove, const struct kz_transaction const *tr);
+kz_instance_bind_lookup_v6(const struct kz_instance *instance, u8 l4proto,
+			   const struct in6_addr *saddr, __be16 sport,
+			   const struct in6_addr *daddr, __be16 dport);
+void kz_instance_remove_bind(struct kz_instance *instance, const netlink_port_t pid_to_remove, const struct kz_transaction *tr);
 
 extern struct kz_instance *kz_instance_lookup_nocheck(const char *name);
 extern struct kz_instance *kz_instance_lookup(const char *name);

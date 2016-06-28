@@ -1167,13 +1167,13 @@ kz_commit_transaction_process_services(const struct kz_transaction *tr, struct k
 }
 
 static bool
-kznl_zone_apply_delete_operation(struct kz_zone *deletable_zone, const struct list_head const *operations)
+kznl_zone_apply_delete_operation(struct kz_zone *deletable_zone, const struct list_head *operations)
 {
 	struct kz_operation *operation, *n;
 	/* append zones created in the transaction */
 	list_for_each_entry_safe(operation, n, operations, list) {
 		if (operation->type == KZNL_OP_DELETE_ZONE) {
-			const struct kz_zone const * updater_zone = (const struct kz_zone const *) operation->data;
+			const struct kz_zone *updater_zone = (const struct kz_zone *) operation->data;
 			if (strcmp(updater_zone->name, deletable_zone->name) == 0) {
 				kz_operation_remove(operation);
 				return true;
@@ -1214,7 +1214,7 @@ kz_commit_transaction_delete_zones(const struct kz_transaction *tr, struct kz_co
 
 	list_for_each_entry(io, &tr->op, list) {
 		if (io->type == KZNL_OP_DELETE_ZONE) {
-			const struct kz_zone const * deletable_zone = (const struct kz_zone const *) io->data;
+			const struct kz_zone *deletable_zone = (const struct kz_zone *) io->data;
 			pr_err_ratelimited("transaction problem: unapplied zone delete operation found; name='%s' depth='%u'\n",
 			       deletable_zone->name, deletable_zone->depth);
 			return -EINVAL;
@@ -1916,7 +1916,7 @@ kznl_build_zone(struct sk_buff *skb, u_int32_t pid, u_int32_t seq, int flags,
 	/* dump rule structures */
 	pr_debug("part_idx=%ld, num_subnet=%d", *part_idx, zone->num_subnet);
 	for (; (*part_idx) <= (long) zone->num_subnet; ++(*part_idx)) {
-		const struct kz_subnet const * subnet = &zone->subnet[(*part_idx) - 1];
+		const struct kz_subnet *subnet = &zone->subnet[(*part_idx) - 1];
 		pr_debug("part_idx=%ld", *part_idx);
 
 		msg_rollback = skb_tail_pointer(skb);

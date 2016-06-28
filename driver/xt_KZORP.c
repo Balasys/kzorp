@@ -70,7 +70,7 @@ v4_lookup_instance_bind_address(const struct kz_dispatcher *dpt,
 {
 	const struct iphdr *iph = ip_hdr(skb);
 	struct sock *sk = NULL;
-	const struct kz_bind const *bind = kz_instance_bind_lookup_v4(dpt->instance, l4proto,
+	const struct kz_bind *bind = kz_instance_bind_lookup_v4(dpt->instance, l4proto,
 								      iph->saddr, sport,
 								      iph->daddr, dport);
 	if (bind) {
@@ -277,7 +277,7 @@ redirect_v6(struct sk_buff *skb, u8 l4proto,
 				   skb->dev, NFT_LOOKUP_ESTABLISHED);
 	if (sk == NULL || sk->sk_state == TCP_TIME_WAIT) {
 
-		const struct kz_bind const *bind = kz_instance_bind_lookup_v6(dpt->instance, l4proto,
+		const struct kz_bind *bind = kz_instance_bind_lookup_v6(dpt->instance, l4proto,
 									      &iph->saddr, sport,
 									      &iph->daddr, dport);
 		if (bind) {

@@ -147,7 +147,7 @@ kz_bind_new(void)
 }
 
 struct kz_bind *
-kz_bind_clone(const struct kz_bind const *_bind)
+kz_bind_clone(const struct kz_bind *_bind)
 {
 	struct kz_bind *bind;
 
