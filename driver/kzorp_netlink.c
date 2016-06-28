@@ -830,11 +830,13 @@ static int
 kznl_dump_name(struct sk_buff *skb, unsigned int attr, const char *name)
 {
 	size_t len = strlen(name);
+	if (len > KZ_ATTR_NAME_MAX_LENGTH)
+		return -ENOMEM;
 
 	{
 		struct {
 			struct kza_name hdr;
-			char name[len];
+			char name[KZ_ATTR_NAME_MAX_LENGTH];
 		} msg;
 
 		msg.hdr.length = htons(len);
