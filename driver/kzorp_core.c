@@ -210,7 +210,7 @@ kz_instance_create(const char *name, const unsigned int len, const netlink_port_
 }
 
 /* !!! must be called with the instance mutex held !!! */
-void
+static void
 kz_instance_delete(struct kz_instance * const i)
 {
 	pr_debug("name='%s'\n", i->name);
@@ -1789,7 +1789,8 @@ EXPORT_SYMBOL_GPL(kz_log_session_verdict);
  * Initialization
  ***********************************************************/
 
-int __init kzorp_core_init(void)
+static int __init
+kzorp_core_init(void)
 {
 	int res = -ENOMEM;
 	struct kz_instance *global;

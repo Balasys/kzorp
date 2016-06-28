@@ -43,7 +43,7 @@ PRIVATE __read_mostly unsigned int kz_hash_size;
 PRIVATE struct hlist_nulls_head *kz_hash;
 atomic_t *kz_hash_lengths;
 struct kzorp_hash_stats __percpu *kz_hash_stats;
-__cacheline_aligned_in_smp spinlock_t kz_hash_locks[KZ_HASH_LOCK_NUM];
+static __cacheline_aligned_in_smp spinlock_t kz_hash_locks[KZ_HASH_LOCK_NUM];
 PRIVATE struct kmem_cache *kz_cachep;
 
 static void (*nf_ct_destroy_orig)(struct nf_conntrack *) __rcu __read_mostly;
@@ -88,7 +88,7 @@ kz_extension_get_hash_index(const struct nf_conntrack_tuple *tuple, u16 zone_id)
 	return index;
 }
 
-struct kz_extension *
+static struct kz_extension *
 kz_extension_get_from_node(struct hlist_nulls_node *n)
 {
 	struct kz_extension *kzorp;

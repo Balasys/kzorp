@@ -2529,18 +2529,18 @@ nlmsg_failure:
 }
 
 /* callback argument allocation for service dump */
-enum {
+enum kznl_service_dump_args {
 	SERVICE_DUMP_CURRENT_SERVICE = 0,
 	SERVICE_DUMP_STATE = 3,
 	SERVICE_DUMP_CONFIG_GEN = 4,
-} kznl_service_dump_args;
+};
 
 /* service dump states */
-enum {
+enum kznl_service_dump_state {
 	SERVICE_DUMP_STATE_FIRST_CALL = 0,
 	SERVICE_DUMP_STATE_HAVE_CONFIG_GEN = 1,
 	SERVICE_DUMP_STATE_NO_MORE_WORK = 2,
-} kznl_service_dump_state;
+};
 
 static int
 kznl_dump_services(struct sk_buff *skb, struct netlink_callback *cb)
@@ -3207,7 +3207,7 @@ error:
 }
 
 /* !!! must be called with the instance mutex held !!! */
-struct kz_bind *
+static struct kz_bind *
 kz_bind_lookup_instance(const struct kz_instance *instance, const struct kz_bind *bind)
 {
 	struct kz_bind *i;
