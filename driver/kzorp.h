@@ -108,7 +108,7 @@ struct kz_bind_lookup {
 
 struct kz_instance {
 	struct list_head list;
-	struct kz_bind_lookup *bind_lookup;
+	struct kz_bind_lookup __rcu *bind_lookup;
 	unsigned int id;
 	unsigned int flags;
 	netlink_port_t peer_pid;

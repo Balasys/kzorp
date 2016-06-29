@@ -289,7 +289,7 @@ static_cfg_cleanup(void)
 	kz_head_zone_destroy(&static_config.zones);
 }
 
-struct kz_config *kz_config_rcu = &static_config;
+struct kz_config __rcu *kz_config_rcu = &static_config;
 
 struct kz_config *kz_config_new(void)
 {
