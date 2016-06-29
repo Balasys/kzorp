@@ -326,7 +326,9 @@ class Daemon():
                         Common.log(None, Common.CORE_INFO, 6, "No hostnames in cache, no update needed;")
             time.sleep(sleep_sec)
 
-def run(foreground, log_verbosity, user, group, manage_caps):
+def run(foreground, log_verbosity, log_spec, user, group, manage_caps, use_syslog):
+    Common.LoggerSingleton().init("kzorp", log_verbosity, log_spec, use_syslog)
+
     ZoneDownloadFactory.init(manage_caps)
     DAEMON = Daemon(user, group, manage_caps)
 
@@ -346,6 +348,10 @@ def process_command_line_arguments():
                         help='Disable managing Linux capabilities (default: %(default)s)')
     parser.add_argument('-v', '--verbose', action='store', dest='verbose', type=int, default=3,
                         help='set verbosity level (default: %(default)d)')
+    parser.add_argument('-l', '--no-syslog', action="store_true", dest="do_not_use_syslog", default=False,
+                        help='do not send messages to syslog (default: %(default)s)')
+    parser.add_argument('-s', '--log-spec', action='store', dest='log_spec', type=str, default="core.accounting:4",
+                        help='set log specification (default: %(default)s)')
     parser.add_argument('-u', '--user', action='store', dest='user', type=str, default="zorp",
                         help='set the user to run the deamon as (default: %(default)s)')
     parser.add_argument('-g', '--group', action='store', dest='group', type=str, default="zorp",
@@ -354,4 +360,8 @@ def process_command_line_arguments():
 
 if __name__ == "__main__":
     args = process_command_line_arguments()
-    run(args.foreground, args.verbose, args.user, args.group, not args.do_not_manage_caps)
+    run(args.foreground,
+        args.verbose, args.log_spec,
+        args.user, args.group,
+        not args.do_not_manage_caps,
+        not args.do_not_use_syslog)
