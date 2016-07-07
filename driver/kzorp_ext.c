@@ -12,6 +12,7 @@
 
 #include <linux/hash.h>
 #include <linux/bootmem.h>
+#include <linux/proc_fs.h>
 #include <net/netfilter/nf_conntrack_acct.h>
 #include <net/netfilter/nf_conntrack_ecache.h>
 #include <net/netfilter/nf_conntrack_zones.h>
@@ -277,8 +278,34 @@ kz_extension_conntrack_destroy(struct nf_conntrack *nfct)
 	rcu_read_unlock();
 }
 
+static int kz_hash_lengths_show(struct seq_file *p, void *v)
+{
+	int i;
+
+	for (i = 0; i < kz_hash_size; i++)
+		seq_printf(p, "%d\n", atomic_read(&kz_hash_lengths[i]));
+
+	return 0;
+}
+
+static int kz_hash_lengths_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, kz_hash_lengths_show, NULL);
+}
+
+static const struct file_operations kz_hash_lengths_file_ops = {
+	.owner		= THIS_MODULE,
+	.open		= kz_hash_lengths_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
 static int __net_init kz_extension_net_init(struct net *net)
 {
+	if (!proc_create("kz_hash_lengths", S_IRUGO, NULL, &kz_hash_lengths_file_ops))
+		return -1;
+
 	rcu_read_lock();
 	nf_ct_destroy_orig = rcu_dereference(nf_ct_destroy);
 	BUG_ON(nf_ct_destroy_orig == NULL);
@@ -299,6 +326,8 @@ void kz_extension_net_exit(struct net *net)
 	rcu_read_unlock();
 
 	rcu_assign_pointer(nf_ct_destroy, destroy_orig);
+
+	remove_proc_entry("kz_hash_lengths", NULL);
 }
 
 static void __net_exit kz_extension_net_exit_batch(struct list_head *net_exit_list)
@@ -328,6 +357,7 @@ static void kz_extension_dealloc_by_tuplehash(struct nf_conntrack_tuple_hash *p)
 	kz_extension_dealloc(kz);
 }
 
+
 /* deallocate entries in the hashtable */
 static void clean_hash(void)
 {
@@ -346,7 +376,6 @@ static void clean_hash(void)
 
 int kz_extension_init(void)
 {
-
 	int ret, i;
 
        kz_cachep = kmem_cache_create("kzorp_slab",
