@@ -33,6 +33,7 @@ PRIVATE __read_mostly unsigned int kz_hash_shift;
 PRIVATE __read_mostly unsigned int kz_hash_size;
 
 PRIVATE struct hlist_nulls_head *kz_hash;
+atomic_t *kz_hash_lengths;
 __cacheline_aligned_in_smp spinlock_t kz_hash_locks[KZ_HASH_LOCK_NUM];
 PRIVATE struct kmem_cache *kz_cachep;
 
@@ -170,6 +171,7 @@ static void kz_extension_dealloc(struct nf_conntrack_kzorp *kz)
 
 	spin_lock(&kz_hash_locks[lock_index]);
 	hlist_nulls_del_init_rcu(&(kz->tuplehash_orig.hnnode));
+	atomic_dec(&kz_hash_lengths[hash_index]);
 	spin_unlock(&kz_hash_locks[lock_index]);
 
         call_rcu(&kz->rcu, kz_extension_free_rcu);
@@ -214,6 +216,7 @@ PRIVATE void kz_extension_fill_one(struct nf_conntrack_kzorp *kzorp, struct nf_c
 
 	spin_lock(&kz_hash_locks[lock_index]);
 	hlist_nulls_add_head_rcu(&(kzorp->tuplehash_orig.hnnode), &kz_hash[hash_index]);
+	atomic_inc(&kz_hash_lengths[hash_index]);
 	spin_unlock(&kz_hash_locks[lock_index]);
 }
 
@@ -359,8 +362,13 @@ int kz_extension_init(void)
 		return -1;
 	}
 
+	kz_hash_lengths = kzalloc(kz_hash_size * sizeof(atomic64_t), GFP_KERNEL);
+	if (!kz_hash_lengths)
+		goto error_free_hash_length;
+
 	for (i = 0; i < kz_hash_size; i++) {
 		INIT_HLIST_NULLS_HEAD(&kz_hash[i], i);
+		atomic_set(&kz_hash_lengths[i], 0);
 	}
 
         ret = register_pernet_subsys(&kz_extension_net_ops);
@@ -376,6 +384,8 @@ int kz_extension_init(void)
 
 error_cleanup_hash:
 	clean_hash();
+error_free_hash_length:
+	kfree(kz_hash_lengths);
 
 	return -1;
 }
@@ -388,5 +398,6 @@ void kz_extension_cleanup(void)
 void kz_extension_fini(void)
 {
 	unregister_pernet_subsys(&kz_extension_net_ops);
+	kfree(kz_hash_lengths);
 	clean_hash();
 }
