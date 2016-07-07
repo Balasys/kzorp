@@ -40,7 +40,6 @@ PRIVATE struct kmem_cache *kz_cachep;
 
 static void (*nf_ct_destroy_orig)(struct nf_conntrack *) __rcu __read_mostly;
 
-unsigned const int kz_hash_rnd = GOLDEN_RATIO_PRIME_32;
 
 /*
  * the same as in nf_conntrack_core.c
@@ -56,7 +55,7 @@ hash_conntrack_raw(const struct nf_conntrack_tuple *tuple, u16 zone)
 	 * three bytes manually.
 	 */
 	n = (sizeof(tuple->src) + sizeof(tuple->dst.u3)) / sizeof(u32);
-	return jhash2((u32 *) tuple, n, zone ^ kz_hash_rnd ^
+	return jhash2((u32 *) tuple, n, zone ^ nf_conntrack_hash_rnd ^
 		      (((__force __u16) tuple->dst.u.all << 16) |
 		       tuple->dst.protonum));
 }
