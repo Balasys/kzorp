@@ -315,6 +315,79 @@ static const struct file_operations kz_hash_lengths_file_ops = {
 	.release	= single_release,
 };
 
+static void *kz_hash_stats_seq_start(struct seq_file *seq, loff_t *pos)
+{
+	int cpu;
+
+	if (*pos == 0)
+		return SEQ_START_TOKEN;
+
+	for (cpu = *pos - 1; cpu < nr_cpu_ids; ++cpu) {
+		if (!cpu_possible(cpu))
+			continue;
+		*pos = cpu + 1;
+		return per_cpu_ptr(kz_hash_stats, cpu);
+	}
+
+	return NULL;
+}
+
+static void *kz_hash_stats_seq_next(struct seq_file *seq, void *v, loff_t *pos)
+{
+	int cpu;
+
+	for (cpu = *pos; cpu < nr_cpu_ids; ++cpu) {
+		if (!cpu_possible(cpu))
+			continue;
+		*pos = cpu + 1;
+		return per_cpu_ptr(kz_hash_stats, cpu);
+	}
+
+	return NULL;
+}
+
+static void kz_hash_stats_seq_stop(struct seq_file *seq, void *v)
+{
+}
+
+static int kz_hash_stats_seq_show(struct seq_file *seq, void *v)
+{
+	const struct kzorp_hash_stats *stats = v;
+
+	if (v == SEQ_START_TOKEN) {
+		seq_printf(seq, "searched found search_restart key_not_equal\n");
+		return 0;
+	}
+
+	seq_printf(seq, "%d %d %d %d\n",
+		   stats->searched,
+		   stats->found,
+		   stats->search_restart,
+		   stats->key_not_equal
+		);
+	return 0;
+}
+
+static const struct seq_operations kz_hash_stats_seq_ops = {
+	.start  = kz_hash_stats_seq_start,
+	.next   = kz_hash_stats_seq_next,
+	.stop   = kz_hash_stats_seq_stop,
+	.show   = kz_hash_stats_seq_show,
+};
+
+static int kz_hash_stats_seq_open(struct inode *inode, struct file *file)
+{
+	return seq_open(file, &kz_hash_stats_seq_ops);
+}
+
+static const struct file_operations kz_hash_stats_file_ops = {
+	.owner   = THIS_MODULE,
+	.open    = kz_hash_stats_seq_open,
+	.read    = seq_read,
+	.llseek  = seq_lseek,
+	.release = seq_release,
+};
+
 static int __net_init kz_extension_net_init(struct net *net)
 {
 	if (!proc_create("kz_hash_lengths", S_IRUGO, NULL, &kz_hash_lengths_file_ops))
@@ -323,6 +396,9 @@ static int __net_init kz_extension_net_init(struct net *net)
 	kz_hash_stats = alloc_percpu(struct kzorp_hash_stats);
 	if (!kz_hash_stats)
 		goto err_proc_entry;
+
+	if (!proc_create("kz_hash_stats", S_IRUGO, NULL, &kz_hash_stats_file_ops))
+		goto err_pcpu_lists;
 
 	rcu_read_lock();
 	nf_ct_destroy_orig = rcu_dereference(nf_ct_destroy);
@@ -333,6 +409,8 @@ static int __net_init kz_extension_net_init(struct net *net)
 
 	return 0;
 
+err_pcpu_lists:
+	free_percpu(kz_hash_stats);
 err_proc_entry:
 	remove_proc_entry("kz_hash_lengths", NULL);
 
@@ -350,6 +428,7 @@ void kz_extension_net_exit(struct net *net)
 
 	rcu_assign_pointer(nf_ct_destroy, destroy_orig);
 
+	remove_proc_entry("kz_hash_stats", NULL);
 	remove_proc_entry("kz_hash_lengths", NULL);
 }
 
