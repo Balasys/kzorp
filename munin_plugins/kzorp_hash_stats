@@ -1,0 +1,53 @@
+#!/usr/bin/env python
+
+from collections import OrderedDict
+
+events = OrderedDict()
+events['searched'] = {
+    'munin_type' : 'COUNTER',
+  }
+events['found'] = {
+    'munin_type' : 'COUNTER',
+  }
+events['search_restart'] = {
+    'munin_type' : 'COUNTER',
+  }
+events['key_not_equal'] = {
+    'munin_type' : 'COUNTER',
+  }
+
+def print_config():
+  print 'graph_title kZorp event counts'
+  print 'graph_vlabel Hash event counts'
+  print 'graph_category Zorp'
+
+  import multiprocessing
+  for event in events.keys():
+    for cpu_num in range(multiprocessing.cpu_count()):
+      print '%s_cpu%d.label %s (CPU %2d)' % (event, cpu_num, event, cpu_num)
+      print '%s_cpu%d.type %s' % (event, cpu_num, events[event]['munin_type'])
+
+def print_values():
+  def compute_values():
+    import csv
+    values = []
+    with open('/proc/kz_hash_stats', 'r') as kzorp_stats:
+      stats_reader = csv.DictReader(kzorp_stats, delimiter=' ', fieldnames=events.keys())
+      for row in stats_reader:
+        if stats_reader.line_num > 1:
+          values.append(row)
+
+    return values
+
+  values = compute_values()
+  import multiprocessing
+  for cpu_num in range(multiprocessing.cpu_count()):
+    for event in events.keys():
+      print '%s_cpu%d.value %s' % (event, cpu_num, values[cpu_num][event])
+
+if __name__ == '__main__':
+  import sys
+  if len(sys.argv) > 1 and sys.argv[1] == 'config':
+    print_config()
+  else:
+    print_values()
