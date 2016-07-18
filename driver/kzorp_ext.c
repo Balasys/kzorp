@@ -30,11 +30,19 @@
 	#define	PRIVATE
 #endif
 
+struct kzorp_hash_stats {
+	unsigned int searched;
+	unsigned int found;
+	unsigned int search_restart;
+	unsigned int key_not_equal;
+};
+
 PRIVATE __read_mostly unsigned int kz_hash_shift;
 PRIVATE __read_mostly unsigned int kz_hash_size;
 
 PRIVATE struct hlist_nulls_head *kz_hash;
 atomic_t *kz_hash_lengths;
+struct kzorp_hash_stats __percpu *kz_hash_stats;
 __cacheline_aligned_in_smp spinlock_t kz_hash_locks[KZ_HASH_LOCK_NUM];
 PRIVATE struct kmem_cache *kz_cachep;
 
@@ -108,16 +116,22 @@ __kz_extension_find(struct nf_conn *ct)
 
 	const u32 hash_index = kz_hash_get_hash_index_from_ct(ct, IP_CT_DIR_ORIGINAL);
 
+	local_bh_disable();
 begin:
 	hlist_nulls_for_each_entry_rcu(h, n, &kz_hash[hash_index], hnnode) {
 		if (__kz_extension_key_equal(h, th, zone)) {
+			this_cpu_inc(kz_hash_stats->found);
+			local_bh_enable();
 			return h;
 		}
+		this_cpu_inc(kz_hash_stats->searched);
 	}
 
 	if (get_nulls_value(n) != hash_index) {
-	  goto begin;
+		this_cpu_inc(kz_hash_stats->search_restart);
+		goto begin;
 	}
+	local_bh_enable();
 
 	return NULL;
 }
@@ -136,7 +150,8 @@ begin:
 	h = __kz_extension_find(ct);
 	if (h) {
 		if (unlikely(!__kz_extension_key_equal(h, th, zone))) {
-		  goto begin;
+			this_cpu_inc(kz_hash_stats->key_not_equal);
+			goto begin;
 		}
 		kz = kz_get_kzorp_from_node(h);
 		rcu_read_unlock();
@@ -305,6 +320,10 @@ static int __net_init kz_extension_net_init(struct net *net)
 	if (!proc_create("kz_hash_lengths", S_IRUGO, NULL, &kz_hash_lengths_file_ops))
 		return -1;
 
+	kz_hash_stats = alloc_percpu(struct kzorp_hash_stats);
+	if (!kz_hash_stats)
+		goto err_proc_entry;
+
 	rcu_read_lock();
 	nf_ct_destroy_orig = rcu_dereference(nf_ct_destroy);
 	BUG_ON(nf_ct_destroy_orig == NULL);
@@ -313,6 +332,11 @@ static int __net_init kz_extension_net_init(struct net *net)
 	rcu_assign_pointer(nf_ct_destroy, kz_extension_conntrack_destroy);
 
 	return 0;
+
+err_proc_entry:
+	remove_proc_entry("kz_hash_lengths", NULL);
+
+	return -1;
 }
 
 void kz_extension_net_exit(struct net *net)
@@ -426,6 +450,7 @@ void kz_extension_cleanup(void)
 void kz_extension_fini(void)
 {
 	unregister_pernet_subsys(&kz_extension_net_ops);
+	free_percpu(kz_hash_stats);
 	kfree(kz_hash_lengths);
 	clean_hash();
 }
