@@ -298,6 +298,8 @@ struct kz_zone {
 struct kz_zone_lookup_node;
 
 struct kz_zone_lookup {
+	struct kz_zone *ipv4_internet_zone;
+	struct kz_zone *ipv6_internet_zone;
 	struct kz_zone_lookup_node *ipv4_root_node;
 	struct kz_zone_lookup_node *ipv6_root_node;
 };

@@ -1652,6 +1652,7 @@ zone_lookup_tree_add(struct kz_zone_lookup *zone_lookup, struct kz_zone * zone, 
 {
 	struct kz_zone_lookup_node *root;
 	struct kz_zone_lookup_node *node;
+	struct kz_zone **internet;
 	addr_prefix_equal_fun addr_prefix_equal;
 	unsigned int prefix_len;
 
@@ -1661,6 +1662,7 @@ zone_lookup_tree_add(struct kz_zone_lookup *zone_lookup, struct kz_zone * zone, 
 		pr_debug("adding zone to radix tree; name='%s', address='%pI4', mask='%pI4', prefix_len='%u'\n",
 			 zone->name, &subnet->addr.in, &subnet->mask.in, prefix_len);
 		root = zone_lookup->ipv4_root_node;
+		internet = &zone_lookup->ipv4_internet_zone;
 		addr_prefix_equal = ipv4_addr_prefix_equal;
 		break;
 	case NFPROTO_IPV6:
@@ -1668,11 +1670,17 @@ zone_lookup_tree_add(struct kz_zone_lookup *zone_lookup, struct kz_zone * zone, 
 		pr_debug("adding zone to radix tree; name='%s', address='%pI6c', mask='%pI6c', prefix_len='%u'\n",
 			 zone->name, &subnet->addr.in6, &subnet->mask.in6, prefix_len);
 		root = zone_lookup->ipv6_root_node;
+		internet = &zone_lookup->ipv6_internet_zone;
 		addr_prefix_equal = ipv6_addr_prefix_equal;
 		break;
 	default:
 		BUG();
 		break;
+	}
+
+	if (prefix_len == 0) {
+		*internet = zone;
+		return 0;
 	}
 
 	node = zone_lookup_node_insert(root, subnet, prefix_len);
@@ -1696,15 +1704,18 @@ kz_head_zone_lookup(const struct kz_head_z *h, const union nf_inet_addr * addr, 
 {
 	const struct kz_zone_lookup_node *node;
 	const struct kz_zone_lookup_node *root;
+	struct kz_zone *internet;
 
 	switch (proto) {
 	case NFPROTO_IPV4:
 		pr_debug("lookup zone in radix tree; addr='%pI4'\n", &addr->in);
 		root = h->zone_lookup.ipv4_root_node;
+		internet = h->zone_lookup.ipv4_internet_zone;
 		break;
 	case NFPROTO_IPV6:
 		pr_debug("lookup zone in radix tree; addr='%pI6c'\n", &addr->in6);
 		root = h->zone_lookup.ipv6_root_node;
+		internet = h->zone_lookup.ipv6_internet_zone;
 		break;
 	default:
 		BUG();
@@ -1713,7 +1724,7 @@ kz_head_zone_lookup(const struct kz_head_z *h, const union nf_inet_addr * addr, 
 
 	node = zone_lookup_node_find(root, addr, proto);
 	if (node == NULL)
-		return NULL;
+		return internet;
 
 	/* if ipv6_lookup() returns with an intermediate node we're in
 	 * big trouble, because that means that the lookup algorithm
@@ -1737,6 +1748,8 @@ kz_head_zone_init(struct kz_head_z *h)
 {
 	h->zone_lookup.ipv6_root_node = zone_lookup_node_new();
 	h->zone_lookup.ipv4_root_node = zone_lookup_node_new();
+	h->zone_lookup.ipv6_internet_zone = NULL;
+	h->zone_lookup.ipv4_internet_zone = NULL;
 }
 EXPORT_SYMBOL_GPL(kz_head_zone_init);
 
