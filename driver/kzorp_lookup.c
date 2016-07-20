@@ -1466,11 +1466,10 @@ get_addr_prefix_equal_fun_by_proto(u_int8_t proto)
 
 KZ_PROTECTED struct kz_zone_lookup_node *
 zone_lookup_node_insert(struct kz_zone_lookup_node *root,
-			const union nf_inet_addr * addr, int prefix_len,
-			u_int8_t proto)
+			const struct kz_subnet *subnet, int prefix_len)
 {
-	addr_prefix_equal_fun addr_prefix_equal = get_addr_prefix_equal_fun_by_proto(proto);
-	const int addr_len = (proto == NFPROTO_IPV6 ? 16 : 4);
+	addr_prefix_equal_fun addr_prefix_equal = get_addr_prefix_equal_fun_by_proto(subnet->family);
+	const int addr_len = (subnet->family == NFPROTO_IPV6 ? 16 : 4);
 	struct kz_zone_lookup_node *n, *parent, *leaf, *intermediate;
 	__be32 dir = 0;
 	int prefix_match_len;
@@ -1480,7 +1479,7 @@ zone_lookup_node_insert(struct kz_zone_lookup_node *root,
 	do {
 		/* prefix is different */
 		if (prefix_len < n->prefix_len ||
-		    !(*addr_prefix_equal)(&n->addr, addr, n->prefix_len))
+		    !(*addr_prefix_equal)(&n->addr, &subnet->addr, n->prefix_len))
 			goto insert_above;
 
 		/* prefix is the same */
@@ -1488,7 +1487,7 @@ zone_lookup_node_insert(struct kz_zone_lookup_node *root,
 			return n;
 
 		/* more bits to go */
-		dir = addr_bit_test(addr, n->prefix_len);
+		dir = addr_bit_test(&subnet->addr, n->prefix_len);
 		parent = n;
 		n = dir ? n->right : n->left;
 	} while (n);
@@ -1500,7 +1499,7 @@ zone_lookup_node_insert(struct kz_zone_lookup_node *root,
 
 	leaf->prefix_len = prefix_len;
 	leaf->parent = parent;
-	memcpy(&leaf->addr, addr, addr_len);
+	memcpy(&leaf->addr, &subnet->addr, addr_len);
 
 	if (dir)
 		parent->right = leaf;
@@ -1514,7 +1513,7 @@ insert_above:
 	parent = n->parent;
 
 	/* __ipv6_addr_diff function work with IPv4 addresses also */
-	prefix_match_len = __ipv6_addr_diff(addr, &n->addr, addr_len);
+	prefix_match_len = __ipv6_addr_diff(&subnet->addr, &n->addr, addr_len);
 
 	if (prefix_len > prefix_match_len) {
 		/*
@@ -1537,7 +1536,7 @@ insert_above:
 		}
 
 		intermediate->prefix_len = prefix_match_len;
-		memcpy(&intermediate->addr, addr, addr_len);
+		memcpy(&intermediate->addr, &subnet->addr, addr_len);
 
 		if (dir)
 			parent->right = intermediate;
@@ -1545,7 +1544,7 @@ insert_above:
 			parent->left = intermediate;
 
 		leaf->prefix_len = prefix_len;
-		memcpy(&leaf->addr, addr, addr_len);
+		memcpy(&leaf->addr, &subnet->addr, addr_len);
 
 		intermediate->parent = parent;
 		leaf->parent = intermediate;
@@ -1575,7 +1574,7 @@ insert_above:
 
 		leaf->prefix_len = prefix_len;
 		leaf->parent = parent;
-		memcpy(&leaf->addr, addr, addr_len);
+		memcpy(&leaf->addr, &subnet->addr, addr_len);
 
 		if (dir)
 			parent->right = leaf;
@@ -1676,7 +1675,7 @@ zone_lookup_tree_add(struct kz_zone_lookup *zone_lookup, struct kz_zone * zone, 
 		break;
 	}
 
-	node = zone_lookup_node_insert(root, &subnet->addr, prefix_len, subnet->family);
+	node = zone_lookup_node_insert(root, subnet, prefix_len);
 	if (node == NULL) {
 		pr_err_ratelimited("error allocating node structure\n");
 		return -ENOMEM;
