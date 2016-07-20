@@ -156,26 +156,4 @@ mask_to_size_v6(const struct in6_addr * const mask)
 	return 128;
 }
 
-KZ_PROTECTED void
-kz_generate_lookup_data(struct kz_head_d *dispatchers);
-
-KZ_PROTECTED inline struct kz_zone_lookup_node *
-zone_lookup_node_new(void);
-
-KZ_PROTECTED inline void
-zone_lookup_node_free(struct kz_zone_lookup_node *n);
-
-KZ_PROTECTED struct kz_zone_lookup_node *
-zone_lookup_node_insert(struct kz_zone_lookup_node *root,
-			const union nf_inet_addr * addr, int prefix_len,
-			u_int8_t proto);
-
-KZ_PROTECTED const struct kz_zone_lookup_node *
-zone_lookup_node_find(const struct kz_zone_lookup_node *root,
-		      const union nf_inet_addr *addr,
-		      u_int8_t proto);
-
-KZ_PROTECTED void
-zone_lookup_node_destroy(struct kz_zone_lookup_node *node);
-
 #endif /* _KZORP_LOOKUP_INTERNAL_H */
