@@ -253,6 +253,7 @@ kz_extension_add_to_cache(struct kz_extension *kzorp, const struct nf_conntrack_
 		}
 	}
 
+	smp_wmb();
 	hlist_nulls_add_head_rcu(&kzorp->hnnode, &kz_hash[hash_index]);
 	atomic_inc(&kz_hash_lengths[hash_index]);
 	spin_unlock(&kz_hash_locks[lock_index]);
