@@ -1423,25 +1423,20 @@ addr_bit_test(const void *token, int bit)
 }
 
 typedef bool (*addr_prefix_equal_fun) (const union nf_inet_addr *addr1,
-				       const union nf_inet_addr *addr2,
-				       unsigned int prefixlen);
+				       const union nf_inet_addr *mask1,
+				       const union nf_inet_addr *addr2);
 static inline bool
 ipv6_addr_prefix_equal(const union nf_inet_addr *addr1,
-		       const union nf_inet_addr *addr2,
-		       unsigned int prefixlen) {
-	return ipv6_prefix_equal(&addr1->in6, &addr2->in6, prefixlen);
+		       const union nf_inet_addr *mask1,
+		       const union nf_inet_addr *addr2) {
+	return ipv6_masked_addr_cmp(&addr1->in6, &mask1->in6, &addr2->in6) == 0;
 }
 
 static inline bool
 ipv4_addr_prefix_equal(const union nf_inet_addr *addr1,
-		       const union nf_inet_addr *addr2,
-		       unsigned int prefixlen) {
-	if (likely(prefixlen)) {
-		const struct in_addr mask = { htonl(0xffffffff << (32 - prefixlen)) };
-		return ipv4_masked_addr_cmp(&addr1->in, &mask, &addr2->in) == 0;
-	}
-
-	return true;
+		       const union nf_inet_addr *mask1,
+		       const union nf_inet_addr *addr2) {
+	return ipv4_masked_addr_cmp(&addr1->in, &mask1->in, &addr2->in) == 0;
 }
 
 static addr_prefix_equal_fun
@@ -1479,7 +1474,7 @@ zone_lookup_node_insert(struct kz_zone_lookup_node *root,
 	do {
 		/* prefix is different */
 		if (prefix_len < n->prefix_len ||
-		    !(*addr_prefix_equal)(&n->addr, &subnet->addr, n->prefix_len))
+		    !(*addr_prefix_equal)(&n->addr, &n->mask, &subnet->addr))
 			goto insert_above;
 
 		/* prefix is the same */
@@ -1500,6 +1495,7 @@ zone_lookup_node_insert(struct kz_zone_lookup_node *root,
 	leaf->prefix_len = prefix_len;
 	leaf->parent = parent;
 	memcpy(&leaf->addr, &subnet->addr, addr_len);
+	memcpy(&leaf->mask, &subnet->mask, addr_len);
 
 	if (dir)
 		parent->right = leaf;
@@ -1537,6 +1533,17 @@ insert_above:
 
 		intermediate->prefix_len = prefix_match_len;
 		memcpy(&intermediate->addr, &subnet->addr, addr_len);
+		switch (subnet->family) {
+		case NFPROTO_IPV4:
+			intermediate->mask.in.s_addr = htonl(0xffffffff << (32 - prefix_match_len));
+			break;
+		case NFPROTO_IPV6:
+			ipv6_addr_prefix(&intermediate->mask.in6, &subnet->addr.in6, prefix_match_len);
+			break;
+		default:
+			BUG();
+			break;
+		}
 
 		if (dir)
 			parent->right = intermediate;
@@ -1545,6 +1552,7 @@ insert_above:
 
 		leaf->prefix_len = prefix_len;
 		memcpy(&leaf->addr, &subnet->addr, addr_len);
+		memcpy(&leaf->mask, &subnet->mask, addr_len);
 
 		intermediate->parent = parent;
 		leaf->parent = intermediate;
@@ -1575,6 +1583,7 @@ insert_above:
 		leaf->prefix_len = prefix_len;
 		leaf->parent = parent;
 		memcpy(&leaf->addr, &subnet->addr, addr_len);
+		memcpy(&leaf->mask, &subnet->mask, addr_len);
 
 		if (dir)
 			parent->right = leaf;
@@ -1625,7 +1634,7 @@ zone_lookup_node_find(const struct kz_zone_lookup_node *root,
 		if (n->zone) {
 			/* this is not an intermediate node, but a
 			 * real one with data associated with it */
-			if ((*addr_prefix_equal)(&n->addr, addr, n->prefix_len))
+			if ((*addr_prefix_equal)(&n->addr, &n->mask, addr))
 				return n;
 		}
 

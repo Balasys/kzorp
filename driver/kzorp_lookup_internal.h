@@ -34,10 +34,11 @@
 #define KZ_NOT_MATCHING_SCORE ((u_int64_t)-1)
 
 struct kz_zone_lookup_node {
+  union nf_inet_addr addr;
+  union nf_inet_addr mask;
   struct kz_zone_lookup_node *parent;
   struct kz_zone_lookup_node *left;
   struct kz_zone_lookup_node *right;
-  union nf_inet_addr addr;
   struct kz_zone *zone;
   __u16 prefix_len;
 };
