@@ -1414,12 +1414,50 @@ zone_lookup_node_free(struct kz_zone_lookup_node *n)
 }
 #endif
 
-static inline __be32
-addr_bit_test(const void *token, int bit)
+static inline int
+addr_bit_test(const __be32 *ip_addr, int bit)
 {
-	const __be32 *addr = token;
+	int nth_32bit;
+ 	int nr;
+	u32 addr_part;
 
-	return htonl(1 << ((~bit) & 0x1F)) & addr[bit >> 5];
+	nth_32bit = bit / 32;
+ 	nr = 31 - (bit - (32 * nth_32bit));
+	addr_part = ntohl(ip_addr[nth_32bit]);
+
+	return test_bit(nr, (const unsigned long *) &addr_part);
+}
+
+enum zone_lookup_tree_direction {
+	ZONE_LOOKUP_TREE_LEFT,
+	ZONE_LOOKUP_TREE_RIGHT
+};
+
+static inline enum zone_lookup_tree_direction
+zone_lookup_tree_get_direction(const union nf_inet_addr *addr, u_int8_t family, int bit)
+{
+	const __be32 *ip_addr;
+	const int addr_len = (family == NFPROTO_IPV6 ? 128 : 32);
+
+	if (bit == addr_len)
+		return ZONE_LOOKUP_TREE_LEFT;
+
+	switch (family) {
+	case NFPROTO_IPV4:
+		ip_addr = &addr->ip;
+		break;
+	case NFPROTO_IPV6:
+		ip_addr = &addr->ip6[0];
+		break;
+	default:
+		BUG();
+		break;
+	}
+
+	if (addr_bit_test(ip_addr, bit))
+	       return ZONE_LOOKUP_TREE_RIGHT;
+
+	return ZONE_LOOKUP_TREE_LEFT;
 }
 
 typedef bool (*addr_prefix_equal_fun) (const union nf_inet_addr *addr1,
@@ -1466,7 +1504,7 @@ zone_lookup_node_insert(struct kz_zone_lookup_node *root,
 	addr_prefix_equal_fun addr_prefix_equal = get_addr_prefix_equal_fun_by_proto(subnet->family);
 	const int addr_len = (subnet->family == NFPROTO_IPV6 ? 16 : 4);
 	struct kz_zone_lookup_node *n, *parent, *leaf, *intermediate;
-	__be32 dir = 0;
+	enum zone_lookup_tree_direction dir = ZONE_LOOKUP_TREE_LEFT;
 	int prefix_match_len;
 
 	n = root;
@@ -1482,9 +1520,9 @@ zone_lookup_node_insert(struct kz_zone_lookup_node *root,
 			return n;
 
 		/* more bits to go */
-		dir = addr_bit_test(&subnet->addr, n->prefix_len);
+		dir = zone_lookup_tree_get_direction(&subnet->addr, subnet->family, n->prefix_len);
 		parent = n;
-		n = dir ? n->right : n->left;
+		n = (dir ==  ZONE_LOOKUP_TREE_RIGHT) ? n->right : n->left;
 	} while (n);
 
 	/* add a new leaf node */
@@ -1497,7 +1535,7 @@ zone_lookup_node_insert(struct kz_zone_lookup_node *root,
 	memcpy(&leaf->addr, &subnet->addr, addr_len);
 	memcpy(&leaf->mask, &subnet->mask, addr_len);
 
-	if (dir)
+	if (dir == ZONE_LOOKUP_TREE_RIGHT)
 		parent->right = leaf;
 	else
 		parent->left = leaf;
@@ -1545,7 +1583,7 @@ insert_above:
 			break;
 		}
 
-		if (dir)
+		if (dir == ZONE_LOOKUP_TREE_RIGHT)
 			parent->right = intermediate;
 		else
 			parent->left = intermediate;
@@ -1558,7 +1596,7 @@ insert_above:
 		leaf->parent = intermediate;
 		n->parent = intermediate;
 
-		if (addr_bit_test(&n->addr, prefix_match_len)) {
+		if (zone_lookup_tree_get_direction(&n->addr, subnet->family, prefix_match_len) == ZONE_LOOKUP_TREE_RIGHT) {
 			intermediate->right = n;
 			intermediate->left = leaf;
 		} else {
@@ -1590,7 +1628,7 @@ insert_above:
 		else
 			parent->left = leaf;
 
-		if (addr_bit_test(&n->addr, prefix_len))
+		if (zone_lookup_tree_get_direction(&n->addr, subnet->family, prefix_len) == ZONE_LOOKUP_TREE_RIGHT)
 			leaf->right = n;
 		else
 			leaf->left = n;
@@ -1608,16 +1646,15 @@ zone_lookup_node_find(const struct kz_zone_lookup_node *root,
 {
 	addr_prefix_equal_fun addr_prefix_equal = get_addr_prefix_equal_fun_by_proto(proto);
 	const struct kz_zone_lookup_node *n = root;
-	__be32 dir;
+	enum zone_lookup_tree_direction dir;
 
 	/* first, descend to a possibly matching node */
 
 	for (;;) {
 		struct kz_zone_lookup_node *next;
 
-		dir = addr_bit_test(addr, n->prefix_len);
-
-		next = dir ? n->right : n->left;
+		dir = zone_lookup_tree_get_direction(addr, proto, n->prefix_len);
+		next = (dir == ZONE_LOOKUP_TREE_RIGHT) ? n->right : n->left;
 
 		if (next) {
 			n = next;
