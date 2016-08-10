@@ -1497,23 +1497,154 @@ get_addr_prefix_equal_fun_by_proto(u_int8_t proto)
 	return addr_prefix_equal;
 }
 
+static struct kz_zone_lookup_node *
+zone_lookup_node_insert_above_with_intermediate(struct kz_zone_lookup_node *parent,
+						struct kz_zone_lookup_node *n,
+						const struct kz_subnet *subnet, int addr_len,
+						int prefix_len, int prefix_match_len,
+						__be32 dir)
+{
+	struct kz_zone_lookup_node *leaf, *intermediate;
+
+	/*
+	 *	   +----------------+
+	 *	   |  intermediate  |
+	 *	   +----------------+
+	 *	      /	       	  \
+	 * +--------------+  +--------------+
+	 * |   new leaf	  |  |   old node   |
+	 * +--------------+  +--------------+
+	 */
+	intermediate = zone_lookup_node_new();
+	leaf = zone_lookup_node_new();
+	if (leaf == NULL || intermediate == NULL) {
+		if (leaf)
+			zone_lookup_node_free(leaf);
+		if (intermediate)
+			zone_lookup_node_free(intermediate);
+		return NULL;
+	}
+
+	intermediate->prefix_len = prefix_match_len;
+	memcpy(&intermediate->addr, &subnet->addr, addr_len);
+	switch (subnet->family) {
+	case NFPROTO_IPV4:
+		intermediate->mask.in.s_addr = htonl(0xffffffff << (32 - prefix_match_len));
+		break;
+	case NFPROTO_IPV6:
+		ipv6_addr_prefix(&intermediate->mask.in6, &subnet->addr.in6, prefix_match_len);
+		break;
+	default:
+		BUG();
+		break;
+	}
+
+	if (dir == ZONE_LOOKUP_TREE_RIGHT)
+		parent->right = intermediate;
+	else
+		parent->left = intermediate;
+
+	leaf->prefix_len = prefix_len;
+	memcpy(&leaf->addr, &subnet->addr, addr_len);
+	memcpy(&leaf->mask, &subnet->mask, addr_len);
+
+	intermediate->parent = parent;
+	leaf->parent = intermediate;
+	n->parent = intermediate;
+
+	if (zone_lookup_tree_get_direction(&n->addr, subnet->family, prefix_match_len) == ZONE_LOOKUP_TREE_RIGHT) {
+		intermediate->right = n;
+		intermediate->left = leaf;
+	} else {
+		intermediate->right = leaf;
+		intermediate->left = n;
+	}
+
+	return leaf;
+}
+
+static struct kz_zone_lookup_node *
+zone_lookup_node_insert_above_without_intermediate(struct kz_zone_lookup_node *parent,
+						   struct kz_zone_lookup_node *n,
+						   const struct kz_subnet *subnet, int addr_len,
+						   int prefix_len, int prefix_match_len,
+						   __be32 dir)
+{
+	struct kz_zone_lookup_node *leaf;
+
+	/* prefix_len <= prefix_match_len
+	 *
+	 *	 +-------------------+
+	 *	 |     new leaf      |
+	 *	 +-------------------+
+	 *	    /  	       	  \
+	 * +--------------+  +--------------+
+	 * |   old node   |  |     NULL     |
+	 * +--------------+  +--------------+
+	 */
+	leaf = zone_lookup_node_new();
+	if (leaf == NULL)
+		return NULL;
+
+	leaf->prefix_len = prefix_len;
+	leaf->parent = parent;
+	memcpy(&leaf->addr, &subnet->addr, addr_len);
+	memcpy(&leaf->mask, &subnet->mask, addr_len);
+
+	if (dir)
+		parent->right = leaf;
+	else
+		parent->left = leaf;
+
+	if (zone_lookup_tree_get_direction(&n->addr, subnet->family, prefix_len) == ZONE_LOOKUP_TREE_RIGHT)
+		leaf->right = n;
+	else
+		leaf->left = n;
+
+	n->parent = leaf;
+
+	return leaf;
+}
+
+static struct kz_zone_lookup_node *
+zone_lookup_node_insert_above(struct kz_zone_lookup_node *n,
+			      const struct kz_subnet *subnet, int addr_len,
+			      int prefix_len, __be32 dir)
+{
+	struct kz_zone_lookup_node *leaf, *parent;
+	int prefix_match_len;
+
+	/* split node, since we have a new key with shorter or different prefix */
+	parent = n->parent;
+	/* __ipv6_addr_diff function work with IPv4 addresses also */
+	prefix_match_len = __ipv6_addr_diff(&subnet->addr, &n->addr, addr_len);
+
+	if (prefix_len > prefix_match_len)
+		leaf = zone_lookup_node_insert_above_with_intermediate(parent, n, subnet, addr_len, prefix_len, prefix_match_len, dir);
+	else
+		leaf = zone_lookup_node_insert_above_without_intermediate(parent, n, subnet, addr_len, prefix_len, prefix_match_len, dir);
+        
+	return leaf;
+}
+
 KZ_PROTECTED struct kz_zone_lookup_node *
 zone_lookup_node_insert(struct kz_zone_lookup_node *root,
 			const struct kz_subnet *subnet, int prefix_len)
 {
 	addr_prefix_equal_fun addr_prefix_equal = get_addr_prefix_equal_fun_by_proto(subnet->family);
 	const int addr_len = (subnet->family == NFPROTO_IPV6 ? 16 : 4);
-	struct kz_zone_lookup_node *n, *parent, *leaf, *intermediate;
+	struct kz_zone_lookup_node *n, *parent, *leaf;
 	enum zone_lookup_tree_direction dir = ZONE_LOOKUP_TREE_LEFT;
-	int prefix_match_len;
 
 	n = root;
 
 	do {
 		/* prefix is different */
 		if (prefix_len < n->prefix_len ||
-		    !(*addr_prefix_equal)(&n->addr, &n->mask, &subnet->addr))
-			goto insert_above;
+		    !(*addr_prefix_equal)(&n->addr, &n->mask, &subnet->addr)) {
+			leaf = zone_lookup_node_insert_above(n, subnet, addr_len, prefix_len, dir);
+			return leaf;
+		}
 
 		/* prefix is the same */
 		if (prefix_len == n->prefix_len)
@@ -1539,102 +1670,6 @@ zone_lookup_node_insert(struct kz_zone_lookup_node *root,
 		parent->right = leaf;
 	else
 		parent->left = leaf;
-
-	return leaf;
-
-insert_above:
-	/* split node, since we have a new key with shorter or different prefix */
-	parent = n->parent;
-
-	/* __ipv6_addr_diff function work with IPv4 addresses also */
-	prefix_match_len = __ipv6_addr_diff(&subnet->addr, &n->addr, addr_len);
-
-	if (prefix_len > prefix_match_len) {
-		/*
-		 *	   +----------------+
-		 *	   |  intermediate  |
-		 *	   +----------------+
-		 *	      /	       	  \
-		 * +--------------+  +--------------+
-		 * |   new leaf	  |  |   old node   |
-		 * +--------------+  +--------------+
-		 */
-		intermediate = zone_lookup_node_new();
-		leaf = zone_lookup_node_new();
-		if (leaf == NULL || intermediate == NULL) {
-			if (leaf)
-				zone_lookup_node_free(leaf);
-			if (intermediate)
-				zone_lookup_node_free(intermediate);
-			return NULL;
-		}
-
-		intermediate->prefix_len = prefix_match_len;
-		memcpy(&intermediate->addr, &subnet->addr, addr_len);
-		switch (subnet->family) {
-		case NFPROTO_IPV4:
-			intermediate->mask.in.s_addr = htonl(0xffffffff << (32 - prefix_match_len));
-			break;
-		case NFPROTO_IPV6:
-			ipv6_addr_prefix(&intermediate->mask.in6, &subnet->addr.in6, prefix_match_len);
-			break;
-		default:
-			BUG();
-			break;
-		}
-
-		if (dir == ZONE_LOOKUP_TREE_RIGHT)
-			parent->right = intermediate;
-		else
-			parent->left = intermediate;
-
-		leaf->prefix_len = prefix_len;
-		memcpy(&leaf->addr, &subnet->addr, addr_len);
-		memcpy(&leaf->mask, &subnet->mask, addr_len);
-
-		intermediate->parent = parent;
-		leaf->parent = intermediate;
-		n->parent = intermediate;
-
-		if (zone_lookup_tree_get_direction(&n->addr, subnet->family, prefix_match_len) == ZONE_LOOKUP_TREE_RIGHT) {
-			intermediate->right = n;
-			intermediate->left = leaf;
-		} else {
-			intermediate->right = leaf;
-			intermediate->left = n;
-		}
-	} else {
-		/* prefix_len <= prefix_match_len
-		 *
-		 *	 +-------------------+
-		 *	 |     new leaf      |
-		 *	 +-------------------+
-		 *	    /  	       	  \
-		 * +--------------+  +--------------+
-		 * |   old node   |  |     NULL     |
-		 * +--------------+  +--------------+
-		 */
-		leaf = zone_lookup_node_new();
-		if (leaf == NULL)
-			return NULL;
-
-		leaf->prefix_len = prefix_len;
-		leaf->parent = parent;
-		memcpy(&leaf->addr, &subnet->addr, addr_len);
-		memcpy(&leaf->mask, &subnet->mask, addr_len);
-
-		if (dir)
-			parent->right = leaf;
-		else
-			parent->left = leaf;
-
-		if (zone_lookup_tree_get_direction(&n->addr, subnet->family, prefix_len) == ZONE_LOOKUP_TREE_RIGHT)
-			leaf->right = n;
-		else
-			leaf->left = n;
-
-		n->parent = leaf;
-	}
 
 	return leaf;
 }
