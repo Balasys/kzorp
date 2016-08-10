@@ -1499,12 +1499,12 @@ get_addr_prefix_equal_fun_by_proto(u_int8_t proto)
 
 static struct kz_zone_lookup_node *
 zone_lookup_node_insert_above_with_intermediate(struct kz_zone_lookup_node *parent,
-						struct kz_zone_lookup_node *n,
+						struct kz_zone_lookup_node *orig_node,
 						const struct kz_subnet *subnet, int addr_len,
 						int prefix_len, int prefix_match_len,
 						__be32 dir)
 {
-	struct kz_zone_lookup_node *leaf, *intermediate;
+	struct kz_zone_lookup_node *new_node, *intermediate_node;
 
 	/*
 	 *	   +----------------+
@@ -1512,27 +1512,27 @@ zone_lookup_node_insert_above_with_intermediate(struct kz_zone_lookup_node *pare
 	 *	   +----------------+
 	 *	      /	       	  \
 	 * +--------------+  +--------------+
-	 * |   new leaf	  |  |   old node   |
+	 * |     new   	  |  |     orig     |
 	 * +--------------+  +--------------+
 	 */
-	intermediate = zone_lookup_node_new();
-	leaf = zone_lookup_node_new();
-	if (leaf == NULL || intermediate == NULL) {
-		if (leaf)
-			zone_lookup_node_free(leaf);
-		if (intermediate)
-			zone_lookup_node_free(intermediate);
+	intermediate_node = zone_lookup_node_new();
+	new_node = zone_lookup_node_new();
+	if (new_node == NULL || intermediate_node == NULL) {
+		if (new_node)
+			zone_lookup_node_free(new_node);
+		if (intermediate_node)
+			zone_lookup_node_free(intermediate_node);
 		return NULL;
 	}
 
-	intermediate->prefix_len = prefix_match_len;
-	memcpy(&intermediate->addr, &subnet->addr, addr_len);
+	intermediate_node->prefix_len = prefix_match_len;
+	memcpy(&intermediate_node->addr, &subnet->addr, addr_len);
 	switch (subnet->family) {
 	case NFPROTO_IPV4:
-		intermediate->mask.in.s_addr = htonl(0xffffffff << (32 - prefix_match_len));
+		intermediate_node->mask.in.s_addr = htonl(0xffffffff << (32 - prefix_match_len));
 		break;
 	case NFPROTO_IPV6:
-		ipv6_addr_prefix(&intermediate->mask.in6, &subnet->addr.in6, prefix_match_len);
+		ipv6_addr_prefix(&intermediate_node->mask.in6, &subnet->addr.in6, prefix_match_len);
 		break;
 	default:
 		BUG();
@@ -1540,91 +1540,91 @@ zone_lookup_node_insert_above_with_intermediate(struct kz_zone_lookup_node *pare
 	}
 
 	if (dir == ZONE_LOOKUP_TREE_RIGHT)
-		parent->right = intermediate;
+		parent->right = intermediate_node;
 	else
-		parent->left = intermediate;
+		parent->left = intermediate_node;
 
-	leaf->prefix_len = prefix_len;
-	memcpy(&leaf->addr, &subnet->addr, addr_len);
-	memcpy(&leaf->mask, &subnet->mask, addr_len);
+	new_node->prefix_len = prefix_len;
+	memcpy(&new_node->addr, &subnet->addr, addr_len);
+	memcpy(&new_node->mask, &subnet->mask, addr_len);
 
-	intermediate->parent = parent;
-	leaf->parent = intermediate;
-	n->parent = intermediate;
+	intermediate_node->parent = parent;
+	new_node->parent = intermediate_node;
+	orig_node->parent = intermediate_node;
 
-	if (zone_lookup_tree_get_direction(&n->addr, subnet->family, prefix_match_len) == ZONE_LOOKUP_TREE_RIGHT) {
-		intermediate->right = n;
-		intermediate->left = leaf;
+	if (zone_lookup_tree_get_direction(&orig_node->addr, subnet->family, prefix_match_len) == ZONE_LOOKUP_TREE_RIGHT) {
+		intermediate_node->right = orig_node;
+		intermediate_node->left = new_node;
 	} else {
-		intermediate->right = leaf;
-		intermediate->left = n;
+		intermediate_node->right = new_node;
+		intermediate_node->left = orig_node;
 	}
 
-	return leaf;
+	return new_node;
 }
 
 static struct kz_zone_lookup_node *
 zone_lookup_node_insert_above_without_intermediate(struct kz_zone_lookup_node *parent,
-						   struct kz_zone_lookup_node *n,
+						   struct kz_zone_lookup_node *orig_node,
 						   const struct kz_subnet *subnet, int addr_len,
 						   int prefix_len, int prefix_match_len,
 						   __be32 dir)
 {
-	struct kz_zone_lookup_node *leaf;
+	struct kz_zone_lookup_node *new_node;
 
 	/* prefix_len <= prefix_match_len
 	 *
 	 *	 +-------------------+
-	 *	 |     new leaf      |
+	 *	 |        new        |
 	 *	 +-------------------+
 	 *	    /  	       	  \
 	 * +--------------+  +--------------+
-	 * |   old node   |  |     NULL     |
+	 * |     orig     |  |     NULL     |
 	 * +--------------+  +--------------+
 	 */
-	leaf = zone_lookup_node_new();
-	if (leaf == NULL)
+	new_node = zone_lookup_node_new();
+	if (new_node == NULL)
 		return NULL;
 
-	leaf->prefix_len = prefix_len;
-	leaf->parent = parent;
-	memcpy(&leaf->addr, &subnet->addr, addr_len);
-	memcpy(&leaf->mask, &subnet->mask, addr_len);
+	new_node->prefix_len = prefix_len;
+	new_node->parent = parent;
+	memcpy(&new_node->addr, &subnet->addr, addr_len);
+	memcpy(&new_node->mask, &subnet->mask, addr_len);
 
 	if (dir)
-		parent->right = leaf;
+		parent->right = new_node;
 	else
-		parent->left = leaf;
+		parent->left = new_node;
 
-	if (zone_lookup_tree_get_direction(&n->addr, subnet->family, prefix_len) == ZONE_LOOKUP_TREE_RIGHT)
-		leaf->right = n;
+	if (zone_lookup_tree_get_direction(&orig_node->addr, subnet->family, prefix_len) == ZONE_LOOKUP_TREE_RIGHT)
+		new_node->right = orig_node;
 	else
-		leaf->left = n;
+		new_node->left = orig_node;
 
-	n->parent = leaf;
+	orig_node->parent = new_node;
 
-	return leaf;
+	return new_node;
 }
 
 static struct kz_zone_lookup_node *
-zone_lookup_node_insert_above(struct kz_zone_lookup_node *n,
+zone_lookup_node_insert_above(struct kz_zone_lookup_node *orig_node,
 			      const struct kz_subnet *subnet, int addr_len,
 			      int prefix_len, __be32 dir)
 {
-	struct kz_zone_lookup_node *leaf, *parent;
+	struct kz_zone_lookup_node *new_node, *parent;
 	int prefix_match_len;
 
 	/* split node, since we have a new key with shorter or different prefix */
-	parent = n->parent;
+	parent = orig_node->parent;
 	/* __ipv6_addr_diff function work with IPv4 addresses also */
-	prefix_match_len = __ipv6_addr_diff(&subnet->addr, &n->addr, addr_len);
+	prefix_match_len = __ipv6_addr_diff(&subnet->addr, &orig_node->addr, addr_len);
 
 	if (prefix_len > prefix_match_len)
-		leaf = zone_lookup_node_insert_above_with_intermediate(parent, n, subnet, addr_len, prefix_len, prefix_match_len, dir);
+		new_node = zone_lookup_node_insert_above_with_intermediate(parent, orig_node, subnet, addr_len, prefix_len, prefix_match_len, dir);
 	else
-		leaf = zone_lookup_node_insert_above_without_intermediate(parent, n, subnet, addr_len, prefix_len, prefix_match_len, dir);
+		new_node = zone_lookup_node_insert_above_without_intermediate(parent, orig_node, subnet, addr_len, prefix_len, prefix_match_len, dir);
         
-	return leaf;
+	return new_node;
 }
 
 KZ_PROTECTED struct kz_zone_lookup_node *
@@ -1633,7 +1633,7 @@ zone_lookup_node_insert(struct kz_zone_lookup_node *root,
 {
 	addr_prefix_equal_fun addr_prefix_equal = get_addr_prefix_equal_fun_by_proto(subnet->family);
 	const int addr_len = (subnet->family == NFPROTO_IPV6 ? 16 : 4);
-	struct kz_zone_lookup_node *n, *parent, *leaf;
+	struct kz_zone_lookup_node *n, *parent, *new_node;
 	enum zone_lookup_tree_direction dir = ZONE_LOOKUP_TREE_LEFT;
 
 	n = root;
@@ -1642,8 +1642,8 @@ zone_lookup_node_insert(struct kz_zone_lookup_node *root,
 		/* prefix is different */
 		if (prefix_len < n->prefix_len ||
 		    !(*addr_prefix_equal)(&n->addr, &n->mask, &subnet->addr)) {
-			leaf = zone_lookup_node_insert_above(n, subnet, addr_len, prefix_len, dir);
-			return leaf;
+			new_node = zone_lookup_node_insert_above(n, subnet, addr_len, prefix_len, dir);
+			return new_node;
 		}
 
 		/* prefix is the same */
@@ -1656,22 +1656,22 @@ zone_lookup_node_insert(struct kz_zone_lookup_node *root,
 		n = (dir ==  ZONE_LOOKUP_TREE_RIGHT) ? n->right : n->left;
 	} while (n);
 
-	/* add a new leaf node */
-	leaf = zone_lookup_node_new();
-	if (leaf == NULL)
+	/* add a new new_node node */
+	new_node = zone_lookup_node_new();
+	if (new_node == NULL)
 		return NULL;
 
-	leaf->prefix_len = prefix_len;
-	leaf->parent = parent;
-	memcpy(&leaf->addr, &subnet->addr, addr_len);
-	memcpy(&leaf->mask, &subnet->mask, addr_len);
+	new_node->prefix_len = prefix_len;
+	new_node->parent = parent;
+	memcpy(&new_node->addr, &subnet->addr, addr_len);
+	memcpy(&new_node->mask, &subnet->mask, addr_len);
 
 	if (dir == ZONE_LOOKUP_TREE_RIGHT)
-		parent->right = leaf;
+		parent->right = new_node;
 	else
-		parent->left = leaf;
+		parent->left = new_node;
 
-	return leaf;
+	return new_node;
 }
 
 KZ_PROTECTED const struct kz_zone_lookup_node *
