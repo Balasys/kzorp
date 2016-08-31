@@ -12,6 +12,7 @@
 
 #include <linux/hash.h>
 #include <linux/bootmem.h>
+#include <linux/proc_fs.h>
 #include <net/netfilter/nf_conntrack_acct.h>
 #include <net/netfilter/nf_conntrack_ecache.h>
 #include <net/netfilter/nf_conntrack_zones.h>
@@ -33,12 +34,12 @@ PRIVATE __read_mostly unsigned int kz_hash_shift;
 PRIVATE __read_mostly unsigned int kz_hash_size;
 
 PRIVATE struct hlist_nulls_head *kz_hash;
+atomic_t *kz_hash_lengths;
 __cacheline_aligned_in_smp spinlock_t kz_hash_locks[KZ_HASH_LOCK_NUM];
 PRIVATE struct kmem_cache *kz_cachep;
 
 static void (*nf_ct_destroy_orig)(struct nf_conntrack *) __rcu __read_mostly;
 
-unsigned const int kz_hash_rnd = GOLDEN_RATIO_PRIME_32;
 
 /*
  * the same as in nf_conntrack_core.c
@@ -54,7 +55,7 @@ hash_conntrack_raw(const struct nf_conntrack_tuple *tuple, u16 zone)
 	 * three bytes manually.
 	 */
 	n = (sizeof(tuple->src) + sizeof(tuple->dst.u3)) / sizeof(u32);
-	return jhash2((u32 *) tuple, n, zone ^ kz_hash_rnd ^
+	return jhash2((u32 *) tuple, n, zone ^ nf_conntrack_hash_rnd ^
 		      (((__force __u16) tuple->dst.u.all << 16) |
 		       tuple->dst.protonum));
 }
@@ -170,6 +171,7 @@ static void kz_extension_dealloc(struct nf_conntrack_kzorp *kz)
 
 	spin_lock(&kz_hash_locks[lock_index]);
 	hlist_nulls_del_init_rcu(&(kz->tuplehash_orig.hnnode));
+	atomic_dec(&kz_hash_lengths[hash_index]);
 	spin_unlock(&kz_hash_locks[lock_index]);
 
         call_rcu(&kz->rcu, kz_extension_free_rcu);
@@ -214,6 +216,7 @@ PRIVATE void kz_extension_fill_one(struct nf_conntrack_kzorp *kzorp, struct nf_c
 
 	spin_lock(&kz_hash_locks[lock_index]);
 	hlist_nulls_add_head_rcu(&(kzorp->tuplehash_orig.hnnode), &kz_hash[hash_index]);
+	atomic_inc(&kz_hash_lengths[hash_index]);
 	spin_unlock(&kz_hash_locks[lock_index]);
 }
 
@@ -274,8 +277,34 @@ kz_extension_conntrack_destroy(struct nf_conntrack *nfct)
 	rcu_read_unlock();
 }
 
+static int kz_hash_lengths_show(struct seq_file *p, void *v)
+{
+	int i;
+
+	for (i = 0; i < kz_hash_size; i++)
+		seq_printf(p, "%d\n", atomic_read(&kz_hash_lengths[i]));
+
+	return 0;
+}
+
+static int kz_hash_lengths_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, kz_hash_lengths_show, NULL);
+}
+
+static const struct file_operations kz_hash_lengths_file_ops = {
+	.owner		= THIS_MODULE,
+	.open		= kz_hash_lengths_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
 static int __net_init kz_extension_net_init(struct net *net)
 {
+	if (!proc_create("kz_hash_lengths", S_IRUGO, NULL, &kz_hash_lengths_file_ops))
+		return -1;
+
 	rcu_read_lock();
 	nf_ct_destroy_orig = rcu_dereference(nf_ct_destroy);
 	BUG_ON(nf_ct_destroy_orig == NULL);
@@ -296,6 +325,8 @@ void kz_extension_net_exit(struct net *net)
 	rcu_read_unlock();
 
 	rcu_assign_pointer(nf_ct_destroy, destroy_orig);
+
+	remove_proc_entry("kz_hash_lengths", NULL);
 }
 
 static void __net_exit kz_extension_net_exit_batch(struct list_head *net_exit_list)
@@ -325,6 +356,7 @@ static void kz_extension_dealloc_by_tuplehash(struct nf_conntrack_tuple_hash *p)
 	kz_extension_dealloc(kz);
 }
 
+
 /* deallocate entries in the hashtable */
 static void clean_hash(void)
 {
@@ -343,7 +375,6 @@ static void clean_hash(void)
 
 int kz_extension_init(void)
 {
-
 	int ret, i;
 
        kz_cachep = kmem_cache_create("kzorp_slab",
@@ -359,8 +390,13 @@ int kz_extension_init(void)
 		return -1;
 	}
 
+	kz_hash_lengths = kzalloc(kz_hash_size * sizeof(atomic64_t), GFP_KERNEL);
+	if (!kz_hash_lengths)
+		goto error_free_hash_length;
+
 	for (i = 0; i < kz_hash_size; i++) {
 		INIT_HLIST_NULLS_HEAD(&kz_hash[i], i);
+		atomic_set(&kz_hash_lengths[i], 0);
 	}
 
         ret = register_pernet_subsys(&kz_extension_net_ops);
@@ -376,6 +412,8 @@ int kz_extension_init(void)
 
 error_cleanup_hash:
 	clean_hash();
+error_free_hash_length:
+	kfree(kz_hash_lengths);
 
 	return -1;
 }
@@ -388,5 +426,6 @@ void kz_extension_cleanup(void)
 void kz_extension_fini(void)
 {
 	unregister_pernet_subsys(&kz_extension_net_ops);
+	kfree(kz_hash_lengths);
 	clean_hash();
 }
