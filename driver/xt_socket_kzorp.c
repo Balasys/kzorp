@@ -224,7 +224,10 @@ socket_match(const struct sk_buff *skb, struct xt_action_param *par,
 		if (info->flags & XT_SOCKET_MARK) {
 			const struct xt_socket_mtinfo3 *mark_info = (struct xt_socket_mtinfo3 *) info;
 
-			is_mark_matches = ((sk->sk_mark & mark_info->mask) == mark_info->mark) ^ mark_info->invert;
+			if (unlikely(sk->sk_state == TCP_TIME_WAIT))
+				is_mark_matches = mark_info->invert;
+			else
+				is_mark_matches = ((sk->sk_mark & mark_info->mask) == mark_info->mark) ^ mark_info->invert;
 		}
 
 		if (sk != skb->sk)
@@ -401,7 +404,10 @@ socket_mt6_v1_v2_v3(const struct sk_buff *skb, struct xt_action_param *par)
 		if (info->flags & XT_SOCKET_MARK) {
 			const struct xt_socket_mtinfo3 *mark_info = (struct xt_socket_mtinfo3 *) info;
 
-			is_mark_matches = ((sk->sk_mark & mark_info->mask) == mark_info->mark) ^ mark_info->invert;
+			if (unlikely(sk->sk_state == TCP_TIME_WAIT))
+				is_mark_matches = mark_info->invert;
+			else
+				is_mark_matches = ((sk->sk_mark & mark_info->mask) == mark_info->mark) ^ mark_info->invert;
 		}
 
 		if (sk != skb->sk)
