@@ -79,7 +79,7 @@ Depends: ${misc:Depends},
          python-daemon,
          zorp-kernel-module,
          python-kzorp (= ${source:Version}),
-         python-zorp-base,
+         python-zorp-base (>> 6.0.9),
          python-prctl
 Description: Python bindings for kzorp.
  2Zorp is a new generation firewall. It is essentially a transparent proxy
