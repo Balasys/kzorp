@@ -1,41 +1,19 @@
 #!/usr/bin/make -f
 
 version := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)/\1/p')
-kernel_version := $(shell apt-cache policy linux-headers-generic | grep "\*\*\*" | sed 's% *\*\*\* *\(.*\)\.\(.*\)\..*%\1-\2%')
-kernel_release := $(shell ls -1d /lib/modules/*/build | head -1 | sed 's%/lib/modules/\(.*\)/build%\1%')
-
-# Uncomment this to turn on verbose mode.
-export DH_VERBOSE=1
 
 ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
     NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
     MAKEFLAGS += -j$(NUMJOBS)
 endif
 
-build: build-indep
-	dh $@  --with autotools-dev,autoreconf
+%:
+	dh $@ --with autoreconf,dkms --parallel
 
-build-indep: build-indep-stamp
-build-indep-stamp:
-	touch $@
+override_dh_dkms:
+	dh_dkms -V$(version)
 
-clean:
-	dh_testdir
-	dh_testroot
-
-	KERNELRELEASE=$(kernel_release) dh_auto_clean
-	dh_autoreconf_clean
-	dh_clean build-indep-stamp debian/kzorp-dkms.dkms
-
-debian/kzorp-dkms.dkms: debian/kzorp-dkms.dkms.in
-	sed s/@VERSION@/$(version)/g $< > $@
-
-install-indep: build-indep debian/kzorp-dkms.dkms
-	dh_testdir
-	dh_testroot
-	dh_prep -i
-	dh_installdirs -i
-
+override_dh_auto_install-indep:
 	mkdir -p usr/src/kzorp-$(version)
 
 	dh_install -pkzorp-dkms driver/Makefile usr/src/kzorp-$(version)/
@@ -43,29 +21,11 @@ install-indep: build-indep debian/kzorp-dkms.dkms
 	dh_install -pkzorp-dkms driver/*.c usr/src/kzorp-$(version)/
 	dh_install -pkzorp-dkms driver/*.h usr/src/kzorp-$(version)/
 	dh_install -pkzorp-dkms driver/include/linux/netfilter/*.h usr/src/kzorp-$(version)/include/linux/netfilter/
-	dh_dkms -pkzorp-dkms
 
 	dh_auto_install --destdir=debian/python-kzorp -- -C pylib install
 	dh_auto_install --destdir=debian/kzorp-munin-plugins -- -C munin_plugins install
 	dh_auto_install --destdir=debian/kzorp-utils -- -C scripts install
 	dh_auto_install --destdir=debian/kzorpd -- -C daemon install
 
-binary-indep: build-indep install-indep
-	dh $@  --with autotools-dev,python2
-
-install:
-	KERNELRELEASE=$(kernel_release) dh_auto_install --destdir=debian/kzorp --sourcedirectory=driver
-
-build-arch:
-	KERNELRELEASE=$(kernel_release) dh $@  --with autotools-dev --sourcedirectory=driver
-
-binary-arch: build-arch install
-	KERNELRELEASE=$(kernel_release) dh $@  --with autotools-dev,python2 --sourcedirectory=driver
-
-override_dh_auto_test:
-
 override_dh_installinit:
 	dh_installinit -i -- defaults 19 21
-
-binary: binary-indep binary-arch
-.PHONY: build build-indep build-arch clean install install-indep binary-indep binary-arch binary
