@@ -14,12 +14,14 @@ override_dh_dkms:
 	dh_dkms -V$(version)
 
 override_dh_auto_install-indep:
-	mkdir -p usr/src/kzorp-$(version)
+	mkdir -p usr/src/kzorp-$(version)/compat
 
 	dh_install -pkzorp-dkms driver/Makefile usr/src/kzorp-$(version)/
+	dh_install -pkzorp-dkms driver/compat/Makefile usr/src/kzorp-$(version)/compat/
 
 	dh_install -pkzorp-dkms driver/*.c usr/src/kzorp-$(version)/
 	dh_install -pkzorp-dkms driver/*.h usr/src/kzorp-$(version)/
+	dh_install -pkzorp-dkms driver/compat/*.c usr/src/kzorp-$(version)/compat/
 	dh_install -pkzorp-dkms driver/include/linux/netfilter/*.h usr/src/kzorp-$(version)/include/linux/netfilter/
 
 	dh_auto_install --destdir=debian/python-kzorp -- -C pylib install

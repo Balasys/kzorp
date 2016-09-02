@@ -1,18 +1,7 @@
-# By default, we try to compile the modules for the currently running
-# kernel.  But it's the first approximation, as we will re-read the
-# version from the kernel sources.
-ifeq (,$(KERNELRELEASE))
-KVERS_UNAME ?= $(shell uname -r)
-else
-KVERS_UNAME ?= $(KERNELRELEASE)
-endif
-
-$(info Build kZorp against kernel version $(KVERS_UNAME))
-
 # KBUILD is the path to the Linux kernel build tree.  It is usually the
 # same as the kernel source tree, except when the kernel was compiled in
 # a separate directory.
-KBUILD ?= $(shell readlink -f /lib/modules/$(KVERS_UNAME)/build)
+KBUILD ?= $(shell readlink -f /lib/modules/`uname -r`/build)
 
 ifeq (,$(KBUILD))
 $(error Kernel build tree not found - please set KBUILD to configured kernel)
@@ -23,38 +12,17 @@ ifeq (,$(wildcard $(KCONFIG)))
 $(error No .config found in $(KBUILD), please set KBUILD to configured kernel)
 endif
 
-ifneq (,$(wildcard $(KBUILD)/include/linux/version.h))
-ifneq (,$(wildcard $(KBUILD)/include/generated/uapi/linux/version.h))
-$(error Multiple copies of version.h found, please clean your build tree)
-endif
-endif
+SRC_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
-# Kernel Makefile doesn't always know the exact kernel version, so we
-# get it from the kernel headers instead and pass it to make.
-VERSION_H := $(KBUILD)/include/generated/utsrelease.h
-ifeq (,$(wildcard $(VERSION_H)))
-VERSION_H := $(KBUILD)/include/linux/utsrelease.h
-endif
-ifeq (,$(wildcard $(VERSION_H)))
-VERSION_H := $(KBUILD)/include/linux/version.h
-endif
-ifeq (,$(wildcard $(VERSION_H)))
-$(error Please run 'make modules_prepare' in $(KBUILD))
-endif
-
-KVERS := $(shell sed -ne 's/"//g;s/^\#define UTS_RELEASE //p' $(VERSION_H))
-
-ifeq (,$(KVERS))
-$(error Cannot find UTS_RELEASE in $(VERSION_H), please report)
-endif
+$(shell $(CC) $(SRC_DIR)/print_kernel_uts_release.c -I $(KBUILD)/include/ -o $(SRC_DIR)/print_kernel_uts_release)
+KVERS := $(shell $(SRC_DIR)/print_kernel_uts_release)
+$(info Build kZorp against kernel version $(KVERS))
 
 INST_DIR = /lib/modules/$(KVERS)/kernel/net/netfilter
 
-SRC_DIR=$(shell pwd)
-
 include $(KCONFIG)
 
-EXTRA_CFLAGS += -I$(src)/include
+EXTRA_CFLAGS += -I$(src)/include -I$(src)
 
 PATCHED_UPSTREAM_MODULES = xt_socket_kzorp
 PATCHED_UPSTREAM_OBJECTS = xt_socket_kzorp.o
@@ -65,7 +33,6 @@ obj-m := kzorp.o xt_KZORP.o xt_rule.o xt_service.o xt_zone.o $(PATCHED_UPSTREAM_
 kzorp-y := kzorp_core.o kzorp_lookup.o kzorp_sockopt.o kzorp_netlink.o kzorp_ext.o
 
 all: config_check modules
-        KBUILD ?= $(shell readlink -f /lib/modules/$(KVERS_UNAME)/build)
 
 config_check:
 	@if [ -z "$(CONFIG_NETFILTER_XT_TARGET_TPROXY)" ]; then \
@@ -99,10 +66,14 @@ config_check:
 		echo; echo; \
 	fi
 
-modules:
+compat_h:
+	$(MAKE) -C compat KBUILD=$(KBUILD)
+
+modules: compat_h
 	$(MAKE) -C $(KBUILD) M=$(SRC_DIR)
 
 clean:
+	$(MAKE) -C compat clean
 	rm -f *.o *.ko .*.cmd *.mod.c *.symvers modules.order *~ .\#*
 	rm -rf .tmp_versions
 
