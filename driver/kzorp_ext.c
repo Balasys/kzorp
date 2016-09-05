@@ -112,12 +112,10 @@ ____kz_extension_find(const struct nf_conntrack_tuple *tuple, u16 zone_id)
 
 	const u32 hash_index = kz_extension_get_hash_index(tuple, zone_id);
 
-	local_bh_disable();
 begin:
 	hlist_nulls_for_each_entry_rcu(kzorp, n, &kz_hash[hash_index], hnnode) {
 		if (__kz_extension_key_equal(kzorp, tuple, zone_id)) {
 			this_cpu_inc(kz_hash_stats->found);
-			local_bh_enable();
 			return kzorp;
 		}
 		this_cpu_inc(kz_hash_stats->searched);
@@ -127,7 +125,6 @@ begin:
 		this_cpu_inc(kz_hash_stats->search_restart);
 		goto begin;
 	}
-	local_bh_enable();
 
 	return NULL;
 }
@@ -237,18 +234,23 @@ kz_extension_prepare_to_cache_addition(struct kz_extension *kzorp,
 struct kz_extension *
 kz_extension_add_to_cache(struct kz_extension *kzorp, const struct nf_conntrack_tuple *tuple, u16 zone_id)
 {
-	const u32 hash_index = kz_extension_get_hash_index(tuple, zone_id);
-        const u32 lock_index = kz_hash_get_lock_index(hash_index);
+	u32 hash_index;
+	u32 lock_index;
 	struct hlist_nulls_node *n;
 	struct kz_extension *kzorp_find;
 
 	kz_extension_prepare_to_cache_addition(kzorp, tuple, zone_id);
+
+	local_bh_disable();
+	hash_index = kz_extension_get_hash_index(tuple, zone_id);
+	lock_index = kz_hash_get_lock_index(hash_index);
 	spin_lock(&kz_hash_locks[lock_index]);
 
 	hlist_nulls_for_each_entry_rcu(kzorp_find, n, &kz_hash[hash_index], hnnode) {
 		if (__kz_extension_key_equal(kzorp_find, tuple, zone_id)) {
 			pr_err("Duplicate kzorp entry found in cache;\n");
 			spin_unlock(&kz_hash_locks[lock_index]);
+			local_bh_enable();
 			return kz_extension_get(kzorp_find);
 		}
 	}
@@ -257,6 +259,7 @@ kz_extension_add_to_cache(struct kz_extension *kzorp, const struct nf_conntrack_
 	hlist_nulls_add_head_rcu(&kzorp->hnnode, &kz_hash[hash_index]);
 	atomic_inc(&kz_hash_lengths[hash_index]);
 	spin_unlock(&kz_hash_locks[lock_index]);
+	local_bh_enable();
 
 	return kz_extension_get(kzorp);
 }
@@ -297,13 +300,20 @@ struct kz_extension *kz_extension_create(void)
 void
 kz_extension_remove_from_cache(struct kz_extension *kzorp)
 {
-	const u32 hash_index = kz_extension_get_hash_index(&kzorp->tuple_orig, kzorp->zone_id);
-	const u32 lock_index = kz_hash_get_lock_index(hash_index);
+	u32 hash_index;
+	u32 lock_index;
+
+	local_bh_disable();
+
+	hash_index = kz_extension_get_hash_index(&kzorp->tuple_orig, kzorp->zone_id);
+	lock_index = kz_hash_get_lock_index(hash_index);
 
 	spin_lock(&kz_hash_locks[lock_index]);
 	hlist_nulls_del_init_rcu(&kzorp->hnnode);
 	atomic_dec(&kz_hash_lengths[hash_index]);
 	spin_unlock(&kz_hash_locks[lock_index]);
+
+	local_bh_enable();
 
 	kz_extension_put(kzorp);
 }
