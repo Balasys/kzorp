@@ -81,8 +81,8 @@ kzorp_getsockopt_results(u8 family, struct sock *sk, int optval, void __user *us
 		break;
 	case PF_INET6:
 		tuple.src.l3num = AF_INET6;
-		ipv6_addr_copy(&tuple.src.u3.in6, &sk->sk_v6_rcv_saddr);
-		ipv6_addr_copy(&tuple.dst.u3.in6, &sk->sk_v6_daddr);
+		tuple.src.u3.in6 = sk->sk_v6_rcv_saddr;
+		tuple.dst.u3.in6 = sk->sk_v6_daddr;
 		break;
 	default:
 		BUG();
@@ -91,24 +91,24 @@ kzorp_getsockopt_results(u8 family, struct sock *sk, int optval, void __user *us
 	h = nf_conntrack_find_get(sock_net(sk), NF_CT_DEFAULT_ZONE, &tuple);
 	if (h) {
 		struct nf_conn *ct = nf_ct_tuplehash_to_ctrack(h);
-		struct nf_conntrack_kzorp *kzorp = kz_extension_find(ct);
+		struct nf_conntrack_kzorp *kzorp;
 		u_int64_t cookie;
 		int res = 0;
 
+		rcu_read_lock_bh();
+		kzorp = kz_extension_find(ct);
 		if (kzorp == NULL) {
 			kz_debug("no kzorp extension structure found\n");
 			res = -ENOENT;
 			goto error_put_ct;
 		}
 
-		rcu_read_lock();
 		{
 			/* we could waste space to store the coolie in kzorp but user is really interested
 			   whether it is the current one, 0 indicates obsolete  */
 			const struct kz_config *cfg = rcu_dereference(kz_config_rcu);
 			cookie = kz_generation_valid(cfg, kzorp->generation) ? cfg->cookie : 0;
 		}
-		rcu_read_unlock();
 
 		kz_debug("found kzorp results; client_zone='%s', server_zone='%s', dispatcher='%s', service='%s'\n",
 			 kzorp->czone ? kzorp->czone->name : kz_log_null,
@@ -132,6 +132,7 @@ kzorp_getsockopt_results(u8 family, struct sock *sk, int optval, void __user *us
 
 		COPY_NUM_TO_USER(user, rule_id, kzorp->rule_id);
 error_put_ct:
+		rcu_read_unlock_bh();
 		nf_ct_put(ct);
 
 		return res;

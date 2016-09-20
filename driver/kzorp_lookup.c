@@ -2056,7 +2056,7 @@ EXPORT_SYMBOL_GPL(kz_instance_bind_lookup_v6);
 /* FIXME: this is _heavily_ dependent on TCP and UDP port numbers
  * being mapped to the same offset in the ip_nat_range structure */
 static inline int
-nat_in_range(const NAT_RANGE_TYPE *r,
+nat_in_range(const struct nf_nat_range *r,
 	 const __be32 addr, const __be16 port,
 	 const u_int8_t proto)
 {
@@ -2070,16 +2070,14 @@ nat_in_range(const NAT_RANGE_TYPE *r,
 	kz_debug("with packet; proto='%d', ip='%pI4', port='%u'\n",
 		 proto, &addr, ntohs(port));
 
-	if ((proto != IPPROTO_TCP) && (proto != IPPROTO_UDP))
-		return 0;
-
-	if (r->flags & IP_NAT_RANGE_MAP_IPS) {
+	if (r->flags & NF_NAT_RANGE_MAP_IPS) {
 		if ((*kz_nat_range_get_min_ip(r) && ntohl(addr) < ntohl(*kz_nat_range_get_min_ip(r))) ||
 		    (*kz_nat_range_get_max_ip(r) && ntohl(addr) > ntohl(*kz_nat_range_get_max_ip(r))))
 			return 0;
 	}
 
-	if (r->flags & IP_NAT_RANGE_PROTO_SPECIFIED) {
+	if ((r->flags & NF_NAT_RANGE_PROTO_SPECIFIED) &&
+	    ((proto == IPPROTO_TCP) || (proto == IPPROTO_UDP))) {
 		if ((*kz_nat_range_get_min_port(r) && ntohs(port) < ntohs(*kz_nat_range_get_min_port(r))) ||
 		    (*kz_nat_range_get_max_port(r) && ntohs(port) > ntohs(*kz_nat_range_get_max_port(r))))
 			return 0;
@@ -2090,7 +2088,7 @@ nat_in_range(const NAT_RANGE_TYPE *r,
 	return 1;
 }
 
-const NAT_RANGE_TYPE *
+const struct nf_nat_range *
 kz_service_nat_lookup(const struct list_head * const head,
 		      const __be32 saddr, const __be32 daddr,
 		      const __be16 sport, const __be16 dport,

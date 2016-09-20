@@ -17,9 +17,52 @@
 #
 import testutil
 from KZorpBaseTestCaseZones import KZorpBaseTestCaseZones
+from KZorpBaseTestCaseCommon import KZorpTestCaseDump
 import kzorp.messages as messages
 import errno
 import socket
+
+class KZorpTestCaseZoneDump(KZorpTestCaseDump):
+    _dump_message = messages.KZorpGetZoneMessage(None)
+
+    def __create_several_zones_that_do_not_fit_into_one_netlink_packet(self):
+        zone_name_format = 'zone_with_subnets_do_not_fit_into_one_netlink_packet_%d'
+        zone_messages = []
+
+        for zone_num in range(self._get_netlink_packet_size()):
+            add_zone_message = messages.KZorpAddZoneMessage(zone_name_format % (zone_num, ), subnet_num = 0)
+            zone_messages.append(add_zone_message)
+
+        return zone_messages
+
+
+    def __create_one_zone_with_subnets_do_not_fit_into_one_netlink_packet(self):
+        zone_name = 'zone'
+        zone_subnet_count_that_not_fit_in_netlink_packet = self._get_netlink_packet_size()
+        zone_subnet_family = socket.AF_INET
+        zone_subnet_format = '192.168.%d.%d'
+
+        zone_messages = []
+
+        add_zone_message = messages.KZorpAddZoneMessage(zone_name, subnet_num = zone_subnet_count_that_not_fit_in_netlink_packet)
+        zone_messages.append(add_zone_message)
+
+        for subnet_num in range(zone_subnet_count_that_not_fit_in_netlink_packet):
+            add_zone_subnet_message = messages.KZorpAddZoneSubnetMessage(
+                zone_name,
+                family = zone_subnet_family,
+                address = socket.inet_pton(zone_subnet_family, zone_subnet_format % (subnet_num % (2 ** 16) / 256, subnet_num % (2 ** 8), )),
+                mask = socket.inet_pton(zone_subnet_family, testutil.size_to_mask(zone_subnet_family, 32))
+            )
+            zone_messages.append(add_zone_subnet_message)
+
+        return zone_messages
+
+    def test_one_zone_with_subnets_do_not_fit_into_one_netlink_packet(self):
+        self._check_objects(self.__create_one_zone_with_subnets_do_not_fit_into_one_netlink_packet())
+
+    def test_several_zones_that_do_not_fit_into_one_netlink_packet(self):
+        self._check_objects(self.__create_several_zones_that_do_not_fit_into_one_netlink_packet())
 
 class KZorpTestCaseZones(KZorpBaseTestCaseZones):
     _zones = [

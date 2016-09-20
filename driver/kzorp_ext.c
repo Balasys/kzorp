@@ -75,7 +75,7 @@ kz_hash_get_hash_index_from_tuple_and_zone(const struct nf_conntrack_tuple *tupl
 static inline u32
 kz_hash_get_hash_index_from_ct(const struct nf_conn *ct, enum ip_conntrack_dir dir)
 {
-	const u32 index = kz_hash_get_hash_index_from_tuple_and_zone(&(ct->tuplehash[dir].tuple), nf_ct_zone(ct));
+	const u32 index = kz_hash_get_hash_index_from_tuple_and_zone(&(ct->tuplehash[dir].tuple), nf_ct_zone_id(ct));
 	return index;
 }
 
@@ -83,7 +83,7 @@ struct nf_conntrack_kzorp * kz_get_kzorp_from_node(struct nf_conntrack_tuple_has
 	struct nf_conntrack_kzorp *kz;
 	kz = container_of((struct hlist_nulls_node *)p,
 			  struct nf_conntrack_kzorp,
-			  tuplehash[p->tuple.dst.dir].hnnode);
+			  tuplehash_orig.hnnode);
 	return kz;
 }
 
@@ -103,7 +103,7 @@ __kz_extension_find(struct nf_conn *ct)
 	struct hlist_nulls_node *n;
 	struct nf_conntrack_tuple_hash *h;
 	struct nf_conntrack_tuple_hash *th = &(ct->tuplehash[0]);
-	unsigned int zone = nf_ct_zone(ct);
+	unsigned int zone = nf_ct_zone_id(ct);
 
 	const u32 hash_index = kz_hash_get_hash_index_from_ct(ct, IP_CT_DIR_ORIGINAL);
 
@@ -127,7 +127,7 @@ kz_extension_find(struct nf_conn *ct)
 	struct nf_conntrack_kzorp *kz;
 	struct nf_conntrack_tuple_hash *h;
 	struct nf_conntrack_tuple_hash *th = &(ct->tuplehash[0]);
-	unsigned int zone = nf_ct_zone(ct);
+	unsigned int zone = nf_ct_zone_id(ct);
 
 	rcu_read_lock();
 
@@ -147,18 +147,9 @@ begin:
 	return NULL;
 }
 
-static void kz_extension_dealloc(struct nf_conntrack_kzorp *kz)
+static void kz_extension_free_rcu(struct rcu_head *rcu_head)
 {
-	enum ip_conntrack_dir dir;
-
-	for (dir = 0; dir < IP_CT_DIR_MAX; dir++) {
-	        const u32 hash_index = kz_hash_get_hash_index_from_tuple_and_zone(&kz->tuplehash[dir].tuple, kz->ct_zone);
-	        const u32 lock_index = kz_hash_get_lock_index(hash_index);
-
-		spin_lock(&kz_hash_locks[lock_index]);
-		hlist_nulls_del_rcu(&(kz->tuplehash[dir].hnnode));
-		spin_unlock(&kz_hash_locks[lock_index]);
-	}
+	struct nf_conntrack_kzorp *kz = container_of(rcu_head, struct nf_conntrack_kzorp, rcu);
 
 	if (kz->czone != NULL)
 		kz_zone_put(kz->czone);
@@ -168,7 +159,20 @@ static void kz_extension_dealloc(struct nf_conntrack_kzorp *kz)
 		kz_dispatcher_put(kz->dpt);
 	if (kz->svc != NULL)
 		kz_service_put(kz->svc);
+
 	kmem_cache_free(kz_cachep, kz);
+}
+
+static void kz_extension_dealloc(struct nf_conntrack_kzorp *kz)
+{
+	const u32 hash_index = kz_hash_get_hash_index_from_tuple_and_zone(&kz->tuplehash_orig.tuple, kz->ct_zone);
+	const u32 lock_index = kz_hash_get_lock_index(hash_index);
+
+	spin_lock(&kz_hash_locks[lock_index]);
+	hlist_nulls_del_init_rcu(&(kz->tuplehash_orig.hnnode));
+	spin_unlock(&kz_hash_locks[lock_index]);
+
+        call_rcu(&kz->rcu, kz_extension_free_rcu);
 }
 
 static void kz_extension_destroy(struct nf_conn *ct)
@@ -181,18 +185,18 @@ static void kz_extension_destroy(struct nf_conn *ct)
 	if ((kzorp->svc != NULL) && (kzorp->sid != 0) &&
 	    (kzorp->svc->type == KZ_SERVICE_FORWARD)) {
 		if (kz_log_ratelimit()) {
-			struct nf_conn_counter *acct;
+			struct nf_conn_counter *counter = (struct nf_conn_counter *) nf_conn_acct_find(ct);
+			if (counter) {
 
-			acct = nf_conn_acct_find(ct);
-			if (acct)
 				printk(KERN_INFO "kzorp (svc/%s:%lu): Ending forwarded session; "
-				       "orig_bytes='%llu', orig_packets='%llu', "
+				       "orig_bytes='%lld', orig_packets='%llu', "
 				       "reply_bytes='%llu', reply_packets='%llu'\n",
 				       kzorp->svc->name, kzorp->sid,
-				       acct[IP_CT_DIR_ORIGINAL].bytes,
-				       acct[IP_CT_DIR_ORIGINAL].packets,
-				       acct[IP_CT_DIR_REPLY].bytes,
-				       acct[IP_CT_DIR_REPLY].packets);
+				       (unsigned long long)atomic64_read(&counter[IP_CT_DIR_ORIGINAL].bytes),
+				       (unsigned long long)atomic64_read(&counter[IP_CT_DIR_ORIGINAL].packets),
+				       (unsigned long long)atomic64_read(&counter[IP_CT_DIR_REPLY].bytes),
+				       (unsigned long long)atomic64_read(&counter[IP_CT_DIR_REPLY].packets));
+			}
 			kz_log_session_verdict(KZ_VERDICT_ACCEPTED, "Ending forwarded session", ct, kzorp);
 		}
 	}
@@ -202,27 +206,17 @@ static void kz_extension_destroy(struct nf_conn *ct)
 
 PRIVATE void kz_extension_fill_one(struct nf_conntrack_kzorp *kzorp, struct nf_conn *ct,int direction)
 {
-	struct nf_conntrack_tuple_hash *th = &(kzorp->tuplehash[direction]);
 	const u32 hash_index = kz_hash_get_hash_index_from_ct(ct, direction);
         const u32 lock_index = kz_hash_get_lock_index(hash_index);
 
 	spin_lock(&kz_hash_locks[lock_index]);
-	hlist_nulls_add_head_rcu(&(th->hnnode), &kz_hash[hash_index]);
+	hlist_nulls_add_head_rcu(&(kzorp->tuplehash_orig.hnnode), &kz_hash[hash_index]);
 	spin_unlock(&kz_hash_locks[lock_index]);
-}
-
-PRIVATE void kz_extension_fill(struct nf_conntrack_kzorp *kzorp, struct nf_conn *ct)
-{
-	int i;
-	for (i = 0; i < IP_CT_DIR_MAX; i++) {
-		kz_extension_fill_one(kzorp,ct,i);
-	}
 }
 
 PRIVATE void kz_extension_copy_tuplehash(struct nf_conntrack_kzorp *kzorp, struct nf_conn *ct)
 {
-	memcpy(&(kzorp->tuplehash), &(ct->tuplehash),
-	       IP_CT_DIR_MAX * sizeof(struct nf_conntrack_tuple_hash));
+	memcpy(&(kzorp->tuplehash_orig), &(ct->tuplehash[IP_CT_DIR_ORIGINAL]), sizeof(struct nf_conntrack_tuple_hash));
 }
 
 static inline void
@@ -256,8 +250,8 @@ struct nf_conntrack_kzorp *kz_extension_create(struct nf_conn *ct)
 
 	nf_conntrack_kzorp_init(kzorp);
 	kz_extension_copy_tuplehash(kzorp,ct);
-	kz_extension_fill(kzorp,ct);
-	kzorp->ct_zone = nf_ct_zone(ct);
+	kz_extension_fill_one(kzorp,ct,IP_CT_DIR_ORIGINAL);
+	kzorp->ct_zone = nf_ct_zone_id(ct);
 	return kzorp;
 }
 

@@ -541,6 +541,9 @@ class KZorpAddServiceMessage(GenericNetlinkMessage):
         return "Service name='%s', flags='%s', type='%s', count='%d'" % \
                (self.name, flags_str, self.type_string, self.count)
 
+    def __hash__(self):
+        return hash(str(self))
+
 
 class KZorpAddProxyServiceMessage(KZorpAddServiceMessage):
 
@@ -811,12 +814,20 @@ class KZorpAddZoneMessage(GenericNetlinkMessage):
         res = "Zone name='%s', admin_parent='%s' count='%d'" % (self.name, self.pname, self.count)
         return res
 
+    def __hash__(self):
+        return hash(str(self))
+
+
 class KZorpObjectEntryMessage(GenericNetlinkMessage):
     def __init__(self, version):
         super(KZorpObjectEntryMessage, self).__init__(self.command, version)
 
     def __eq__(self, other):
         return str(self) == str(other)
+
+    def __hash__(self):
+        return hash(str(self))
+
 
 class KZorpObjectSubnetEntryMessage(KZorpObjectEntryMessage):
     def __init__(self, zone_name, family, address, mask = None):

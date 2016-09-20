@@ -1,4 +1,6 @@
 language: c
+sudo: required
+dist: trusty
 
 compiler:
   - gcc
@@ -13,9 +15,9 @@ before_install:
 
 before_script:
   - sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu/ trusty main universe multiverse"
-  - sudo apt-get update -qq
-  - sudo apt-get install -qq devscripts equivs
-  - sudo mk-build-deps -i -r
+  - sudo apt-get update
+  - sudo apt-get install --yes devscripts equivs
+  - sudo mk-build-deps -i -r -t " apt-get --no-install-recommends --yes"
 
 script:
   - autoreconf -if
@@ -31,24 +33,24 @@ after_success:
 
 env:
   global:
-    - secure: "ZV2dZSpOGdsbckOgzbi4pZBNEwVohsex+7UaYZUtsXunraDfYZGp0q91v6AhZhP9LmIWW/TKYzPY6QcTCbWkeyE3rL3cT5a4EcqlAk5OVZN9FtNjUcj4KLgX82Y/hP8cgoq9IUBzKnjUl6B7oXyFlsxMX5TjFYTrQ3JKfqSDV6s="
+    - secure: "DNYtkAhuVGiA0ktjoP3tk+moZy1dvWfnAjNIdcb7Hlutxz3z4B7fXcdrwuX3HRRBkPgNxGiG787SJAnaAx+BfUgPtECIlhEv/1Qg+fE3QkGsblCc2iB5McMyPeDSzsUEg7gBsy66T3nabOIummu0YFh4ai8sjceMLNsb/dJ657OcGtkShCSR5ybkZzx8jgIdR5vc3i1DdOh/Bi1h2H6k3+OwX2h8sPUrTLbb+FjnV1/9HsVl1T41t4ohdZEo6aro4XDipIpocLJsAiYpOlAN5iYuJexiLR/Fu8vnBrr+gXm4TS+2usdadCutY9nLxFoMefFoJnrZiRGzCL76KZ4MHt8Banbw2r8EWnCCx3YJcDd4kMLoFeKL2uVtl7wSmG/QHhlKMomV7VSCMjMdHQ4oyVfwuxdxc6O0vAaHGyVQE52029YMJUzuaDj92A6w/8/z0pecH8L0MnNcnD1x23aKkCryvlwEvkHlgpzJy6+kE/mCKtnCPU/tUky83bp1xctylDekhO76WlMqU7gePSO5WeOgmxSutfDkPGGD6XmZY5lPE1l7LXB6ol9MLmuBwybos5WR13+ZCG82kcdUebPSj+qUNO1JVdamhIcHXN7ipwZdWAhJ9Ln2DaQRbC4ghfmlJ+c4eRm8K2HYKi5TsmLtGsdpSyuJMXvmXDqaPKFfHok="
     - OBS_HOME=security
     - OBS_PROJECT=Zorp
     - OBS_MAJOR_VERSION=6
     - OBS_MINOR_VERSION=0
-    - OBS_MAINTENANCE_VERSION=6
+    - OBS_MAINTENANCE_VERSION=8
     - OBS_PACKAGE=kzorp
     - TEST_OS=Ubuntu
     - TEST_OS_VERSION=14.04
-    - secure: "Nap+7mVY7Qi9gofYXSaFUfk2YGq5rglKIsgx1Ty5epe5kmIcswrZX1mSdaIn6n7ReVt9zLqYoStlshUGhpj2FFmR+YBme05O+qNv9DsOomiDohNUz+ZDQKZZrc7klt6UALNvbjLcDSR3ZwvWUBKYEL94XJbqwSJuLRp0XYNciDg="
-    - KERNELRELEASE=3.13.0-24-generic
+    - secure: "LE92W8HweNQjNPN5qx1/GA9iaAy3j/ix7GvBinne0F3aHF3oeXobj/Q1fx5XEHT1cXl2J1VWepVe5ONrWaXS/euc5pdtqfSLHDzxNfCwlB8XI5I3SGLurzoi7YW8uT+aPy5kB9vkPxNeyXoCVNLtWMbWAYWs2ZJakEIoOAuDJsQrzt6PDZZsMd+Bwt3mjREXSuV61ZVmNxP7VcfuSZz6QCCrR2ajqcp2yompmUBFsNbyYqDydr2jVdF5zEIcLrh+lCoVYzW7wGWMVZ31mHMsjqLlbkbTaVJrg23lgVuYnJL4cPTFDCn54H1KarGjCPe6gmZIVMBOfRxlEckZ6Wqty4wtFLcYhShlcOcGz8VUJGUVCUuF/4yCNZWIBI5rnvQQ8EjQ8/NzEwWSQMRnIZD/WvdznEGND7CKSEqxkfDDenURsmTSUl8mFMhUM4GvrWqU6lynCc3NGnpgerXgOkvfhK7nenUgTyZWS7Kf/K1+m94WnGOqSeneBZU1PpG8FYq8kIHobmZdWRmyUIsd0KHCJGVnnbwUFv9lffzV8aA7XKBVn8updGYpfLOR4D1l3EM/AaY4H5zI4cpvtVSOU/5085pPy77HHgffF4nmn1GHprdBn5+mWjba0/GcqMl0gPv2PKX6AHXKFcfEoItDGBu22PrFMiN4SiI9QfdND3l/mxA="
+    - KERNELRELEASE=3.13.0-96-generic
 
 addons:
   coverity_scan:
     project:
-      name: "balabit/kzorp"
+      name: "Balasys/kzorp"
       description: "Build submitted via Travis CI"
     notification_email: coroner@pfeifferszilard.hu
     build_command_prepend: "autoreconf -if; ./configure; make clean"
     build_command:   "make all-driver -j4"
-    branch_pattern: 6.0.6
+    branch_pattern: 6.0.8

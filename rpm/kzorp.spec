@@ -1,5 +1,5 @@
 Name:                   kzorp
-Version:                6.0.6
+Version:                6.0.8
 Release:                1
 URL:                    https://www.balabit.com/network-security/zorp-gpl
 Source0:                kzorp_%{version}.tar.gz
@@ -27,6 +27,9 @@ BuildRequires:          kmod-compat
 %endif
 
 %if 0%{?fedora} || 0%{?rhel} || 0%{?centos}
+%global _enable_debug_package 0
+%global debug_package %{nil}
+%global __os_install_post /usr/lib/rpm/brp-compress %{nil}
 %{!?kernel_release: %global kernel_release %(sh -c "rpm -q kernel-devel | sed 's/kernel-devel-//'")}
 %else
 %{!?kernel_release: %global kernel_release %(sh -c "rpm -q kernel-default-devel | sed 's/kernel-default-devel-\\([0-9.]\\+-[0-9]\\+\\).*/\\1-default/'")}
@@ -101,13 +104,8 @@ General python bindings for kzorp.
 %dir %{python2_sitelib}/Zorp
 %{python2_sitelib}/Zorp/KZorp.py
 
-%if 0%{?fedora} || 0%{?rhel} || 0%{?centos}
-%attr(755,root,root) %{python2_sitelib}/Zorp/*.pyc
-%attr(755,root,root) %{python2_sitelib}/kzorp/*.pyc
-%attr(755,root,root) %{python2_sitelib}/Zorp/*.pyo
-%attr(755,root,root) %{python2_sitelib}/kzorp/*.pyo
-%endif
-
 %changelog
+* Fri Feb 26 2016 Balasys Zorp GPL Team <zorp@lists.balabit.hu> - 6.0.8-1
+  - New upstream release 6.0.8.0
 * Wed Feb 25 2015 BalaBit Zorp GPL Team <zorp@lists.balabit.hu> - 6.0.0-1
 - Initial packaging

@@ -20,10 +20,10 @@
 #include <linux/rcupdate.h>
 #include <linux/netfilter_ipv4.h>
 #include <linux/in.h>
+#include <linux/netfilter/nf_nat.h>
 #include <net/netfilter/nf_nat.h>
 #include <net/netfilter/nf_conntrack_extend.h>
 #include "kzorp_netlink.h"
-#include <net/ip_vs.h>
 #include <net/xfrm.h>
 #include <linux/if.h>
 #include <linux/netdevice.h>
@@ -51,8 +51,9 @@ typedef unsigned int kz_generation_t; /* integral with suitable size */
 typedef __be32 netlink_port_t;
 
 struct nf_conntrack_kzorp {
+	struct rcu_head rcu;
 	unsigned int ct_zone;
-	struct nf_conntrack_tuple_hash tuplehash[IP_CT_DIR_MAX];
+	struct nf_conntrack_tuple_hash tuplehash_orig;
 	unsigned long sid;
 	/*  "lookup data" from here to end */
 	kz_generation_t generation; /* config version */
@@ -232,9 +233,9 @@ struct kz_dispatcher {
 
 struct kz_service_nat_entry {
 	struct list_head list;
-	NAT_RANGE_TYPE src;
-	NAT_RANGE_TYPE dst;
-	NAT_RANGE_TYPE map;
+	struct nf_nat_range src;
+	struct nf_nat_range dst;
+	struct nf_nat_range map;
 };
 
 struct kz_service_info_fwd {
@@ -455,8 +456,8 @@ extern void kz_service_destroy(struct kz_service *service);
 extern struct kz_service *__kz_service_lookup_name(const struct list_head * const head,
 						   const char *name);
 extern struct kz_service *kz_service_lookup_name(const struct kz_config *cfg, const char *name);
-extern int kz_service_add_nat_entry(struct list_head *head, NAT_RANGE_TYPE *src,
-				    NAT_RANGE_TYPE *dst, NAT_RANGE_TYPE *map);
+extern int kz_service_add_nat_entry(struct list_head *head, struct nf_nat_range *src,
+				    struct nf_nat_range *dst, struct nf_nat_range *map);
 extern struct kz_service *kz_service_clone(const struct kz_service * const o);
 extern long kz_service_lock(struct kz_service * const service);
 extern void kz_service_unlock(struct kz_service * const service);
@@ -507,6 +508,15 @@ kz_dispatcher_put(struct kz_dispatcher *dispatcher)
 
 int kz_log_ratelimit(void);
 bool kz_log_session_verdict_enabled(void);
+
+static inline const __be32 *kz_nat_range_get_min_ip(const struct nf_nat_range *r) { return &r->min_addr.ip; }
+static inline const __be32 *kz_nat_range_get_max_ip(const struct nf_nat_range *r) { return &r->max_addr.ip; }
+static inline const __be16 *kz_nat_range_get_min_port(const struct nf_nat_range *r) { return &r->min_proto.udp.port; }
+static inline const __be16 *kz_nat_range_get_max_port(const struct nf_nat_range *r) { return &r->max_proto.udp.port; }
+static inline void kz_nat_range_set_min_ip(struct nf_nat_range *r, __be32 min_ip) { r->min_addr.ip = min_ip; }
+static inline void kz_nat_range_set_max_ip(struct nf_nat_range *r, __be32 max_ip) { r->max_addr.ip = max_ip; }
+static inline void kz_nat_range_set_min_port(struct nf_nat_range *r, __be16 min_port) { r->min_proto.udp.port = min_port; }
+static inline void kz_nat_range_set_max_port(struct nf_nat_range *r, __be16 max_port) { r->max_proto.udp.port = max_port; }
 
 /***********************************************************
  * Conntrack structure extension
@@ -614,7 +624,7 @@ extern struct kz_zone * kz_head_zone_lookup(const struct kz_head_z *h, const uni
 extern int kz_add_zone(struct kz_zone *zone);
 extern int kz_add_zone_subnet(struct kz_zone *zone, const struct kz_subnet * const zone_subnet);
 
-extern const NAT_RANGE_TYPE *kz_service_nat_lookup(const struct list_head * const head,
+extern const struct nf_nat_range *kz_service_nat_lookup(const struct list_head * const head,
 						    const __be32 saddr, const __be32 daddr,
 						    const __be16 sport, const __be16 dport,
 						    const u_int8_t proto);
@@ -668,7 +678,7 @@ extern void kz_nfnetlink_cleanup(void);
  ***********************************************************/
 
 #define kz_debug(format, args...) pr_debug("%s: " format, __FUNCTION__, ##args)
-#define kz_err(format, args...) pr_err("kzorp:%s: " format, __FUNCTION__, ##args)
+#define kz_err(format, args...) pr_err_ratelimited("kzorp:%s: " format, __FUNCTION__, ##args)
 
 #define kz_bind_debug(bind, msg) \
 { \
@@ -684,22 +694,48 @@ extern void kz_nfnetlink_cleanup(void);
 	} \
 }
 
-#define L4PROTOCOL_STRING_SIZE 20 /* same as ip_vs_proto_name buffer size */
+#define L4PROTOCOL_STRING_SIZE 20
 
 /**
- * l4proto_as_string() - return name of protocol from number
- * @protocol: protocol number
+ * l4proto_as_string() - return name of layer 4 protocol from number
+ * @l4proto: layer 4 protocol number
  * @buf: temporary buffer to use if no interned string representation is known
  *
- * Return a string representation of the protocol number: either the
- * protocol name for well-known protocols or the number itself
+ * Return a string representation of the layer 4 protocol number: either the
+ * layer 4 protocol name for well-known protocols or the number itself
  * converted to a string.
  */
 static inline const char *
-l4proto_as_string(u8 protocol, char buf[L4PROTOCOL_STRING_SIZE])
+l4proto_as_string(u8 l4proto, char buf[L4PROTOCOL_STRING_SIZE])
 {
-	strncpy(buf, ip_vs_proto_name(protocol), L4PROTOCOL_STRING_SIZE);
-	buf[L4PROTOCOL_STRING_SIZE - 1] = '\0';
+	const char *proto_name;
+
+	switch (l4proto) {
+	case IPPROTO_UDP:
+		proto_name = "UDP";
+		break;
+	case IPPROTO_TCP:
+		proto_name = "TCP";
+		break;
+	case IPPROTO_ICMP:
+		proto_name = "ICMP";
+		break;
+#ifdef CONFIG_IP_VS_IPV6
+	case IPPROTO_ICMPV6:
+		proto_name = "ICMPv6";
+		break;
+#endif
+	default:
+		proto_name = NULL;
+		break;
+	}
+
+	if (proto_name) {
+		strncpy(buf, proto_name, L4PROTOCOL_STRING_SIZE);
+		buf[L4PROTOCOL_STRING_SIZE - 1] = '\0';
+	} else {
+		sprintf(buf, "IP_%d", l4proto);
+	}
 
 	return buf;
 }

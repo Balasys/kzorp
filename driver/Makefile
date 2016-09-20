@@ -42,10 +42,6 @@ ifeq (,$(wildcard $(VERSION_H)))
 $(error Please run 'make modules_prepare' in $(KBUILD))
 endif
 
-ifeq (,$(wildcard $(KBUILD)/include/net/netfilter/nf_tproxy_core.h))
-	EXTRA_CFLAGS += -DWITH_KZ_TPROXY_CORE_H
-endif
-
 KVERS := $(shell sed -ne 's/"//g;s/^\#define UTS_RELEASE //p' $(VERSION_H))
 
 ifeq (,$(KVERS))
