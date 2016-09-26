@@ -55,9 +55,6 @@ esac
 
 TestRoot="${Root}/tests"
 OSImageDir="${Root}/disk_images"
-OSImageName="disk.img.dist_${OSVersion}_${Architecture}"
-OSImagePath="${OSImageDir}/${OSImageName}"
-OSImagePathSeed="${OSImageDir}/${OSImageName}.seed"
 
 if [ -z ${KMemLeakURL} ]; then
   ImageURL="http://cloud-images.ubuntu.com/server/releases/${OSVersion}/release"
@@ -65,6 +62,10 @@ if [ -z ${KMemLeakURL} ]; then
 else
   ImageURL=${KMemLeakURL}
 fi
+
+OSImageName="${ImageURL##*/}"  # The part after the last '/' character (the actual filename)
+OSImagePath="${OSImageDir}/${OSImageName}"
+OSImagePathSeed="${OSImageDir}/${OSImageName}.seed"
 
 if [ ! -d ${OSImageDir} ]; then
   mkdir -p ${OSImageDir}
