@@ -582,7 +582,7 @@ kz_extension_add(struct nf_conn *ct,
 
 	/* implicit:  kzorp->sid = 0; */
 	kz_extension_fill_with_lookup_data_rcu(kzorp, ctinfo, skb, in, l3proto, p_cfg);
-	kzorp_in_cache = kz_extension_add_to_cache(kzorp, &ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple, kz_nf_ct_zone_id(ct));
+	kzorp_in_cache = kz_extension_add_to_cache(kzorp, ct);
 	if (unlikely(kzorp != kzorp_in_cache)) {
 		kz_extension_put(kzorp);
 		kzorp = kzorp_in_cache;
