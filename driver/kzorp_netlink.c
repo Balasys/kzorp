@@ -1018,12 +1018,7 @@ nla_put_failure:
  * Netlink message processing
  ***********************************************************/
 
-static struct genl_family kznl_family = {
-	.id = GENL_ID_GENERATE,
-	.name = "kzorp",
-	.version = 2,
-	.maxattr = KZNL_ATTR_TYPE_COUNT,
-};
+static struct genl_family kznl_family;
 
 static int
 kznl_recv_start(struct sk_buff *skb, struct genl_info *info)
@@ -4240,6 +4235,15 @@ static struct genl_ops kznl_ops[] = {
 #undef SETUP_kznl_ops
 };
 
+static struct genl_family kznl_family = {
+	.name = "kzorp",
+	.version = 2,
+	.maxattr = KZNL_ATTR_TYPE_COUNT,
+	.module = THIS_MODULE,
+	.ops = kznl_ops,
+	.n_ops = ARRAY_SIZE(kznl_ops),
+};
+
 static struct notifier_block kz_rtnl_notifier = {
 	.notifier_call	= kznl_netlink_event,
 };
@@ -4253,7 +4257,7 @@ int __init kz_netlink_init(void)
 
 	/* register netlink notifier and genetlink family */
 	netlink_register_notifier(&kz_rtnl_notifier);
-	res = genl_register_family_with_ops(&kznl_family, kznl_ops);
+	res = genl_register_family(&kznl_family);
 	if (res < 0) {
 		pr_err_ratelimited("failed to register generic netlink family; err='%d'\n", res);
 		goto cleanup_notifier;
