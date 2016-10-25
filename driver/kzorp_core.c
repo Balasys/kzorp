@@ -590,6 +590,32 @@ kz_extension_add(struct nf_conn *ct,
 	return kzorp;
 }
 
+bool
+kz_zone_lookup_from_skb(const struct sk_buff *skb, int l3proto, struct kz_zone **src_zone, struct kz_zone **dst_zone) {
+	u8 l4proto;
+	union nf_inet_addr *saddr, *daddr;
+	u16 src_port, dst_port;
+	u8 proto_type, proto_subtype;
+	const struct kz_config *kzorp_config;
+
+	if (!kz_extension_get_traffic_props_from_skb(skb, l3proto,
+						     &l4proto, &saddr, &daddr,
+						     &src_port, &dst_port,
+						     &proto_type, &proto_subtype))
+		return NULL;
+
+	rcu_read_lock();
+	kzorp_config = rcu_dereference(kz_config_rcu);
+	*src_zone = kz_head_zone_lookup(&kzorp_config->zones, saddr, l3proto);
+	*dst_zone = kz_head_zone_lookup(&kzorp_config->zones, daddr, l3proto);
+	kz_zone_get(*src_zone);
+	kz_zone_get(*dst_zone);
+	rcu_read_unlock();
+
+	return true;
+}
+EXPORT_SYMBOL_GPL(kz_zone_lookup_from_skb);
+
 /* returns consolidated kzorp lookup info; caches it in ct, and uses
    the cache if valid;
    returns NULL only if it's not possible to add kzorp extension to ct

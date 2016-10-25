@@ -541,6 +541,7 @@ extern void kz_head_zone_init(struct kz_head_z *h);
 extern int kz_head_zone_build(struct kz_head_z *h);
 extern void kz_head_zone_destroy(struct kz_head_z *h);
 extern struct kz_zone * kz_head_zone_lookup(const struct kz_head_z *h, const union nf_inet_addr * addr, u_int8_t proto);
+extern bool kz_zone_lookup_from_skb(const struct sk_buff *skb, int l3proto, struct kz_zone **src_zone, struct kz_zone **dst_zone);
 
 extern int kz_add_zone(struct kz_zone *zone);
 extern int kz_add_zone_subnet(struct kz_zone *zone, const struct kz_subnet * const zone_subnet);

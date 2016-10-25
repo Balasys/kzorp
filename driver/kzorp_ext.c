@@ -181,6 +181,7 @@ kz_extension_find(const struct nf_conn *ct)
 
 	return __kz_extension_find(tuple, zone_id);
 }
+EXPORT_SYMBOL_GPL(kz_extension_find);
 
 void kz_extension_destroy(struct kz_extension *kzorp)
 {
