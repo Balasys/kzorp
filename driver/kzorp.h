@@ -33,7 +33,7 @@
 #include "kzorp_internal.h"
 
 #define KZ_MAJOR_VERSION  4
-#define KZ_COMPAT_VERSION 5
+#define KZ_COMPAT_VERSION 6
 
 enum KZ_ALLOC_TYPE
 {
@@ -237,6 +237,7 @@ struct kz_service_nat_entry {
 	struct nf_nat_range src;
 	struct nf_nat_range dst;
 	struct nf_nat_range map;
+	uint8_t l3proto;
 };
 
 struct kz_service_info_fwd {
@@ -457,8 +458,10 @@ extern void kz_service_destroy(struct kz_service *service);
 extern struct kz_service *__kz_service_lookup_name(const struct list_head * const head,
 						   const char *name);
 extern struct kz_service *kz_service_lookup_name(const struct kz_config *cfg, const char *name);
-extern int kz_service_add_nat_entry(struct list_head *head, struct nf_nat_range *src,
-				    struct nf_nat_range *dst, struct nf_nat_range *map);
+extern int kz_service_add_nat_entry(struct list_head *head,
+				    struct nf_nat_range *src,
+				    struct nf_nat_range *dst,
+				    struct nf_nat_range *map, uint8_t l3proto);
 extern struct kz_service *kz_service_clone(const struct kz_service * const o);
 extern long kz_service_lock(struct kz_service * const service);
 extern void kz_service_unlock(struct kz_service * const service);
@@ -509,15 +512,6 @@ kz_dispatcher_put(struct kz_dispatcher *dispatcher)
 
 int kz_log_ratelimit(void);
 bool kz_log_session_verdict_enabled(void);
-
-static inline const __be32 *kz_nat_range_get_min_ip(const struct nf_nat_range *r) { return &r->min_addr.ip; }
-static inline const __be32 *kz_nat_range_get_max_ip(const struct nf_nat_range *r) { return &r->max_addr.ip; }
-static inline const __be16 *kz_nat_range_get_min_port(const struct nf_nat_range *r) { return &r->min_proto.udp.port; }
-static inline const __be16 *kz_nat_range_get_max_port(const struct nf_nat_range *r) { return &r->max_proto.udp.port; }
-static inline void kz_nat_range_set_min_ip(struct nf_nat_range *r, __be32 min_ip) { r->min_addr.ip = min_ip; }
-static inline void kz_nat_range_set_max_ip(struct nf_nat_range *r, __be32 max_ip) { r->max_addr.ip = max_ip; }
-static inline void kz_nat_range_set_min_port(struct nf_nat_range *r, __be16 min_port) { r->min_proto.udp.port = min_port; }
-static inline void kz_nat_range_set_max_port(struct nf_nat_range *r, __be16 max_port) { r->max_proto.udp.port = max_port; }
 
 /***********************************************************
  * Conntrack structure extension
@@ -625,10 +619,13 @@ extern struct kz_zone * kz_head_zone_lookup(const struct kz_head_z *h, const uni
 extern int kz_add_zone(struct kz_zone *zone);
 extern int kz_add_zone_subnet(struct kz_zone *zone, const struct kz_subnet * const zone_subnet);
 
-extern const struct nf_nat_range *kz_service_nat_lookup(const struct list_head * const head,
-						    const __be32 saddr, const __be32 daddr,
-						    const __be16 sport, const __be16 dport,
-						    const u_int8_t proto);
+extern const struct nf_nat_range *kz_service_nat_lookup(const struct list_head
+							*const head,
+							const union nf_inet_addr
+							*saddr,
+							const union nf_inet_addr
+							*daddr,
+							const u_int8_t l3proto);
 
 struct kz_traffic_props {
 	sa_family_t l3proto;

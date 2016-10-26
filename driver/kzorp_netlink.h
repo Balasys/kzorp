@@ -90,6 +90,12 @@ enum kznl_attr_types {
 	KZNL_ATTR_ZONE_SUBNET_NUM,
 	KZNL_ATTR_ZONE_IP,
 	KZNL_ATTR_ACCOUNTING_COUNTER_NUM,
+	KZNL_ATTR_SERVICE_NAT_SRC_MIN_IP,
+	KZNL_ATTR_SERVICE_NAT_SRC_MAX_IP,
+	KZNL_ATTR_SERVICE_NAT_DST_MIN_IP,
+	KZNL_ATTR_SERVICE_NAT_DST_MAX_IP,
+	KZNL_ATTR_SERVICE_NAT_MAP_MIN_IP,
+	KZNL_ATTR_SERVICE_NAT_MAP_MAX_IP,
 	KZNL_ATTR_TYPE_COUNT
 };
 
@@ -131,19 +137,6 @@ enum kzf_service_params_flags {
 struct kza_service_params {
 	__be32 flags;
 	__u8 type;
-} __attribute__ ((packed));
-
-enum kzf_service_nat_params_flags {
-	KZF_SERVICE_NAT_MAP_IPS		   = 1 << 0,
-	KZF_SERVICE_NAT_MAP_PROTO_SPECIFIC = 1 << 1,
-	KZF_SERVICE_NAT_MAP_PUBLIC_FLAGS   = KZF_SERVICE_NAT_MAP_IPS |
-					     KZF_SERVICE_NAT_MAP_PROTO_SPECIFIC
-};
-
-struct kza_service_nat_params {
-	__be32 flags;
-	__be32 min_ip, max_ip;
-	__be16 min_port, max_port;
 } __attribute__ ((packed));
 
 enum kz_service_ipv4_deny_method {

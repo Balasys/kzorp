@@ -89,7 +89,8 @@ Packages="
  - autoconf
  - libtool
  - python-prctl
- - python-nose"
+ - python-nose
+ - python-netaddr"
 if [ -z ${KMemLeakURL} ]; then
   Packages="$Packages
  - linux-headers-generic"
