@@ -43,20 +43,6 @@ Description: mixed packet filter/application level gateway
  packet filter/application level gateway functionality on Linux.
  Kzorp is used by Zorp, and anyone is welcome to use it with other gateways.
 
-Package: kzorp
-Architecture: any
-Section: kernel
-Conflicts: kzorp (<< 6.0), kzorp-dkms
-Replaces: kzorp (<< 6.0)
-Provides: zorp-kernel-module
-Depends: ${misc:Depends}
-Description: mixed packet filter/application level gateway, kernel module
- Kzorp is a open source set of mechanisms to implement mixed
- packet filter/application level gateway functionality on Linux.
- Kzorp is used by Zorp, and anyone is welcome to use it with other gateways.
- .
- This package provides the binary kernel modules.
-
 Package: kzorp-dkms
 Architecture: all
 Section: kernel
