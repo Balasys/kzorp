@@ -48,26 +48,6 @@ PRIVATE struct kmem_cache *kz_cachep;
 
 static void (*nf_ct_destroy_orig)(struct nf_conntrack *) __rcu __read_mostly;
 
-
-/*
- * the same as in nf_conntrack_core.c
- * do not call directly, use 
- */
-static u32
-hash_conntrack_raw(const struct nf_conntrack_tuple *tuple, u16 zone_id)
-{
-	unsigned int n;
-
-	/* The direction must be ignored, so we hash everything up to the
-	 * destination ports (which is a multiple of 4) and treat the last
-	 * three bytes manually.
-	 */
-	n = (sizeof(tuple->src) + sizeof(tuple->dst.u3)) / sizeof(u32);
-	return jhash2((u32 *) tuple, n, zone_id ^ nf_conntrack_hash_rnd ^
-		      (((__force __u16) tuple->dst.u.all << 16) |
-		       tuple->dst.protonum));
-}
-
 static inline u32
 kz_hash_get_lock_index(const u32 hash_index)
 {
@@ -75,16 +55,13 @@ kz_hash_get_lock_index(const u32 hash_index)
 }
 
 static inline u32
-kz_hash_get_hash_index_from_tuple_and_zone(const struct nf_conntrack_tuple *tuple, u16 zone_id)
+kz_extension_get_hash_index(const struct nf_conn *ct)
 {
-	const u32 index = hash_conntrack_raw(tuple, zone_id) >> (32 - kz_hash_shift);
-	return index;
-}
+	const u32 length = sizeof(ct) / sizeof(u32);
+	const u32 *key = (const u32 *) &ct;
+	const u32 hash = jhash2(key, length, nf_conntrack_hash_rnd);
+	const u32 index = hash >> (32 - kz_hash_shift);
 
-static inline u32
-kz_extension_get_hash_index(const struct nf_conntrack_tuple *tuple, u16 zone_id)
-{
-	const u32 index = kz_hash_get_hash_index_from_tuple_and_zone(tuple, zone_id);
 	return index;
 }
 
@@ -98,23 +75,22 @@ kz_extension_get_from_node(struct hlist_nulls_node *n)
 
 static inline bool
 __kz_extension_key_equal(const struct kz_extension *kzorp,
-			 const struct nf_conntrack_tuple *tuple,
-			 u16 zone_id)
+		         const struct nf_conn *ct)
 {
-	return nf_ct_tuple_equal(tuple, &kzorp->tuple_orig) && kzorp && kzorp->zone_id == zone_id;
+	return kzorp->ct == ct;
 }
 
 static struct kz_extension *
-____kz_extension_find(const struct nf_conntrack_tuple *tuple, u16 zone_id)
+____kz_extension_find(const struct nf_conn *ct)
 {
 	struct hlist_nulls_node *n;
 	struct kz_extension *kzorp;
 
-	const u32 hash_index = kz_extension_get_hash_index(tuple, zone_id);
+	const u32 hash_index = kz_extension_get_hash_index(ct);
 
 begin:
 	hlist_nulls_for_each_entry_rcu(kzorp, n, &kz_hash[hash_index], hnnode) {
-		if (__kz_extension_key_equal(kzorp, tuple, zone_id)) {
+		if (__kz_extension_key_equal(kzorp, ct)) {
 			this_cpu_inc(kz_hash_stats->found);
 			return kzorp;
 		}
@@ -130,7 +106,7 @@ begin:
 }
 
 static inline struct kz_extension *
-__kz_extension_find(const struct nf_conntrack_tuple *tuple, u16 zone_id)
+__kz_extension_find(const struct nf_conn *ct)
 {
 	struct kz_extension *kzorp;
 
@@ -138,7 +114,7 @@ __kz_extension_find(const struct nf_conntrack_tuple *tuple, u16 zone_id)
 
 begin:
 
-	kzorp = ____kz_extension_find(tuple, zone_id);
+	kzorp = ____kz_extension_find(ct);
 	if (kzorp) {
 		kzorp = kz_extension_get(kzorp);
 		/*
@@ -155,7 +131,7 @@ begin:
 		 *
 		 * http://lxr.free-electrons.com/source/include/linux/slab.h#L31
 		 */
-		if (unlikely(!__kz_extension_key_equal(kzorp, tuple, zone_id))) {
+		if (unlikely(!__kz_extension_key_equal(kzorp, ct))) {
 			this_cpu_inc(kz_hash_stats->key_not_equal);
 			kz_extension_put(kzorp);
 			goto begin;
@@ -170,16 +146,10 @@ begin:
 struct kz_extension *
 kz_extension_find(const struct nf_conn *ct)
 {
-	const struct nf_conntrack_tuple *tuple;
-	u16 zone_id;
-
 	if (ct == NULL)
 		return NULL;
 
-	tuple = &ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple;
-	zone_id = kz_nf_ct_zone_id(ct);
-
-	return __kz_extension_find(tuple, zone_id);
+	return __kz_extension_find(ct);
 }
 EXPORT_SYMBOL_GPL(kz_extension_find);
 
@@ -225,30 +195,34 @@ static void kz_log_accounting(const struct kz_extension *kzorp, struct nf_conn *
 
 static inline void
 kz_extension_prepare_to_cache_addition(struct kz_extension *kzorp,
+				       const struct nf_conn *ct,
 				       const struct nf_conntrack_tuple *tuple,
 				       u16 zone_id)
 {
+	kzorp->ct = ct;
 	memcpy(&kzorp->tuple_orig, tuple, sizeof(struct nf_conntrack_tuple));
 	kzorp->zone_id = zone_id;
 }
 
 struct kz_extension *
-kz_extension_add_to_cache(struct kz_extension *kzorp, const struct nf_conntrack_tuple *tuple, u16 zone_id)
+kz_extension_add_to_cache(struct kz_extension *kzorp, const struct nf_conn *ct)
 {
 	u32 hash_index;
 	u32 lock_index;
 	struct hlist_nulls_node *n;
 	struct kz_extension *kzorp_find;
+	const struct nf_conntrack_tuple *tuple = &ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple;
+	const u16 zone_id = kz_nf_ct_zone_id(ct);
 
-	kz_extension_prepare_to_cache_addition(kzorp, tuple, zone_id);
+	kz_extension_prepare_to_cache_addition(kzorp, ct, tuple, zone_id);
 
 	local_bh_disable();
-	hash_index = kz_extension_get_hash_index(tuple, zone_id);
+	hash_index = kz_extension_get_hash_index(ct);
 	lock_index = kz_hash_get_lock_index(hash_index);
 	spin_lock(&kz_hash_locks[lock_index]);
 
 	hlist_nulls_for_each_entry_rcu(kzorp_find, n, &kz_hash[hash_index], hnnode) {
-		if (__kz_extension_key_equal(kzorp_find, tuple, zone_id)) {
+		if (__kz_extension_key_equal(kzorp_find, ct)) {
 			pr_err("Duplicate kzorp entry found in cache;\n");
 			spin_unlock(&kz_hash_locks[lock_index]);
 			local_bh_enable();
@@ -306,11 +280,12 @@ kz_extension_remove_from_cache(struct kz_extension *kzorp)
 
 	local_bh_disable();
 
-	hash_index = kz_extension_get_hash_index(&kzorp->tuple_orig, kzorp->zone_id);
+	hash_index = kz_extension_get_hash_index(kzorp->ct);
 	lock_index = kz_hash_get_lock_index(hash_index);
 
 	spin_lock(&kz_hash_locks[lock_index]);
-	hlist_nulls_del_init_rcu(&kzorp->hnnode);
+	BUG_ON(hlist_nulls_unhashed(&kzorp->hnnode));
+	hlist_nulls_del_rcu(&kzorp->hnnode);
 	atomic_dec(&kz_hash_lengths[hash_index]);
 	spin_unlock(&kz_hash_locks[lock_index]);
 
