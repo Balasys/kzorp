@@ -120,7 +120,7 @@ mark_zone_path(unsigned long *mask, const struct kz_zone *zone)
 static __always_inline unsigned int
 mask_to_size_v4(const struct in_addr * const mask)
 {
-	if (mask == 0U)
+	if (mask == NULL)
 		return 0;
 	else
 		return 32 - fls(ntohl(~mask->s_addr));

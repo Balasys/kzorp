@@ -147,7 +147,7 @@ kz_bind_new(void)
 }
 
 struct kz_bind *
-kz_bind_clone(const struct kz_bind const *_bind)
+kz_bind_clone(const struct kz_bind *_bind)
 {
 	struct kz_bind *bind;
 
@@ -210,7 +210,7 @@ kz_instance_create(const char *name, const unsigned int len, const netlink_port_
 }
 
 /* !!! must be called with the instance mutex held !!! */
-void
+static void
 kz_instance_delete(struct kz_instance * const i)
 {
 	pr_debug("name='%s'\n", i->name);
@@ -289,7 +289,7 @@ static_cfg_cleanup(void)
 	kz_head_zone_destroy(&static_config.zones);
 }
 
-struct kz_config *kz_config_rcu = &static_config;
+struct kz_config __rcu *kz_config_rcu = &static_config;
 
 struct kz_config *kz_config_new(void)
 {
@@ -336,67 +336,47 @@ kz_config_swap(struct kz_config * new_cfg)
  * Lookup
  ***********************************************************/
 
-void nfct_kzorp_lookup_rcu(struct nf_conntrack_kzorp * kzorp,
-	enum ip_conntrack_info ctinfo,
-	const struct sk_buff *skb,
-	const struct net_device * const in,
-	const u8 l3proto,
-	const struct kz_config **p_cfg)
-{
-	struct kz_traffic_props traffic_props;
-	u_int32_t rule_id = 0;
-	struct timespec now;
-	struct kz_zone *czone = NULL;
-	struct kz_zone *szone = NULL;
-	struct kz_dispatcher *dpt = NULL;
-	struct kz_service *svc = NULL;
+static bool
+kz_extension_get_traffic_props_from_skb(const struct sk_buff *skb, int l3proto,
+					u8 *l4proto,
+					union nf_inet_addr **saddr, union nf_inet_addr **daddr,
+					u16 *_src_port, u16 *_dst_port,
+					u8 *proto_type, u8 *proto_subtype) {
 	struct {
 		u16 src;
 		u16 dst;
 	} __attribute__((packed)) *ports, _ports = { .src = 0, .dst = 0 };
-	const struct kz_config * loc_cfg;
-	u8 l4proto;
-	u_int32_t proto_type = 0, proto_subtype = 0;
-	union nf_inet_addr *saddr, *daddr;
-        struct kz_reqids reqids;
-	int sp_idx;
 
 	ports = &_ports;
-
-	if (p_cfg == NULL)
-		p_cfg = &loc_cfg;
-
-	*p_cfg = rcu_dereference(kz_config_rcu);
-
-	BUG_ON(*p_cfg == NULL);
-	kzorp->generation = (*p_cfg)->generation;
+	*proto_type = 0;
+	*proto_subtype = 0;
 
 	switch (l3proto) {
 	case NFPROTO_IPV4:
 	{
 		const struct iphdr * const iph = ip_hdr(skb);
 
-		l4proto = iph->protocol;
-		saddr = (union nf_inet_addr *) &iph->saddr;
-		daddr = (union nf_inet_addr *) &iph->daddr;
+		*l4proto = iph->protocol;
+		*saddr = (union nf_inet_addr *) &iph->saddr;
+		*daddr = (union nf_inet_addr *) &iph->daddr;
 
-		if ((l4proto == IPPROTO_TCP) || (l4proto == IPPROTO_UDP)) {
+		if ((iph->protocol == IPPROTO_TCP) || (iph->protocol == IPPROTO_UDP)) {
 			ports = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_ports), &_ports);
 			if (unlikely(ports == NULL))
-				goto done;
+				return false;
 			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI4:%u', dst='%pI4:%u'\n",
 				 iph->protocol, &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
 		}
-		else if (l4proto == IPPROTO_ICMP) {
+		else if (iph->protocol == IPPROTO_ICMP) {
 			const struct icmphdr *icmp;
 			struct icmphdr _icmp = { .type = 0, .code = 0 };
 			icmp = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_icmp), &_icmp);
 			if (unlikely(icmp == NULL))
-				goto done;
+				return false;
 
-			proto_type = icmp->type;
-			proto_subtype = icmp->code;
-			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI4', dst='%pI4', type='%d', code='%d'\n", l4proto,
+			*proto_type = icmp->type;
+			*proto_subtype = icmp->code;
+			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI4', dst='%pI4', type='%d', code='%d'\n", iph->protocol,
 				 &iph->saddr, &iph->daddr, icmp->type, icmp->code);
 		}
 	}
@@ -411,30 +391,30 @@ void nfct_kzorp_lookup_rcu(struct nf_conntrack_kzorp * kzorp,
 		__be16 frag_offp;
 		thoff = ipv6_skip_exthdr(skb, sizeof(*iph), &tproto, &frag_offp);
 		if (unlikely(thoff < 0))
-			goto done;
+			return false;
 
-		l4proto = tproto;
-		saddr = (union nf_inet_addr *) &iph->saddr;
-		daddr = (union nf_inet_addr *) &iph->daddr;
+		*l4proto = tproto;
+		*saddr = (union nf_inet_addr *) &iph->saddr;
+		*daddr = (union nf_inet_addr *) &iph->daddr;
 
-		if ((l4proto == IPPROTO_TCP) || (l4proto == IPPROTO_UDP)) {
+		if ((tproto == IPPROTO_TCP) || (tproto == IPPROTO_UDP)) {
 			/* get info from transport header */
 			ports = skb_header_pointer(skb, thoff, sizeof(_ports), &_ports);
 			if (unlikely(ports == NULL))
-				goto done;
-			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI6c:%u', dst='%pI6c:%u'\n", l4proto,
+				return false;
+			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI6c:%u', dst='%pI6c:%u'\n", tproto,
 				 &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
 		}
-		else if (l4proto == IPPROTO_ICMPV6) {
+		else if (tproto == IPPROTO_ICMPV6) {
 			const struct icmp6hdr *icmp;
 			struct icmp6hdr _icmp = { .icmp6_type = 0, .icmp6_code = 0 };
 			icmp = skb_header_pointer(skb, thoff, sizeof(_icmp), &_icmp);
 			if (unlikely(icmp == NULL))
-				goto done;
+				return false;
 
-			proto_type = icmp->icmp6_type;
-			proto_subtype = icmp->icmp6_code;
-			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI6c', dst='%pI6c', type='%d', code='%d'\n", l4proto,
+			*proto_type = icmp->icmp6_type;
+			*proto_subtype = icmp->icmp6_code;
+			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI6c', dst='%pI6c', type='%d', code='%d'\n", tproto,
 				 &iph->saddr, &iph->daddr, icmp->icmp6_type, icmp->icmp6_code);
 		}
 
@@ -444,6 +424,55 @@ void nfct_kzorp_lookup_rcu(struct nf_conntrack_kzorp * kzorp,
 		BUG();
 		break;
 	}
+
+	*_src_port = ports->src;
+	*_dst_port = ports->dst;
+
+	return true;
+}
+
+/* fills kzorp structure with lookup data
+   rcu_dereferenced config is stored in p_cfg
+   call under rcu_read_lock() even if p_cfg==NULL!
+   leaves non-lookup fields untouched!
+   pointers in the passed structure must be valid/NULL,
+   as they are released while the new ones addrefed
+*/
+static void kz_extension_fill_with_lookup_data_rcu(struct kz_extension * kzorp,
+	enum ip_conntrack_info ctinfo,
+	const struct sk_buff *skb,
+	const struct net_device * const in,
+	const u8 l3proto,
+	const struct kz_config **p_cfg)
+{
+	struct kz_traffic_props traffic_props;
+	u_int32_t rule_id = 0;
+	struct timespec now;
+	struct kz_zone *czone = NULL;
+	struct kz_zone *szone = NULL;
+	struct kz_dispatcher *dpt = NULL;
+	struct kz_service *svc = NULL;
+	u16 sport, dport;
+	const struct kz_config * loc_cfg;
+	u8 l4proto;
+	u8 proto_type = 0, proto_subtype = 0;
+	union nf_inet_addr *saddr, *daddr;
+        struct kz_reqids reqids;
+	int sp_idx;
+
+	if (p_cfg == NULL)
+		p_cfg = &loc_cfg;
+
+	*p_cfg = rcu_dereference(kz_config_rcu);
+
+	BUG_ON(*p_cfg == NULL);
+	kzorp->generation = (*p_cfg)->generation;
+
+	if (!kz_extension_get_traffic_props_from_skb(skb, l3proto, &l4proto,
+						     &saddr, &daddr,
+						     &sport, &dport,
+						     &proto_type, &proto_subtype))
+		goto done;
 
 	/* copy IPSEC reqids from secpath to our own structure */
 	if (skb->sp != NULL) {
@@ -464,8 +493,8 @@ void nfct_kzorp_lookup_rcu(struct nf_conntrack_kzorp * kzorp,
 	switch (l4proto) {
 	case IPPROTO_TCP:
 	case IPPROTO_UDP:
-		traffic_props.src_port = ntohs(ports->src);
-		traffic_props.dst_port = ntohs(ports->dst);
+		traffic_props.src_port = ntohs(sport);
+		traffic_props.dst_port = ntohs(dport);
 		break;
 
 	case IPPROTO_ICMP:
@@ -513,9 +542,8 @@ done:
 
 	return;
 }
-EXPORT_SYMBOL_GPL(nfct_kzorp_lookup_rcu);
 
-static struct nf_conntrack_kzorp *
+static struct kz_extension *
 kz_extension_add(struct nf_conn *ct,
 		 enum ip_conntrack_info ctinfo,
 		 const struct sk_buff *skb,
@@ -523,7 +551,7 @@ kz_extension_add(struct nf_conn *ct,
 		 const u8 l3proto,
 		 const struct kz_config **p_cfg)
 {
-	struct nf_conntrack_kzorp *kzorp;
+	struct kz_extension *kzorp, *kzorp_in_cache;
 
 	/* if the conntrack is confirmed extension must not be added */
 	if (unlikely(nf_ct_is_confirmed(ct))) {
@@ -548,31 +576,68 @@ kz_extension_add(struct nf_conn *ct,
 		return NULL;
 	}
 
-	kzorp = kz_extension_create(ct);
+	kzorp = kz_extension_create();
 	if (unlikely(!kzorp))
 		return NULL;
 
 	/* implicit:  kzorp->sid = 0; */
-	nfct_kzorp_lookup_rcu(kzorp, ctinfo, skb, in, l3proto, p_cfg);
+	kz_extension_fill_with_lookup_data_rcu(kzorp, ctinfo, skb, in, l3proto, p_cfg);
+	kzorp_in_cache = kz_extension_add_to_cache(kzorp, &ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple, kz_nf_ct_zone_id(ct));
+	if (unlikely(kzorp != kzorp_in_cache)) {
+		kz_extension_put(kzorp);
+		kzorp = kzorp_in_cache;
+	}
 	return kzorp;
 }
 
-const struct nf_conntrack_kzorp *
-kz_extension_update(struct nf_conn *ct,
+bool
+kz_zone_lookup_from_skb(const struct sk_buff *skb, int l3proto, struct kz_zone **src_zone, struct kz_zone **dst_zone) {
+	u8 l4proto;
+	union nf_inet_addr *saddr, *daddr;
+	u16 src_port, dst_port;
+	u8 proto_type, proto_subtype;
+	const struct kz_config *kzorp_config;
+
+	if (!kz_extension_get_traffic_props_from_skb(skb, l3proto,
+						     &l4proto, &saddr, &daddr,
+						     &src_port, &dst_port,
+						     &proto_type, &proto_subtype))
+		return NULL;
+
+	rcu_read_lock();
+	kzorp_config = rcu_dereference(kz_config_rcu);
+	*src_zone = kz_head_zone_lookup(&kzorp_config->zones, saddr, l3proto);
+	*dst_zone = kz_head_zone_lookup(&kzorp_config->zones, daddr, l3proto);
+	kz_zone_get(*src_zone);
+	kz_zone_get(*dst_zone);
+	rcu_read_unlock();
+
+	return true;
+}
+EXPORT_SYMBOL_GPL(kz_zone_lookup_from_skb);
+
+/* returns consolidated kzorp lookup info; caches it in ct, and uses
+   the cache if valid;
+   returns NULL only if it's not possible to add kzorp extension to ct
+   rcu_dereferenced config is stored in p_cfg
+  call under rcu_read_lock() even if p_cfg==NULL!
+*/
+static struct kz_extension *
+kz_extension_find_or_add(struct nf_conn *ct,
 		    enum ip_conntrack_info ctinfo,
 		    const struct sk_buff *skb,
 		    const struct net_device * const in,
 		    const u8 l3proto,
 		    const struct kz_config **p_cfg)
 {
-	struct nf_conntrack_kzorp *kzorp;
+	struct kz_extension *kzorp;
 	const struct kz_config *kzorp_config;
 
 	kzorp_config = rcu_dereference(kz_config_rcu);
 	kzorp = kz_extension_find(ct);
 	if (kzorp) {
 		if (unlikely(!kz_generation_valid(kzorp_config, kzorp->generation)))
-			nfct_kzorp_lookup_rcu(kzorp, ctinfo, skb, in, l3proto, &kzorp_config);
+			kz_extension_fill_with_lookup_data_rcu(kzorp, ctinfo, skb, in, l3proto, &kzorp_config);
 	} else {
 		kzorp = kz_extension_add(ct, ctinfo, skb, in, l3proto, &kzorp_config);
 	}
@@ -582,38 +647,36 @@ kz_extension_update(struct nf_conn *ct,
 
 	return kzorp;
 }
-EXPORT_SYMBOL_GPL(kz_extension_update);
 
-void
-kz_extension_get_from_ct_or_lookup(const struct sk_buff *skb,
+struct kz_extension *
+kz_extension_find_or_evaluate(const struct sk_buff *skb,
 				   const struct net_device * const in,
 				   u8 l3proto,
-				   struct nf_conntrack_kzorp *local_kzorp,
-				   const struct nf_conntrack_kzorp **kzorp,
 				   const struct kz_config **cfg)
 {
 	struct nf_conn *ct;
 	enum ip_conntrack_info ctinfo;
+	struct kz_extension *kzorp;
 
 	ct = nf_ct_get((struct sk_buff *)skb, &ctinfo);
 	if (ct && !nf_ct_is_untracked(ct)) {
 		// ctinfo filled by nf_ct_get
-		*kzorp = kz_extension_update(ct, ctinfo, skb, in, l3proto, cfg);
+		kzorp = kz_extension_find_or_add(ct, ctinfo, skb, in, l3proto, cfg);
 	} else {
 		ctinfo = IP_CT_NEW;
-		*kzorp = NULL;
+		kzorp = NULL;
 	}
 
-	if (*kzorp == NULL) {
+	if (kzorp == NULL) {
 		pr_debug("cannot add kzorp extension, doing local lookup\n");
 
-		memset(local_kzorp, 0, sizeof(struct nf_conntrack_kzorp));
-		nfct_kzorp_lookup_rcu(local_kzorp, ctinfo, skb, in, l3proto, cfg);
-
-		*kzorp = local_kzorp;
+		kzorp = kz_extension_create();
+		kz_extension_fill_with_lookup_data_rcu(kzorp, ctinfo, skb, in, l3proto, cfg);
 	}
+
+	return kzorp;
 }
-EXPORT_SYMBOL_GPL(kz_extension_get_from_ct_or_lookup);
+EXPORT_SYMBOL_GPL(kz_extension_find_or_evaluate);
 
 /***********************************************************
  * Common macros
@@ -1621,7 +1684,7 @@ void
 kz_log_session_verdict(enum kz_verdict verdict,
 		       const char *info,
 		       const struct nf_conn *ct,
-		       const struct nf_conntrack_kzorp *kzorp)
+		       const struct kz_extension *kzorp)
 {
 	u_int16_t l3proto;
 	u_int16_t l4proto;
@@ -1749,29 +1812,11 @@ EXPORT_SYMBOL_GPL(kz_log_session_verdict);
 
 
 /***********************************************************
- * Conntrack extension
- ***********************************************************/
-
-void
-kz_destroy_kzorp(struct nf_conntrack_kzorp *kzorp)
-{
-	if (kzorp->czone != NULL)
-		kz_zone_put(kzorp->czone);
-	if (kzorp->szone != NULL)
-		kz_zone_put(kzorp->szone);
-	if (kzorp->dpt != NULL)
-		kz_dispatcher_put(kzorp->dpt);
-	if (kzorp->svc != NULL)
-		kz_service_put(kzorp->svc);
-}
-
-EXPORT_SYMBOL_GPL(kz_destroy_kzorp);
-
-/***********************************************************
  * Initialization
  ***********************************************************/
 
-int __init kzorp_core_init(void)
+static int __init
+kzorp_core_init(void)
 {
 	int res = -ENOMEM;
 	struct kz_instance *global;

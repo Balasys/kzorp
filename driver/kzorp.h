@@ -30,6 +30,7 @@
 #include <linux/netdevice.h>
 
 #include "kzorp_compat.h"
+#include "kzorp_ext.h"
 #include "kzorp_internal.h"
 
 #define KZ_MAJOR_VERSION  4
@@ -50,23 +51,6 @@ void kz_big_free(void *ptr, enum KZ_ALLOC_TYPE alloc_type);
 
 typedef unsigned int kz_generation_t; /* integral with suitable size */
 typedef __be32 netlink_port_t;
-
-struct nf_conntrack_kzorp {
-	struct rcu_head rcu;
-	unsigned int ct_zone;
-	struct nf_conntrack_tuple_hash tuplehash_orig;
-	unsigned long sid;
-	/*  "lookup data" from here to end */
-	kz_generation_t generation; /* config version */
-	struct kz_zone *czone;		/* client zone */
-	struct kz_zone *szone;		/* server zone */
-	struct kz_dispatcher *dpt;	/* dispatcher */
-	struct kz_service *svc;		/* service */
-	u_int32_t rule_id;
-	u_int64_t session_start;
-};
-
-#define NF_CT_EXT_KZ_TYPE struct nf_conntrack_kzorp
 
 enum kzf_instance_flags {
 	KZF_INSTANCE_DELETED = 1 << 0,
@@ -116,15 +100,15 @@ struct kz_bind_lookup {
 	 */
 
 	/* array of pointers to all bind structures, ordered by l3proto and l4proto */
-	const struct kz_bind const **binds;
+	const struct kz_bind **binds;
 	/* array of pointers to the appropriate element of the binds array */
-	const struct kz_bind const **binds_by_type[KZ_BIND_L3PROTO_COUNT][KZ_BIND_L4PROTO_COUNT];
+	const struct kz_bind **binds_by_type[KZ_BIND_L3PROTO_COUNT][KZ_BIND_L4PROTO_COUNT];
 	unsigned int bind_nums[KZ_BIND_L3PROTO_COUNT][KZ_BIND_L4PROTO_COUNT];
 };
 
 struct kz_instance {
 	struct list_head list;
-	struct kz_bind_lookup *bind_lookup;
+	struct kz_bind_lookup __rcu *bind_lookup;
 	unsigned int id;
 	unsigned int flags;
 	netlink_port_t peer_pid;
@@ -414,19 +398,19 @@ extern void kz_head_destroy_service(struct kz_head_s *h);
 extern void kz_head_destroy_dispatcher(struct kz_head_d *h);
 
 struct kz_bind * kz_bind_new(void);
-struct kz_bind * kz_bind_clone(const struct kz_bind const *_bind);
+struct kz_bind * kz_bind_clone(const struct kz_bind *_bind);
 void kz_bind_destroy(struct kz_bind *bind);
 
 const struct kz_bind * const
-kz_instance_bind_lookup_v4(const struct kz_instance const *instance, u8 l4proto,
+kz_instance_bind_lookup_v4(const struct kz_instance *instance, u8 l4proto,
 			   __be32 saddr, __be16 sport,
 			   __be32 daddr, __be16 dport);
 
 const struct kz_bind * const
-kz_instance_bind_lookup_v6(const struct kz_instance const *instance, u8 l4proto,
-			   const struct in6_addr const *saddr, __be16 sport,
-			   const struct in6_addr const *daddr, __be16 dport);
-void kz_instance_remove_bind(struct kz_instance *instance, const netlink_port_t pid_to_remove, const struct kz_transaction const *tr);
+kz_instance_bind_lookup_v6(const struct kz_instance *instance, u8 l4proto,
+			   const struct in6_addr *saddr, __be16 sport,
+			   const struct in6_addr *daddr, __be16 dport);
+void kz_instance_remove_bind(struct kz_instance *instance, const netlink_port_t pid_to_remove, const struct kz_transaction *tr);
 
 extern struct kz_instance *kz_instance_lookup_nocheck(const char *name);
 extern struct kz_instance *kz_instance_lookup(const char *name);
@@ -439,18 +423,6 @@ extern struct kz_zone *__kz_zone_lookup_name(const struct list_head * const head
 extern struct kz_zone *kz_zone_lookup_name(const struct kz_config *cfg, const char *name);
 
 extern struct kz_zone *kz_zone_clone(const struct kz_zone * const zone);
-
-static inline struct kz_zone *kz_zone_get(struct kz_zone *zone)
-{
-	atomic_inc(&zone->refcnt);
-	return zone;
-}
-
-static inline void kz_zone_put(struct kz_zone *zone)
-{
-	if (atomic_dec_and_test(&zone->refcnt))
-		kz_zone_destroy(zone);
-}
 
 extern struct kz_service *kz_service_new(void);
 extern void service_destroy(struct kz_service *service);
@@ -465,18 +437,6 @@ extern int kz_service_add_nat_entry(struct list_head *head,
 extern struct kz_service *kz_service_clone(const struct kz_service * const o);
 extern long kz_service_lock(struct kz_service * const service);
 extern void kz_service_unlock(struct kz_service * const service);
-
-static inline struct kz_service *kz_service_get(struct kz_service *service)
-{
-	atomic_inc(&service->refcnt);
-	return service;
-}
-
-static inline void kz_service_put(struct kz_service *service)
-{
-	if (atomic_dec_and_test(&service->refcnt))
-		kz_service_destroy(service);
-}
 
 extern int kz_rule_copy(struct kz_rule *dst,
 			const struct kz_rule * const src);
@@ -496,22 +456,29 @@ extern struct kz_dispatcher *kz_dispatcher_clone(const struct kz_dispatcher * co
 extern struct kz_dispatcher *kz_dispatcher_clone_pure(const struct kz_dispatcher * const o);
 extern int kz_dispatcher_relink(struct kz_dispatcher *d, const struct list_head * zonelist, const struct list_head * servicelist);
 
-static inline struct kz_dispatcher *
-kz_dispatcher_get(struct kz_dispatcher *dispatcher)
-{
-	atomic_inc(&dispatcher->refcnt);
-	return dispatcher;
-}
-
-static inline void
-kz_dispatcher_put(struct kz_dispatcher *dispatcher)
-{
-	if (atomic_dec_and_test(&dispatcher->refcnt))
-		kz_dispatcher_destroy(dispatcher);
-}
-
 int kz_log_ratelimit(void);
 bool kz_log_session_verdict_enabled(void);
+
+/*
+ * Get/Put functions should handle null pointer as the result of
+ * the rule evaluation zone/service may null pointers.
+ */
+#define kz_object_declare_ref_funcs(object_name) \
+static inline struct kz_##object_name *kz_##object_name##_get(struct kz_##object_name *object_name) \
+{ \
+	if (object_name) \
+		atomic_inc(&object_name->refcnt); \
+	return object_name; \
+} \
+static inline void kz_##object_name##_put(struct kz_##object_name *object_name) \
+{ \
+	if (object_name && atomic_dec_and_test(&object_name->refcnt)) \
+		kz_##object_name##_destroy(object_name); \
+}
+
+kz_object_declare_ref_funcs(zone)
+kz_object_declare_ref_funcs(service)
+kz_object_declare_ref_funcs(dispatcher)
 
 /***********************************************************
  * Conntrack structure extension
@@ -528,7 +495,7 @@ bool kz_log_session_verdict_enabled(void);
    when ct gets destroyed
 */
 
-extern const struct nf_conntrack_kzorp * kz_extension_update(
+extern const struct kz_extension * kz_extension_update(
 	struct nf_conn *ct,
 	enum ip_conntrack_info ctinfo,
 	const struct sk_buff *skb,
@@ -545,25 +512,12 @@ extern const struct nf_conntrack_kzorp * kz_extension_update(
 
    make sure to call kz_destroy_kzorp on pkzorp eventually
 */
-extern void nfct_kzorp_lookup_rcu(struct nf_conntrack_kzorp * pkzorp,
+extern void nfct_kzorp_lookup_rcu(struct kz_extension * pkzorp,
 	enum ip_conntrack_info ctinfo,
 	const struct sk_buff *skb,
 	const struct net_device * const in,
 	const u8 l3proto,
 	const struct kz_config **p_cfg);
-
-extern void
-kz_extension_get_from_ct_or_lookup(const struct sk_buff *skb,
-				   const struct net_device * const in,
-				   u8 l3proto,
-				   struct nf_conntrack_kzorp *local_kzorp,
-				   const struct nf_conntrack_kzorp **kzorp,
-				   const struct kz_config **cfg);
-
-
-/* unreferences stuff inside
-*/
-extern void kz_destroy_kzorp(struct nf_conntrack_kzorp *kzorp);
 
 /***********************************************************
  * Hook functions
@@ -571,34 +525,6 @@ extern void kz_destroy_kzorp(struct nf_conntrack_kzorp *kzorp);
 
 extern int kz_hooks_init(void);
 extern void kz_hooks_cleanup(void);
-
-/***********************************************************
- * Cache functions
- ***********************************************************/
-
-extern int kz_extension_init(void);
-extern void kz_extension_cleanup(void);
-extern void kz_extension_fini(void);
-extern struct nf_conntrack_kzorp *kz_extension_create(struct nf_conn *ct);
-/* handle kzorp extension in conntrack record
-   an earlier version had the kzorp structure directly in nf_conn
-   we changed that to use the extension API and add only on request
-   this makes it possible to use kzorp as a dkms module.
-
-   FIXME: check/test the below sentences
-   The downside is that extensions can not be added after certain point
-   (basicly, it must happen at the start of a session, not at second
-    or a further packet...). 
-   If the kzorp extension can't be added, we still can do zone/svc
-   lookup on the fly -- only losing the cache. 
-   The other thing we lose is the session id assignment.
-   
-   So a proper ruleset that wants to use those facilities shall make
-   sure to have have the first packet meet KZORP related lookup.
-   
-*/
-
-extern struct nf_conntrack_kzorp *kz_extension_find(struct nf_conn *ct);
 
 /***********************************************************
  * Lookup functions
@@ -615,6 +541,7 @@ extern void kz_head_zone_init(struct kz_head_z *h);
 extern int kz_head_zone_build(struct kz_head_z *h);
 extern void kz_head_zone_destroy(struct kz_head_z *h);
 extern struct kz_zone * kz_head_zone_lookup(const struct kz_head_z *h, const union nf_inet_addr * addr, u_int8_t proto);
+extern bool kz_zone_lookup_from_skb(const struct sk_buff *skb, int l3proto, struct kz_zone **src_zone, struct kz_zone **dst_zone);
 
 extern int kz_add_zone(struct kz_zone *zone);
 extern int kz_add_zone_subnet(struct kz_zone *zone, const struct kz_subnet * const zone_subnet);
@@ -722,7 +649,7 @@ enum kz_verdict {
 	KZ_VERDICT_DENIED_BY_UNKNOWN_FAIL    = 4
 };
 
-void kz_log_session_verdict(enum kz_verdict verdict, const char *info, const struct nf_conn *ct, const struct nf_conntrack_kzorp *kzorp);
+void kz_log_session_verdict(enum kz_verdict verdict, const char *info, const struct nf_conn *ct, const struct kz_extension *kzorp);
 
 /* Bitfield */
 enum {

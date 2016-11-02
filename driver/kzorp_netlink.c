@@ -830,11 +830,13 @@ static int
 kznl_dump_name(struct sk_buff *skb, unsigned int attr, const char *name)
 {
 	size_t len = strlen(name);
+	if (len > KZ_ATTR_NAME_MAX_LENGTH)
+		return -ENOMEM;
 
 	{
 		struct {
 			struct kza_name hdr;
-			char name[len];
+			char name[KZ_ATTR_NAME_MAX_LENGTH];
 		} msg;
 
 		msg.hdr.length = htons(len);
@@ -1167,13 +1169,13 @@ kz_commit_transaction_process_services(const struct kz_transaction *tr, struct k
 }
 
 static bool
-kznl_zone_apply_delete_operation(struct kz_zone *deletable_zone, const struct list_head const *operations)
+kznl_zone_apply_delete_operation(struct kz_zone *deletable_zone, const struct list_head *operations)
 {
 	struct kz_operation *operation, *n;
 	/* append zones created in the transaction */
 	list_for_each_entry_safe(operation, n, operations, list) {
 		if (operation->type == KZNL_OP_DELETE_ZONE) {
-			const struct kz_zone const * updater_zone = (const struct kz_zone const *) operation->data;
+			const struct kz_zone *updater_zone = (const struct kz_zone *) operation->data;
 			if (strcmp(updater_zone->name, deletable_zone->name) == 0) {
 				kz_operation_remove(operation);
 				return true;
@@ -1214,7 +1216,7 @@ kz_commit_transaction_delete_zones(const struct kz_transaction *tr, struct kz_co
 
 	list_for_each_entry(io, &tr->op, list) {
 		if (io->type == KZNL_OP_DELETE_ZONE) {
-			const struct kz_zone const * deletable_zone = (const struct kz_zone const *) io->data;
+			const struct kz_zone *deletable_zone = (const struct kz_zone *) io->data;
 			pr_err_ratelimited("transaction problem: unapplied zone delete operation found; name='%s' depth='%u'\n",
 			       deletable_zone->name, deletable_zone->depth);
 			return -EINVAL;
@@ -1916,7 +1918,7 @@ kznl_build_zone(struct sk_buff *skb, u_int32_t pid, u_int32_t seq, int flags,
 	/* dump rule structures */
 	pr_debug("part_idx=%ld, num_subnet=%d", *part_idx, zone->num_subnet);
 	for (; (*part_idx) <= (long) zone->num_subnet; ++(*part_idx)) {
-		const struct kz_subnet const * subnet = &zone->subnet[(*part_idx) - 1];
+		const struct kz_subnet *subnet = &zone->subnet[(*part_idx) - 1];
 		pr_debug("part_idx=%ld", *part_idx);
 
 		msg_rollback = skb_tail_pointer(skb);
@@ -2529,18 +2531,18 @@ nlmsg_failure:
 }
 
 /* callback argument allocation for service dump */
-enum {
+enum kznl_service_dump_args {
 	SERVICE_DUMP_CURRENT_SERVICE = 0,
 	SERVICE_DUMP_STATE = 3,
 	SERVICE_DUMP_CONFIG_GEN = 4,
-} kznl_service_dump_args;
+};
 
 /* service dump states */
-enum {
+enum kznl_service_dump_state {
 	SERVICE_DUMP_STATE_FIRST_CALL = 0,
 	SERVICE_DUMP_STATE_HAVE_CONFIG_GEN = 1,
 	SERVICE_DUMP_STATE_NO_MORE_WORK = 2,
-} kznl_service_dump_state;
+};
 
 static int
 kznl_dump_services(struct sk_buff *skb, struct netlink_callback *cb)
@@ -3207,7 +3209,7 @@ error:
 }
 
 /* !!! must be called with the instance mutex held !!! */
-struct kz_bind *
+static struct kz_bind *
 kz_bind_lookup_instance(const struct kz_instance *instance, const struct kz_bind *bind)
 {
 	struct kz_bind *i;

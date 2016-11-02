@@ -1878,7 +1878,7 @@ bind_lookup_get_l4proto(const u8 l4proto)
 static void
 bind_lookup_build(struct kz_bind_lookup *bind_lookup)
 {
-	const struct kz_bind const *bind;
+	const struct kz_bind *bind;
 	unsigned int num_binds;
 	enum kz_bind_l3proto l3proto;
 	enum kz_bind_l4proto l4proto;
@@ -1896,7 +1896,7 @@ bind_lookup_build(struct kz_bind_lookup *bind_lookup)
 	if (num_binds == 0)
 		return;
 
-	bind_lookup->binds = (const struct kz_bind const **) kzalloc(sizeof(struct kz_bind *) * num_binds, GFP_KERNEL);
+	bind_lookup->binds = (const struct kz_bind **) kzalloc(sizeof(struct kz_bind *) * num_binds, GFP_KERNEL);
 	num_binds = 0;
 	for (l3proto = KZ_BIND_L3PROTO_IPV4; l3proto < KZ_BIND_L3PROTO_COUNT; l3proto++) {
 		for (l4proto = KZ_BIND_L4PROTO_TCP; l4proto < KZ_BIND_L4PROTO_COUNT; l4proto++) {
@@ -1937,10 +1937,10 @@ instance_bind_lookup_swap(struct kz_instance *instance, struct kz_bind_lookup *n
 
 /* !!! must be called with the instance mutex held !!! */
 void
-kz_instance_remove_bind(struct kz_instance *instance, const netlink_port_t pid_to_remove, const struct kz_transaction const *tr)
+kz_instance_remove_bind(struct kz_instance *instance, const netlink_port_t pid_to_remove, const struct kz_transaction *tr)
 {
 	struct kz_bind_lookup *bind_lookup;
-	const struct kz_bind const *orig_bind;
+	const struct kz_bind *orig_bind;
 	struct kz_bind *new_bind;
 	struct kz_operation *io, *po;
 
@@ -1982,14 +1982,14 @@ bind_lookup_hash_v4(__be32 saddr, __be16 sport, __be32 daddr, __be16 dport)
 }
 
 const struct kz_bind * const
-kz_instance_bind_lookup_v4(const struct kz_instance const *instance, u8 l4proto,
+kz_instance_bind_lookup_v4(const struct kz_instance *instance, u8 l4proto,
 			__be32 saddr, __be16 sport,
 			__be32 daddr, __be16 dport)
 {
 	unsigned int bind_num;
 	unsigned int lookup_bind_num;
 	enum kz_bind_l4proto bind_l4proto = bind_lookup_get_l4proto(l4proto);
-	const struct kz_bind const *bind;
+	const struct kz_bind *bind;
 
 	pr_debug("lookup bind; l4proto='%d', saddr='%pI4', sport='%d', daddr='%pI4', dport='%d'\n", l4proto, &saddr, htons(sport), &daddr, htons(dport));
 
@@ -2012,7 +2012,7 @@ kz_instance_bind_lookup_v4(const struct kz_instance const *instance, u8 l4proto,
 EXPORT_SYMBOL(kz_instance_bind_lookup_v4);
 
 static inline unsigned int
-bind_lookup_hash_v6(const struct in6_addr const *saddr, __be16 sport, const struct in6_addr const *daddr, __be16 dport)
+bind_lookup_hash_v6(const struct in6_addr *saddr, __be16 sport, const struct in6_addr *daddr, __be16 dport)
 {
 	/* FIXME: seed */
 	return jhash_3words(jhash2(saddr->s6_addr32, ARRAY_SIZE(saddr->s6_addr32), 0),
@@ -2021,14 +2021,14 @@ bind_lookup_hash_v6(const struct in6_addr const *saddr, __be16 sport, const stru
 }
 
 const struct kz_bind * const
-kz_instance_bind_lookup_v6(const struct kz_instance const *instance, u8 l4proto,
-			   const struct in6_addr const *saddr, __be16 sport,
-			   const struct in6_addr const *daddr, __be16 dport)
+kz_instance_bind_lookup_v6(const struct kz_instance *instance, u8 l4proto,
+			   const struct in6_addr *saddr, __be16 sport,
+			   const struct in6_addr *daddr, __be16 dport)
 {
 	unsigned int bind_num;
 	unsigned int lookup_bind_num;
 	enum kz_bind_l4proto bind_l4proto = bind_lookup_get_l4proto(l4proto);
-	const struct kz_bind const *bind;
+	const struct kz_bind *bind;
 
 	pr_debug("lookup bind; l4proto='%d', saddr='%pI6c', sport='%d', daddr='%pI6c', dport='%d'\n", l4proto, saddr, htons(sport), daddr, htons(dport));
 
