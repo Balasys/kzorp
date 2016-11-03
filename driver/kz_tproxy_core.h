@@ -346,7 +346,8 @@ tproxy_tg4_v0(struct sk_buff *skb, const struct xt_action_param *par)
 {
 	const struct xt_tproxy_target_info *tgi = par->targinfo;
 
-	return tproxy_tg4(par->net, skb, tgi->laddr, tgi->lport, tgi->mark_mask, tgi->mark_value);
+	return tproxy_tg4(xt_net(par), skb, tgi->laddr, tgi->lport,
+			  tgi->mark_mask, tgi->mark_value);
 }
 
 static inline unsigned int
@@ -354,7 +355,8 @@ tproxy_tg4_v1(struct sk_buff *skb, const struct xt_action_param *par)
 {
 	const struct xt_tproxy_target_info_v1 *tgi = par->targinfo;
 
-	return tproxy_tg4(par->net, skb, tgi->laddr.ip, tgi->lport, tgi->mark_mask, tgi->mark_value);
+	return tproxy_tg4(xt_net(par), skb, tgi->laddr.ip, tgi->lport,
+			  tgi->mark_mask, tgi->mark_value);
 }
 
 static inline int

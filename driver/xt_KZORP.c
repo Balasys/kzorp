@@ -1217,8 +1217,8 @@ static unsigned int
 kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 {
 	const struct xt_kzorp_target_info * const tgi = par->targinfo;
-	const struct net_device * const in = par->in;
-	const struct net_device * const out = par->out;
+	const struct net_device * const in = xt_in(par);
+	const struct net_device * const out = xt_out(par);
 
 	unsigned int verdict = NF_ACCEPT;
 	enum ip_conntrack_info ctinfo;
@@ -1243,7 +1243,7 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	if (ct == NULL || ctinfo >= IP_CT_IS_REPLY)
 		return NF_ACCEPT;
 
-	switch (par->family) {
+	switch (xt_family(par)) {
 	case NFPROTO_IPV4:
 	{
 		const struct iphdr * const iph = ip_hdr(skb);
@@ -1261,7 +1261,7 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 		}
 
 		pr_debug("kzorp hook processing packet: hook='%u', protocol='%u', src='%pI4:%u', dst='%pI4:%u'\n",
-			 par->hooknum, l4proto, &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
+			 xt_hooknum(par), l4proto, &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
 	}
 		break;
 	case NFPROTO_IPV6:
@@ -1292,7 +1292,7 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 		}
 
 		pr_debug("kzorp hook processing packet: hook='%u', protocol='%u', src='%pI6c:%u', dst='%pI6c:%u'\n",
-			 par->hooknum, l4proto, &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
+			 xt_hooknum(par), l4proto, &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
 	}
 		break;
 	default:
@@ -1300,7 +1300,7 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	}
 
 	rcu_read_lock();
-	kzorp = kz_extension_find_or_evaluate(skb, in, par->family, &cfg);
+	kzorp = kz_extension_find_or_evaluate(skb, in, xt_family(par), &cfg);
 
 	pr_debug("lookup data for kzorp hook; dpt='%s', client_zone='%s', server_zone='%s', svc='%s'\n",
 		 kzorp->dpt ? kzorp->dpt->name : kz_log_null,
@@ -1308,30 +1308,30 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 		 kzorp->szone ? kzorp->szone->name : kz_log_null,
 		 kzorp->svc ? kzorp->svc->name : kz_log_null);
 
-	switch (par->hooknum)
+	switch (xt_hooknum(par))
 	{
 	case NF_INET_PRE_ROUTING:
 		verdict = kz_prerouting_verdict(skb, in, out, cfg,
-						par->family, l4proto,
+						xt_family(par), l4proto,
 						ports->src, ports->dst, 
 						ctinfo, ct, kzorp, tgi);
 		break;
 	case NF_INET_LOCAL_IN:
 		if (ctinfo == IP_CT_NEW)
-			verdict = kz_input_newconn_verdict(skb, in, par->family, l4proto,
+			verdict = kz_input_newconn_verdict(skb, in, xt_family(par), l4proto,
 							   ports->src, ports->dst,
 							   ct, kzorp);
 		break;
 	case NF_INET_FORWARD:
 		if (ctinfo == IP_CT_NEW)
-			verdict = kz_forward_newconn_verdict(skb, in, par->family, l4proto,
+			verdict = kz_forward_newconn_verdict(skb, in, xt_family(par), l4proto,
 							     ports->src, ports->dst,
 							     ct, kzorp);
 		break;
 	case NF_INET_POST_ROUTING:
 		if (ctinfo == IP_CT_NEW)
 			verdict = kz_postrouting_newconn_verdict(skb, in, out, cfg,
-								 par->family, l4proto,
+								 xt_family(par), l4proto,
 								 ports->src, ports->dst,
 								 ct, kzorp, tgi);
 		break;

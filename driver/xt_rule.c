@@ -23,7 +23,7 @@ rule_mt_v0_eval(const struct sk_buff *skb, const struct ipt_rule_info_v0 *info, 
 	struct kz_extension *kzorp;
 	bool res = true;
 
-	kzorp = kz_extension_find_or_evaluate(skb, par->in, par->family, NULL);
+	kzorp = kz_extension_find_or_evaluate(skb, xt_in(par), xt_family(par), NULL);
 
 	res &= (kzorp->rule_id == info->id);
 	if (res && (info->flags & IPT_RULE_NOCOUNT) == 0)

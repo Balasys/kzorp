@@ -55,10 +55,10 @@ socket_match(const struct sk_buff *skb, struct xt_action_param *par,
 {
 	struct sock *sk = skb->sk;
 	const struct net_device *dev =
-		(par->hooknum == NF_INET_LOCAL_OUT) ? par->out : par->in;
+		(xt_hooknum(par) == NF_INET_LOCAL_OUT) ? xt_out(par) : xt_in(par);
 
 	if (!sk)
-		sk = nf_sk_lookup_slow_v4(par->net, skb, dev);
+		sk = nf_sk_lookup_slow_v4(xt_net(par), skb, dev);
 	if (sk) {
 		bool wildcard;
 		bool transparent = true;
@@ -119,10 +119,10 @@ socket_mt6_v1_v2_v3(const struct sk_buff *skb, struct xt_action_param *par)
 	const struct xt_socket_mtinfo1 *info = (struct xt_socket_mtinfo1 *) par->matchinfo;
 	struct sock *sk = skb->sk;
 	const struct net_device *dev =
-		(par->hooknum == NF_INET_LOCAL_OUT) ? par->out : par->in;
+		(xt_hooknum(par) == NF_INET_LOCAL_OUT) ? xt_out(par) : xt_in(par);
 
 	if (!sk)
-		sk = nf_sk_lookup_slow_v6(par->net, skb, dev);
+		sk = nf_sk_lookup_slow_v6(xt_net(par), skb, dev);
 	if (sk) {
 		bool wildcard;
 		bool transparent = true;

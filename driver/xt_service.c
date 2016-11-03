@@ -30,7 +30,7 @@ service_mt(const struct sk_buff *skb, struct xt_action_param *par)
 
 	rcu_read_lock();
 
-	kzorp = kz_extension_find_or_evaluate(skb, par->in, par->family, &cfg);
+	kzorp = kz_extension_find_or_evaluate(skb, xt_in(par), xt_family(par), &cfg);
 
 	if ((p_svc = kzorp->svc) == NULL) {
 		/* no service for this packet => no match */
