@@ -18,6 +18,7 @@ Section: python
 Depends: ${python:Depends},
          ${misc:Depends},
          python-all (>= 2.7),
+         python-netaddr,
          python-prctl
 Conflicts: zorp-common (<< 3.5), python-kzorp (<< 6.0)
 Replaces: python-kzorp (<< 6.0)
