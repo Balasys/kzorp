@@ -81,6 +81,7 @@ fi
 mkdir -p $TestRoot
 touch $TestRoot/result.xml
 touch $TestRoot/kmemleak
+touch $TestRoot/dmesg
 
 ## Packages to install
 Packages="
@@ -102,7 +103,7 @@ cat > $TestSeedConf <<EOF
 password: zorp
 chpasswd: { expire: False }
 ssh_pwauth: True
-apt_proxy: http://proxy.balabit:3128
+apt_mirror: http://mirror.balasys/ubuntu/
 packages: $Packages
 runcmd:
  - set -x
@@ -123,6 +124,7 @@ runcmd:
  - echo scan | sudo tee /sys/kernel/debug/kmemleak  # kmemleak is more reliable when scanning twice:
  - echo scan | sudo tee /sys/kernel/debug/kmemleak  # http://stackoverflow.com/questions/12943906/debug-kernel-module-memory-corruption
  - sudo cp /sys/kernel/debug/kmemleak ${TestRoot}/kmemleak
+ - dmesg | sudo tee ${TestRoot}/dmesg > /dev/null
  - cp nosetests.xml ${TestRoot}/result.xml
  - sudo poweroff
 EOF
@@ -142,4 +144,7 @@ cp ${TestRoot}/result.xml result.xml
 if [ ! -z $KMemLeakURL ]; then
   cp ${TestRoot}/kmemleak kmemleak
   ./driver/tests/kmemleak2junit.py
+
+  cp ${TestRoot}/dmesg dmesg
+  ./driver/tests/kasan2junit.py
 fi
