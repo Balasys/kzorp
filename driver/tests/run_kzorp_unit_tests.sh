@@ -103,7 +103,7 @@ cat > $TestSeedConf <<EOF
 password: zorp
 chpasswd: { expire: False }
 ssh_pwauth: True
-apt_proxy: http://proxy.balabit:3128
+apt_mirror: http://mirror.balasys/ubuntu/
 packages: $Packages
 runcmd:
  - set -x
