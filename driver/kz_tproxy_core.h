@@ -363,6 +363,11 @@ static inline int
 tproxy_tg4_check(const struct xt_tgchk_param *par)
 {
 	const struct ipt_ip *i = par->entryinfo;
+	int err;
+
+	err = nf_defrag_ipv4_enable(par->net);
+	if (err)
+		return err;
 
 	if ((i->proto == IPPROTO_TCP || i->proto == IPPROTO_UDP)
 	    && !(i->invflags & IPT_INV_PROTO))

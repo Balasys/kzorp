@@ -1350,6 +1350,12 @@ static int kzorp_tg_check(const struct xt_tgchk_param *par)
 {
 	const struct xt_kzorp_target_info * const tgi = par->targinfo;
 
+	int err;
+
+	err = nf_defrag_ipv4_enable(par->net);
+	if (err)
+		return err;
+
 	/* flags can be used in the future to support extension vithout versioning */
 	if (tgi->flags != 0)
 		return -EINVAL;
@@ -1393,7 +1399,6 @@ static struct xt_target kzorp_tg_reg[] __read_mostly = {
 
 static int __init kzorp_tg_init(void)
 {
-	nf_defrag_ipv4_enable();
 	return xt_register_targets(kzorp_tg_reg, ARRAY_SIZE(kzorp_tg_reg));
 }
 
