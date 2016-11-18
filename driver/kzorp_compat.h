@@ -95,4 +95,17 @@ kz_ip_route_me_harder(struct sk_buff *skb, unsigned addr_type) {
 #endif
 }
 
+#include <net/netfilter/nf_conntrack_core.h>
+
+static inline struct nf_conntrack_tuple_hash *
+kz_nf_conntrack_find_get(struct net *net,                                          
+			 const struct nf_conntrack_tuple *tuple) {
+#ifdef ZONE_STRUCT_ADDED_NF_CONNTRACK_FIND_GET
+	return nf_conntrack_find_get(net, &nf_ct_zone_dflt, tuple);
+#else
+	return nf_conntrack_find_get(net, NF_CT_DEFAULT_ZONE, tuple);
+#endif
+}
+
+
 #endif /* _KZORP_COMPAT_H */

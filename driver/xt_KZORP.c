@@ -115,8 +115,9 @@ v4_get_socket_to_redirect_to(const struct kz_dispatcher *dpt,
 				if (sk->sk_state == TCP_TIME_WAIT &&
 				    tcp_header->syn && !tcp_header->rst && !tcp_header->ack && !tcp_header->fin)
 					kz_inet_twsk_deschedule_put(inet_twsk(sk));
-
-				if (sk->sk_state != TCP_TIME_WAIT)
+				else if (sk->sk_state == TCP_TIME_WAIT)
+					inet_twsk_put(inet_twsk(sk));
+				else
 					sock_put(sk);
 			}
 

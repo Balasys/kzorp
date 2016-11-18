@@ -43,17 +43,25 @@ nf_ct_zone_id.h: nf_ct_zone_id.c
 	$(CC) $(COMPAT_CPPFLAGS) $(COMPAT_CFLAGS) -c nf_ct_zone_id.c 2>/dev/null || \
 	echo "#define DIR_ADDED_NF_CT_ZONE 1" > nf_ct_zone_id.h
 
+nf_conntrack_find_get.h: nf_conntrack_find_get.c
+	truncate -s 0 nf_conntrack_find_get.h
+	$(CC) $(COMPAT_CPPFLAGS) $(COMPAT_CFLAGS) -c -Werror nf_conntrack_find_get.c 2>/dev/null || \
+	echo "#define ZONE_STRUCT_ADDED_NF_CONNTRACK_FIND_GET 1" > nf_conntrack_find_get.h
+
+
 compat.h: \
 		net_param_added_to_ip_local_functions.h \
 		put_added_to_inet_twsk_deschedule.h \
 		skb_doff_added_to_lookup_listener_function.h \
-		nf_ct_zone_id.h
+		nf_ct_zone_id.h \
+		nf_conntrack_find_get.h
 
 	cat \
 	net_param_added_to_ip_local_functions.h \
 	put_added_to_inet_twsk_deschedule.h \
 	skb_doff_added_to_lookup_listener_function.h \
 	nf_ct_zone_id.h \
+	nf_conntrack_find_get.h \
 	> compat.h
 
 compat_h: compat.h
