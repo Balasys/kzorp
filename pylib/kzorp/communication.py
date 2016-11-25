@@ -55,37 +55,45 @@ def commitTransaction(h):
 
 class Adapter(object):
     def __init__(self, instance_name=kzorp_messages.KZ_INSTANCE_GLOBAL, manage_caps=False):
-        self.kzorp_handle = Handle()
         self.instance_name = instance_name
         self.manage_capabilities = manage_caps
+        self.__acquire_caps()
+        self.kzorp_handle = Handle()
+        self.__drop_caps()
 
     def __enter__(self):
-        if self.manage_capabilities:
-            self.__acquire_caps()
+        self.__acquire_caps()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        if self.manage_capabilities:
-            self.__drop_caps()
+        self.__drop_caps()
 
     def __acquire_caps(self):
         """ aquire the CAP_NET_ADMIN capability """
+
+        if not self.manage_capabilities:
+            return
+
         try:
             import prctl
             prctl.set_caps((prctl.CAP_NET_ADMIN, prctl.CAP_EFFECTIVE, True))
         except OSError, e:
-            import Zorp.Common
-            Zorp.Common.log(None, Zorp.Common.CORE_ERROR, 1, "Unable to acquire NET_ADMIN capability; error='%s'" % (e))
+            import Zorp.Common as Common
+            Common.log(None, Common.CORE_ERROR, 1, "Unable to acquire NET_ADMIN capability; error='%s'" % (e))
             raise e
 
     def __drop_caps(self):
         """ drop the CAP_NET_ADMIN capability """
+
+        if not self.manage_capabilities:
+            return
+
         try:
             import prctl
             prctl.set_caps((prctl.CAP_NET_ADMIN, prctl.CAP_EFFECTIVE, False))
         except OSError, e:
-            import Zorp.Common
-            Zorp.Common.log(None, Zorp.Common.CORE_ERROR, 1, "Unable to drop NET_ADMIN capability; error='%s'" % (e))
+            import Zorp.Common as Common
+            Common.log(None, Common.CORE_ERROR, 1, "Unable to drop NET_ADMIN capability; error='%s'" % (e))
             raise e
 
     def send_message(self, message):
@@ -100,7 +108,7 @@ class Adapter(object):
 
             commitTransaction(self.kzorp_handle)
         except netlink.NetlinkException as e:
-            import Zorp.Common
-            Zorp.Common.log(None, Zorp.Common.CORE_ERROR, 6,
+            import Zorp.Common as Common
+            Common.log(None, Common.CORE_ERROR, 6,
                        "Error occured while downloading zones to kernel; error='%s'" % (e.detail))
             raise e

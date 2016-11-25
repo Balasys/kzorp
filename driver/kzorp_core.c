@@ -84,7 +84,7 @@ kz_instance_lookup_nocheck(const char *name)
 {
 	struct kz_instance *i;
 
-	kz_debug("name='%s'\n", name);
+	pr_debug("name='%s'\n", name);
 
 	list_for_each_entry(i, &kz_instances, list) {
 		if (strcmp(i->name, name) == 0)
@@ -100,7 +100,7 @@ kz_instance_lookup(const char *name)
 {
 	struct kz_instance *i;
 
-	kz_debug("name='%s'", name);
+	pr_debug("name='%s'", name);
 
 	list_for_each_entry(i, &kz_instances, list) {
 		if (!(i->flags & KZF_INSTANCE_DELETED) &&
@@ -117,7 +117,7 @@ kz_instance_lookup_id(const unsigned int id)
 {
 	struct kz_instance *i;
 
-	kz_debug("id='%u'\n", id);
+	pr_debug("id='%u'\n", id);
 
 	list_for_each_entry(i, &kz_instances, list) {
 		if (!(i->flags & KZF_INSTANCE_DELETED) &&
@@ -176,7 +176,7 @@ kz_instance_create(const char *name, const unsigned int len, const netlink_port_
 {
 	struct kz_instance *i;
 
-	kz_debug("name='%s', pid='%d'\n", name, peer_pid);
+	pr_debug("name='%s', pid='%d'\n", name, peer_pid);
 
 	/* check if we already have a deleted instance with this name */
 	i = kz_instance_lookup_nocheck(name);
@@ -204,7 +204,7 @@ kz_instance_create(const char *name, const unsigned int len, const netlink_port_
 	INIT_LIST_HEAD(&i->bind_lookup->list_bind);
 	list_add(&i->list, &kz_instances);
 
-	kz_debug("instance created; name='%s', id='%d'\n", name, i->id);
+	pr_debug("instance created; name='%s', id='%d'\n", name, i->id);
 
 	return i;
 }
@@ -213,7 +213,7 @@ kz_instance_create(const char *name, const unsigned int len, const netlink_port_
 void
 kz_instance_delete(struct kz_instance * const i)
 {
-	kz_debug("name='%s'\n", i->name);
+	pr_debug("name='%s'\n", i->name);
 
 	i->flags |= KZF_INSTANCE_DELETED;
 }
@@ -384,7 +384,7 @@ void nfct_kzorp_lookup_rcu(struct nf_conntrack_kzorp * kzorp,
 			ports = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_ports), &_ports);
 			if (unlikely(ports == NULL))
 				goto done;
-			kz_debug("kzorp lookup for packet: protocol='%u', src='%pI4:%u', dst='%pI4:%u'\n",
+			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI4:%u', dst='%pI4:%u'\n",
 				 iph->protocol, &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
 		}
 		else if (l4proto == IPPROTO_ICMP) {
@@ -396,7 +396,7 @@ void nfct_kzorp_lookup_rcu(struct nf_conntrack_kzorp * kzorp,
 
 			proto_type = icmp->type;
 			proto_subtype = icmp->code;
-			kz_debug("kzorp lookup for packet: protocol='%u', src='%pI4', dst='%pI4', type='%d', code='%d'\n", l4proto,
+			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI4', dst='%pI4', type='%d', code='%d'\n", l4proto,
 				 &iph->saddr, &iph->daddr, icmp->type, icmp->code);
 		}
 	}
@@ -422,7 +422,7 @@ void nfct_kzorp_lookup_rcu(struct nf_conntrack_kzorp * kzorp,
 			ports = skb_header_pointer(skb, thoff, sizeof(_ports), &_ports);
 			if (unlikely(ports == NULL))
 				goto done;
-			kz_debug("kzorp lookup for packet: protocol='%u', src='%pI6c:%u', dst='%pI6c:%u'\n", l4proto,
+			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI6c:%u', dst='%pI6c:%u'\n", l4proto,
 				 &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
 		}
 		else if (l4proto == IPPROTO_ICMPV6) {
@@ -434,7 +434,7 @@ void nfct_kzorp_lookup_rcu(struct nf_conntrack_kzorp * kzorp,
 
 			proto_type = icmp->icmp6_type;
 			proto_subtype = icmp->icmp6_code;
-			kz_debug("kzorp lookup for packet: protocol='%u', src='%pI6c', dst='%pI6c', type='%d', code='%d'\n", l4proto,
+			pr_debug("kzorp lookup for packet: protocol='%u', src='%pI6c', dst='%pI6c', type='%d', code='%d'\n", l4proto,
 				 &iph->saddr, &iph->daddr, icmp->icmp6_type, icmp->icmp6_code);
 		}
 
@@ -505,7 +505,7 @@ done:
 	if (kzorp->session_start != now.tv_sec)
 		kzorp->session_start = now.tv_sec;
 
-	kz_debug("kzorp lookup result; dpt='%s', client_zone='%s', server_zone='%s', svc='%s'\n",
+	pr_debug("kzorp lookup result; dpt='%s', client_zone='%s', server_zone='%s', svc='%s'\n",
 		 kzorp->dpt ? kzorp->dpt->name : kz_log_null,
 		 kzorp->czone ? kzorp->czone->name : kz_log_null,
 		 kzorp->szone ? kzorp->szone->name : kz_log_null,
@@ -531,14 +531,14 @@ kz_extension_add(struct nf_conn *ct,
 		case NFPROTO_IPV4:
 		{
 			const struct iphdr * const iph = ip_hdr(skb);
-			kz_debug("can't add kzorp to ct for packet: src='%pI4', dst='%pI4'\n",
+			pr_debug("can't add kzorp to ct for packet: src='%pI4', dst='%pI4'\n",
 				 &iph->saddr, &iph->daddr);
 		}
 			break;
 		case NFPROTO_IPV6:
 		{
 			const struct ipv6hdr * const iph = ipv6_hdr(skb);
-			kz_debug("can't add kzorp to ct for packet: src='%pI6c', dst='%pI6c'\n",
+			pr_debug("can't add kzorp to ct for packet: src='%pI6c', dst='%pI6c'\n",
 				 &iph->saddr, &iph->daddr);
 		}
 			break;
@@ -605,7 +605,7 @@ kz_extension_get_from_ct_or_lookup(const struct sk_buff *skb,
 	}
 
 	if (*kzorp == NULL) {
-		kz_debug("cannot add kzorp extension, doing local lookup\n");
+		pr_debug("cannot add kzorp extension, doing local lookup\n");
 
 		memset(local_kzorp, 0, sizeof(struct nf_conntrack_kzorp));
 		nfct_kzorp_lookup_rcu(local_kzorp, ctinfo, skb, in, l3proto, cfg);
@@ -1115,7 +1115,7 @@ kz_dispatcher_add_rule(struct kz_dispatcher *d, struct kz_service *service,
 	int64_t last_id = -1L;
 
 	if (d->num_rule + 1 > d->alloc_rule) {
-		kz_err("each rule has already been added to this dispatcher; num_rule='%d'\n",
+		pr_err_ratelimited("each rule has already been added to this dispatcher; num_rule='%d'\n",
 		       d->alloc_rule);
 		res = -EINVAL;
 		goto error;
@@ -1127,7 +1127,7 @@ kz_dispatcher_add_rule(struct kz_dispatcher *d, struct kz_service *service,
 		last_id = d->rule[d->num_rule - 1].id;
 
 	if (rule_params->id <= last_id) {
-		kz_err("rule id is not larger than the id of the last rule; id='%u', last_id='%lld'\n", rule_params->id, last_id);
+		pr_err_ratelimited("rule id is not larger than the id of the last rule; id='%u', last_id='%lld'\n", rule_params->id, last_id);
 		res = -EINVAL;
 		goto error;
 	}
@@ -1158,7 +1158,7 @@ error:
 
 #define kz_object_entry_check_alloc(object_name, entry_name)		\
 	if (object_name->num_##entry_name + 1 > object_name->alloc_##entry_name) { \
-		kz_err("each " #entry_name " has already been added to the " #object_name "; alloc_" #entry_name "='%d'", \
+		pr_err_ratelimited("each " #entry_name " has already been added to the " #object_name "; alloc_" #entry_name "='%d'", \
 		       object_name->num_##entry_name);			\
 		res = -ENOMEM;					\
 		goto error;					\
@@ -1294,7 +1294,7 @@ kz_rule_arr_relink_zones(u_int32_t * size, struct kz_zone **arr, u_int32_t rule_
 		 * consistent again.
 		 */
 		if (out == NULL) {
-			kz_err("Zone referred by rule cannot be found, therefore removed; rule_id='%d', zone_name='%s'",
+			pr_err_ratelimited("Zone referred by rule cannot be found, therefore removed; rule_id='%d', zone_name='%s'",
 			       rule_id, in->name);
                         kz_zone_put(in);
 			continue;
@@ -1386,7 +1386,7 @@ kz_dispatcher_copy_rules(struct kz_dispatcher *dst,
 		}
 	}
 
-	kz_debug("cloned rules; dst_num_rules='%u', dst_alloc_rules='%u', src_num_rules='%u', src_alloc_rules='%u'\n",
+	pr_debug("cloned rules; dst_num_rules='%u', dst_alloc_rules='%u', src_num_rules='%u', src_alloc_rules='%u'\n",
 		 dst->num_rule, dst->alloc_rule, src->num_rule, src->alloc_rule);
 
 	return 0;
@@ -1454,7 +1454,7 @@ kz_dispatcher_relink_n_dim(struct kz_dispatcher *d, const struct list_head * zon
 		struct kz_rule *rule = &d->rule[i];
 		struct kz_service *service = __kz_service_lookup_name(servicelist, rule->service->name);
 		if (service == NULL) {
-			kz_err("Service can not be deleted while it is refered; dispatcher='%s', rule_id='%u', service='%s'\n",
+			pr_err_ratelimited("Service can not be deleted while it is refered; dispatcher='%s', rule_id='%u', service='%s'\n",
 			       d->name, rule->id, rule->service->name);
 			return -EINVAL;
 		}
@@ -1473,7 +1473,7 @@ kz_dispatcher_relink_n_dim(struct kz_dispatcher *d, const struct list_head * zon
 int
 kz_dispatcher_relink(struct kz_dispatcher *d, const struct list_head * zonelist, const struct list_head * servicelist)
 {
-	kz_debug("re-linked n-dim dispatcher; name='%s', num_rules='%u'\n", d->name, d->num_rule);
+	pr_debug("re-linked n-dim dispatcher; name='%s', num_rules='%u'\n", d->name, d->num_rule);
 	return kz_dispatcher_relink_n_dim(d, zonelist, servicelist);
 }
 
@@ -1806,7 +1806,7 @@ int __init kzorp_core_init(void)
 
 	res = kz_extension_init();
 	if (res < 0) {
-		kz_err("unable to init conntrack extension\n");
+		pr_err_ratelimited("unable to init conntrack extension\n");
 		goto cleanup_global_instance;
 	}
 #ifdef CONFIG_SYSCTL

@@ -38,12 +38,12 @@ env:
     - OBS_PROJECT=Zorp
     - OBS_MAJOR_VERSION=6
     - OBS_MINOR_VERSION=0
-    - OBS_MAINTENANCE_VERSION=8
+    - OBS_MAINTENANCE_VERSION=9
     - OBS_PACKAGE=kzorp
     - TEST_OS=Ubuntu
     - TEST_OS_VERSION=14.04
     - secure: "LE92W8HweNQjNPN5qx1/GA9iaAy3j/ix7GvBinne0F3aHF3oeXobj/Q1fx5XEHT1cXl2J1VWepVe5ONrWaXS/euc5pdtqfSLHDzxNfCwlB8XI5I3SGLurzoi7YW8uT+aPy5kB9vkPxNeyXoCVNLtWMbWAYWs2ZJakEIoOAuDJsQrzt6PDZZsMd+Bwt3mjREXSuV61ZVmNxP7VcfuSZz6QCCrR2ajqcp2yompmUBFsNbyYqDydr2jVdF5zEIcLrh+lCoVYzW7wGWMVZ31mHMsjqLlbkbTaVJrg23lgVuYnJL4cPTFDCn54H1KarGjCPe6gmZIVMBOfRxlEckZ6Wqty4wtFLcYhShlcOcGz8VUJGUVCUuF/4yCNZWIBI5rnvQQ8EjQ8/NzEwWSQMRnIZD/WvdznEGND7CKSEqxkfDDenURsmTSUl8mFMhUM4GvrWqU6lynCc3NGnpgerXgOkvfhK7nenUgTyZWS7Kf/K1+m94WnGOqSeneBZU1PpG8FYq8kIHobmZdWRmyUIsd0KHCJGVnnbwUFv9lffzV8aA7XKBVn8updGYpfLOR4D1l3EM/AaY4H5zI4cpvtVSOU/5085pPy77HHgffF4nmn1GHprdBn5+mWjba0/GcqMl0gPv2PKX6AHXKFcfEoItDGBu22PrFMiN4SiI9QfdND3l/mxA="
-    - KERNELRELEASE=3.13.0-96-generic
+    - KERNELRELEASE=3.13.0-101-generic
 
 addons:
   coverity_scan:
@@ -53,4 +53,4 @@ addons:
     notification_email: coroner@pfeifferszilard.hu
     build_command_prepend: "autoreconf -if; ./configure; make clean"
     build_command:   "make all-driver -j4"
-    branch_pattern: 6.0.8
+    branch_pattern: 6.0.9
