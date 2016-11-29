@@ -327,7 +327,7 @@ class Daemon():
             time.sleep(sleep_sec)
 
 def run(foreground, log_verbosity, log_spec, user, group, manage_caps, use_syslog):
-    Common.LoggerSingleton().init("kzorp", log_verbosity, log_spec, use_syslog)
+    Common.LoggerSingleton().init("kzorpd", log_verbosity, log_spec, use_syslog)
 
     ZoneDownloadFactory.init(manage_caps)
     DAEMON = Daemon(user, group, manage_caps)
