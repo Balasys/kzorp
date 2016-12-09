@@ -88,10 +88,10 @@ kzorp_getsockopt_results(u8 family, struct sock *sk, int optval, void __user *us
 		BUG();
 	}
 
-	h = nf_conntrack_find_get(sock_net(sk), NF_CT_DEFAULT_ZONE, &tuple);
+	h = kz_nf_conntrack_find_get(sock_net(sk), &tuple);
 	if (h) {
 		struct nf_conn *ct = nf_ct_tuplehash_to_ctrack(h);
-		struct nf_conntrack_kzorp *kzorp;
+		struct kz_extension *kzorp;
 		u_int64_t cookie;
 		int res = 0;
 
@@ -131,6 +131,8 @@ kzorp_getsockopt_results(u8 family, struct sock *sk, int optval, void __user *us
 			COPY_NAME_TO_USER(user, service_name, kzorp->svc->name);
 
 		COPY_NUM_TO_USER(user, rule_id, kzorp->rule_id);
+
+		kz_extension_put(kzorp);
 error_put_ct:
 		rcu_read_unlock_bh();
 		nf_ct_put(ct);

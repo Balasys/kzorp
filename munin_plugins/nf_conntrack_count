@@ -1,0 +1,13 @@
+#!/bin/sh
+
+if [ "$1" = "config" ]; then
+        echo 'graph_title Conntrack entry count'
+        echo 'graph_args --base 1000 -l 0'
+        echo 'graph_vlabel Conntrack entry count'
+        echo 'graph_category Zorp'
+
+        echo "nf_conntrack_count.label" "Conntrack entry count"
+        exit 0
+fi
+
+echo "nf_conntrack_count.value " `cat /proc/sys/net/netfilter/nf_conntrack_count`

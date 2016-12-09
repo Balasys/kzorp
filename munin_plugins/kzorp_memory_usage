@@ -1,0 +1,17 @@
+#!/bin/sh
+
+if [ "$1" = "config" ]; then
+
+
+        echo 'graph_title kZorp memory usage'
+        echo 'graph_args --base 1024 -l 0'
+        echo 'graph_vlabel Slab objects'
+        echo 'graph_category Zorp'
+
+        echo "active_objs.label" "Active SLAB entry count"
+        echo "num_objs.label" "Total SLAB entry count"
+        exit 0
+fi
+
+echo "active_objs.value " `grep kzorp_slab /proc/slabinfo | sed 's% \+%\t%g' | cut -f 2`
+echo "num_objs.value " `grep kzorp_slab /proc/slabinfo | sed 's% \+%\t%g' | cut -f 3`

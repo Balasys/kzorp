@@ -1,0 +1,4 @@
+/usr/share/munin/plugins/kzorp_hash_lengths /etc/munin/plugins/kzorp_hash_lengths
+/usr/share/munin/plugins/kzorp_hash_stats /etc/munin/plugins/kzorp_hash_stats
+/usr/share/munin/plugins/kzorp_memory_usage /etc/munin/plugins/kzorp_memory_usage
+/usr/share/munin/plugins/nf_conntrack_count /etc/munin/plugins/nf_conntrack_count

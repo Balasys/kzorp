@@ -1414,34 +1414,67 @@ zone_lookup_node_free(struct kz_zone_lookup_node *n)
 }
 #endif
 
-static inline __be32
-addr_bit_test(const void *token, int bit)
+static inline int
+addr_bit_test(const __be32 *ip_addr, int bit)
 {
-	const __be32 *addr = token;
+	int nth_32bit;
+ 	int nr;
+	u32 addr_part;
 
-	return htonl(1 << ((~bit) & 0x1F)) & addr[bit >> 5];
+	nth_32bit = bit / 32;
+ 	nr = 31 - (bit - (32 * nth_32bit));
+	addr_part = ntohl(ip_addr[nth_32bit]);
+
+	return test_bit(nr, (const unsigned long *) &addr_part);
+}
+
+enum zone_lookup_tree_direction {
+	ZONE_LOOKUP_TREE_LEFT,
+	ZONE_LOOKUP_TREE_RIGHT
+};
+
+static inline enum zone_lookup_tree_direction
+zone_lookup_tree_get_direction(const union nf_inet_addr *addr, u_int8_t family, int bit)
+{
+	const __be32 *ip_addr;
+	const int addr_len = (family == NFPROTO_IPV6 ? 128 : 32);
+
+	if (bit == addr_len)
+		return ZONE_LOOKUP_TREE_LEFT;
+
+	switch (family) {
+	case NFPROTO_IPV4:
+		ip_addr = &addr->ip;
+		break;
+	case NFPROTO_IPV6:
+		ip_addr = &addr->ip6[0];
+		break;
+	default:
+		BUG();
+		break;
+	}
+
+	if (addr_bit_test(ip_addr, bit))
+	       return ZONE_LOOKUP_TREE_RIGHT;
+
+	return ZONE_LOOKUP_TREE_LEFT;
 }
 
 typedef bool (*addr_prefix_equal_fun) (const union nf_inet_addr *addr1,
-				       const union nf_inet_addr *addr2,
-				       unsigned int prefixlen);
+				       const union nf_inet_addr *mask1,
+				       const union nf_inet_addr *addr2);
 static inline bool
 ipv6_addr_prefix_equal(const union nf_inet_addr *addr1,
-		       const union nf_inet_addr *addr2,
-		       unsigned int prefixlen) {
-	return ipv6_prefix_equal(&addr1->in6, &addr2->in6, prefixlen);
+		       const union nf_inet_addr *mask1,
+		       const union nf_inet_addr *addr2) {
+	return ipv6_masked_addr_cmp(&addr1->in6, &mask1->in6, &addr2->in6) == 0;
 }
 
 static inline bool
 ipv4_addr_prefix_equal(const union nf_inet_addr *addr1,
-		       const union nf_inet_addr *addr2,
-		       unsigned int prefixlen) {
-	if (likely(prefixlen)) {
-		const struct in_addr mask = { htonl(0xffffffff << (32 - prefixlen)) };
-		return ipv4_masked_addr_cmp(&addr1->in, &mask, &addr2->in) == 0;
-	}
-
-	return true;
+		       const union nf_inet_addr *mask1,
+		       const union nf_inet_addr *addr2) {
+	return ipv4_masked_addr_cmp(&addr1->in, &mask1->in, &addr2->in) == 0;
 }
 
 static addr_prefix_equal_fun
@@ -1464,133 +1497,181 @@ get_addr_prefix_equal_fun_by_proto(u_int8_t proto)
 	return addr_prefix_equal;
 }
 
+static struct kz_zone_lookup_node *
+zone_lookup_node_insert_above_with_intermediate(struct kz_zone_lookup_node *parent,
+						struct kz_zone_lookup_node *orig_node,
+						const struct kz_subnet *subnet, int addr_len,
+						int prefix_len, int prefix_match_len,
+						__be32 dir)
+{
+	struct kz_zone_lookup_node *new_node, *intermediate_node;
+
+	/*
+	 *	   +----------------+
+	 *	   |  intermediate  |
+	 *	   +----------------+
+	 *	      /	       	  \
+	 * +--------------+  +--------------+
+	 * |     new   	  |  |     orig     |
+	 * +--------------+  +--------------+
+	 */
+	intermediate_node = zone_lookup_node_new();
+	new_node = zone_lookup_node_new();
+	if (new_node == NULL || intermediate_node == NULL) {
+		if (new_node)
+			zone_lookup_node_free(new_node);
+		if (intermediate_node)
+			zone_lookup_node_free(intermediate_node);
+		return NULL;
+	}
+
+	intermediate_node->prefix_len = prefix_match_len;
+	memcpy(&intermediate_node->addr, &subnet->addr, addr_len);
+	switch (subnet->family) {
+	case NFPROTO_IPV4:
+		intermediate_node->mask.in.s_addr = htonl(0xffffffff << (32 - prefix_match_len));
+		break;
+	case NFPROTO_IPV6:
+		ipv6_addr_prefix(&intermediate_node->mask.in6, &subnet->addr.in6, prefix_match_len);
+		break;
+	default:
+		BUG();
+		break;
+	}
+
+	if (dir == ZONE_LOOKUP_TREE_RIGHT)
+		parent->right = intermediate_node;
+	else
+		parent->left = intermediate_node;
+
+	new_node->prefix_len = prefix_len;
+	memcpy(&new_node->addr, &subnet->addr, addr_len);
+	memcpy(&new_node->mask, &subnet->mask, addr_len);
+
+	intermediate_node->parent = parent;
+	new_node->parent = intermediate_node;
+	orig_node->parent = intermediate_node;
+
+	if (zone_lookup_tree_get_direction(&orig_node->addr, subnet->family, prefix_match_len) == ZONE_LOOKUP_TREE_RIGHT) {
+		intermediate_node->right = orig_node;
+		intermediate_node->left = new_node;
+	} else {
+		intermediate_node->right = new_node;
+		intermediate_node->left = orig_node;
+	}
+
+	return new_node;
+}
+
+static struct kz_zone_lookup_node *
+zone_lookup_node_insert_above_without_intermediate(struct kz_zone_lookup_node *parent,
+						   struct kz_zone_lookup_node *orig_node,
+						   const struct kz_subnet *subnet, int addr_len,
+						   int prefix_len, int prefix_match_len,
+						   __be32 dir)
+{
+	struct kz_zone_lookup_node *new_node;
+
+	/* prefix_len <= prefix_match_len
+	 *
+	 *	 +-------------------+
+	 *	 |        new        |
+	 *	 +-------------------+
+	 *	    /  	       	  \
+	 * +--------------+  +--------------+
+	 * |     orig     |  |     NULL     |
+	 * +--------------+  +--------------+
+	 */
+	new_node = zone_lookup_node_new();
+	if (new_node == NULL)
+		return NULL;
+
+	new_node->prefix_len = prefix_len;
+	new_node->parent = parent;
+	memcpy(&new_node->addr, &subnet->addr, addr_len);
+	memcpy(&new_node->mask, &subnet->mask, addr_len);
+
+	if (dir)
+		parent->right = new_node;
+	else
+		parent->left = new_node;
+
+	if (zone_lookup_tree_get_direction(&orig_node->addr, subnet->family, prefix_len) == ZONE_LOOKUP_TREE_RIGHT)
+		new_node->right = orig_node;
+	else
+		new_node->left = orig_node;
+
+	orig_node->parent = new_node;
+
+	return new_node;
+}
+
+static struct kz_zone_lookup_node *
+zone_lookup_node_insert_above(struct kz_zone_lookup_node *orig_node,
+			      const struct kz_subnet *subnet, int addr_len,
+			      int prefix_len, __be32 dir)
+{
+	struct kz_zone_lookup_node *new_node, *parent;
+	int prefix_match_len;
+
+	/* split node, since we have a new key with shorter or different prefix */
+	parent = orig_node->parent;
+	/* __ipv6_addr_diff function work with IPv4 addresses also */
+	prefix_match_len = __ipv6_addr_diff(&subnet->addr, &orig_node->addr, addr_len);
+
+	if (prefix_len > prefix_match_len)
+		new_node = zone_lookup_node_insert_above_with_intermediate(parent, orig_node, subnet, addr_len, prefix_len, prefix_match_len, dir);
+	else
+		new_node = zone_lookup_node_insert_above_without_intermediate(parent, orig_node, subnet, addr_len, prefix_len, prefix_match_len, dir);
+        
+	return new_node;
+}
+
 KZ_PROTECTED struct kz_zone_lookup_node *
 zone_lookup_node_insert(struct kz_zone_lookup_node *root,
-			const union nf_inet_addr * addr, int prefix_len,
-			u_int8_t proto)
+			const struct kz_subnet *subnet, int prefix_len)
 {
-	addr_prefix_equal_fun addr_prefix_equal = get_addr_prefix_equal_fun_by_proto(proto);
-	const int addr_len = (proto == NFPROTO_IPV6 ? 16 : 4);
-	struct kz_zone_lookup_node *n, *parent, *leaf, *intermediate;
-	__be32 dir = 0;
-	int prefix_match_len;
+	addr_prefix_equal_fun addr_prefix_equal = get_addr_prefix_equal_fun_by_proto(subnet->family);
+	const int addr_len = (subnet->family == NFPROTO_IPV6 ? 16 : 4);
+	struct kz_zone_lookup_node *n, *parent, *new_node;
+	enum zone_lookup_tree_direction dir = ZONE_LOOKUP_TREE_LEFT;
 
 	n = root;
 
 	do {
 		/* prefix is different */
 		if (prefix_len < n->prefix_len ||
-		    !(*addr_prefix_equal)(&n->addr, addr, n->prefix_len))
-			goto insert_above;
+		    !(*addr_prefix_equal)(&n->addr, &n->mask, &subnet->addr)) {
+			new_node = zone_lookup_node_insert_above(n, subnet, addr_len, prefix_len, dir);
+			return new_node;
+		}
 
 		/* prefix is the same */
 		if (prefix_len == n->prefix_len)
 			return n;
 
 		/* more bits to go */
-		dir = addr_bit_test(addr, n->prefix_len);
+		dir = zone_lookup_tree_get_direction(&subnet->addr, subnet->family, n->prefix_len);
 		parent = n;
-		n = dir ? n->right : n->left;
+		n = (dir ==  ZONE_LOOKUP_TREE_RIGHT) ? n->right : n->left;
 	} while (n);
 
-	/* add a new leaf node */
-	leaf = zone_lookup_node_new();
-	if (leaf == NULL)
+	/* add a new new_node node */
+	new_node = zone_lookup_node_new();
+	if (new_node == NULL)
 		return NULL;
 
-	leaf->prefix_len = prefix_len;
-	leaf->parent = parent;
-	memcpy(&leaf->addr, addr, addr_len);
+	new_node->prefix_len = prefix_len;
+	new_node->parent = parent;
+	memcpy(&new_node->addr, &subnet->addr, addr_len);
+	memcpy(&new_node->mask, &subnet->mask, addr_len);
 
-	if (dir)
-		parent->right = leaf;
+	if (dir == ZONE_LOOKUP_TREE_RIGHT)
+		parent->right = new_node;
 	else
-		parent->left = leaf;
+		parent->left = new_node;
 
-	return leaf;
-
-insert_above:
-	/* split node, since we have a new key with shorter or different prefix */
-	parent = n->parent;
-
-	/* __ipv6_addr_diff function work with IPv4 addresses also */
-	prefix_match_len = __ipv6_addr_diff(addr, &n->addr, addr_len);
-
-	if (prefix_len > prefix_match_len) {
-		/*
-		 *	   +----------------+
-		 *	   |  intermediate  |
-		 *	   +----------------+
-		 *	      /	       	  \
-		 * +--------------+  +--------------+
-		 * |   new leaf	  |  |   old node   |
-		 * +--------------+  +--------------+
-		 */
-		intermediate = zone_lookup_node_new();
-		leaf = zone_lookup_node_new();
-		if (leaf == NULL || intermediate == NULL) {
-			if (leaf)
-				zone_lookup_node_free(leaf);
-			if (intermediate)
-				zone_lookup_node_free(intermediate);
-			return NULL;
-		}
-
-		intermediate->prefix_len = prefix_match_len;
-		memcpy(&intermediate->addr, addr, addr_len);
-
-		if (dir)
-			parent->right = intermediate;
-		else
-			parent->left = intermediate;
-
-		leaf->prefix_len = prefix_len;
-		memcpy(&leaf->addr, addr, addr_len);
-
-		intermediate->parent = parent;
-		leaf->parent = intermediate;
-		n->parent = intermediate;
-
-		if (addr_bit_test(&n->addr, prefix_match_len)) {
-			intermediate->right = n;
-			intermediate->left = leaf;
-		} else {
-			intermediate->right = leaf;
-			intermediate->left = n;
-		}
-	} else {
-		/* prefix_len <= prefix_match_len
-		 *
-		 *	 +-------------------+
-		 *	 |     new leaf      |
-		 *	 +-------------------+
-		 *	    /  	       	  \
-		 * +--------------+  +--------------+
-		 * |   old node   |  |     NULL     |
-		 * +--------------+  +--------------+
-		 */
-		leaf = zone_lookup_node_new();
-		if (leaf == NULL)
-			return NULL;
-
-		leaf->prefix_len = prefix_len;
-		leaf->parent = parent;
-		memcpy(&leaf->addr, addr, addr_len);
-
-		if (dir)
-			parent->right = leaf;
-		else
-			parent->left = leaf;
-
-		if (addr_bit_test(&n->addr, prefix_len))
-			leaf->right = n;
-		else
-			leaf->left = n;
-
-		n->parent = leaf;
-	}
-
-	return leaf;
+	return new_node;
 }
 
 KZ_PROTECTED const struct kz_zone_lookup_node *
@@ -1600,16 +1681,15 @@ zone_lookup_node_find(const struct kz_zone_lookup_node *root,
 {
 	addr_prefix_equal_fun addr_prefix_equal = get_addr_prefix_equal_fun_by_proto(proto);
 	const struct kz_zone_lookup_node *n = root;
-	__be32 dir;
+	enum zone_lookup_tree_direction dir;
 
 	/* first, descend to a possibly matching node */
 
 	for (;;) {
 		struct kz_zone_lookup_node *next;
 
-		dir = addr_bit_test(addr, n->prefix_len);
-
-		next = dir ? n->right : n->left;
+		dir = zone_lookup_tree_get_direction(addr, proto, n->prefix_len);
+		next = (dir == ZONE_LOOKUP_TREE_RIGHT) ? n->right : n->left;
 
 		if (next) {
 			n = next;
@@ -1626,7 +1706,7 @@ zone_lookup_node_find(const struct kz_zone_lookup_node *root,
 		if (n->zone) {
 			/* this is not an intermediate node, but a
 			 * real one with data associated with it */
-			if ((*addr_prefix_equal)(&n->addr, addr, n->prefix_len))
+			if ((*addr_prefix_equal)(&n->addr, &n->mask, addr))
 				return n;
 		}
 
@@ -1653,6 +1733,7 @@ zone_lookup_tree_add(struct kz_zone_lookup *zone_lookup, struct kz_zone * zone, 
 {
 	struct kz_zone_lookup_node *root;
 	struct kz_zone_lookup_node *node;
+	struct kz_zone **internet;
 	addr_prefix_equal_fun addr_prefix_equal;
 	unsigned int prefix_len;
 
@@ -1662,6 +1743,7 @@ zone_lookup_tree_add(struct kz_zone_lookup *zone_lookup, struct kz_zone * zone, 
 		pr_debug("adding zone to radix tree; name='%s', address='%pI4', mask='%pI4', prefix_len='%u'\n",
 			 zone->name, &subnet->addr.in, &subnet->mask.in, prefix_len);
 		root = zone_lookup->ipv4_root_node;
+		internet = &zone_lookup->ipv4_internet_zone;
 		addr_prefix_equal = ipv4_addr_prefix_equal;
 		break;
 	case NFPROTO_IPV6:
@@ -1669,6 +1751,7 @@ zone_lookup_tree_add(struct kz_zone_lookup *zone_lookup, struct kz_zone * zone, 
 		pr_debug("adding zone to radix tree; name='%s', address='%pI6c', mask='%pI6c', prefix_len='%u'\n",
 			 zone->name, &subnet->addr.in6, &subnet->mask.in6, prefix_len);
 		root = zone_lookup->ipv6_root_node;
+		internet = &zone_lookup->ipv6_internet_zone;
 		addr_prefix_equal = ipv6_addr_prefix_equal;
 		break;
 	default:
@@ -1676,7 +1759,12 @@ zone_lookup_tree_add(struct kz_zone_lookup *zone_lookup, struct kz_zone * zone, 
 		break;
 	}
 
-	node = zone_lookup_node_insert(root, &subnet->addr, prefix_len, subnet->family);
+	if (prefix_len == 0) {
+		*internet = zone;
+		return 0;
+	}
+
+	node = zone_lookup_node_insert(root, subnet, prefix_len);
 	if (node == NULL) {
 		pr_err_ratelimited("error allocating node structure\n");
 		return -ENOMEM;
@@ -1697,15 +1785,18 @@ kz_head_zone_lookup(const struct kz_head_z *h, const union nf_inet_addr * addr, 
 {
 	const struct kz_zone_lookup_node *node;
 	const struct kz_zone_lookup_node *root;
+	struct kz_zone *internet;
 
 	switch (proto) {
 	case NFPROTO_IPV4:
 		pr_debug("lookup zone in radix tree; addr='%pI4'\n", &addr->in);
 		root = h->zone_lookup.ipv4_root_node;
+		internet = h->zone_lookup.ipv4_internet_zone;
 		break;
 	case NFPROTO_IPV6:
 		pr_debug("lookup zone in radix tree; addr='%pI6c'\n", &addr->in6);
 		root = h->zone_lookup.ipv6_root_node;
+		internet = h->zone_lookup.ipv6_internet_zone;
 		break;
 	default:
 		BUG();
@@ -1714,7 +1805,7 @@ kz_head_zone_lookup(const struct kz_head_z *h, const union nf_inet_addr * addr, 
 
 	node = zone_lookup_node_find(root, addr, proto);
 	if (node == NULL)
-		return NULL;
+		return internet;
 
 	/* if ipv6_lookup() returns with an intermediate node we're in
 	 * big trouble, because that means that the lookup algorithm
@@ -1738,6 +1829,8 @@ kz_head_zone_init(struct kz_head_z *h)
 {
 	h->zone_lookup.ipv6_root_node = zone_lookup_node_new();
 	h->zone_lookup.ipv4_root_node = zone_lookup_node_new();
+	h->zone_lookup.ipv6_internet_zone = NULL;
+	h->zone_lookup.ipv4_internet_zone = NULL;
 }
 EXPORT_SYMBOL_GPL(kz_head_zone_init);
 
@@ -1878,7 +1971,7 @@ bind_lookup_get_l4proto(const u8 l4proto)
 static void
 bind_lookup_build(struct kz_bind_lookup *bind_lookup)
 {
-	const struct kz_bind const *bind;
+	const struct kz_bind *bind;
 	unsigned int num_binds;
 	enum kz_bind_l3proto l3proto;
 	enum kz_bind_l4proto l4proto;
@@ -1896,7 +1989,7 @@ bind_lookup_build(struct kz_bind_lookup *bind_lookup)
 	if (num_binds == 0)
 		return;
 
-	bind_lookup->binds = (const struct kz_bind const **) kzalloc(sizeof(struct kz_bind *) * num_binds, GFP_KERNEL);
+	bind_lookup->binds = (const struct kz_bind **) kzalloc(sizeof(struct kz_bind *) * num_binds, GFP_KERNEL);
 	num_binds = 0;
 	for (l3proto = KZ_BIND_L3PROTO_IPV4; l3proto < KZ_BIND_L3PROTO_COUNT; l3proto++) {
 		for (l4proto = KZ_BIND_L4PROTO_TCP; l4proto < KZ_BIND_L4PROTO_COUNT; l4proto++) {
@@ -1937,10 +2030,10 @@ instance_bind_lookup_swap(struct kz_instance *instance, struct kz_bind_lookup *n
 
 /* !!! must be called with the instance mutex held !!! */
 void
-kz_instance_remove_bind(struct kz_instance *instance, const netlink_port_t pid_to_remove, const struct kz_transaction const *tr)
+kz_instance_remove_bind(struct kz_instance *instance, const netlink_port_t pid_to_remove, const struct kz_transaction *tr)
 {
 	struct kz_bind_lookup *bind_lookup;
-	const struct kz_bind const *orig_bind;
+	const struct kz_bind *orig_bind;
 	struct kz_bind *new_bind;
 	struct kz_operation *io, *po;
 
@@ -1982,14 +2075,14 @@ bind_lookup_hash_v4(__be32 saddr, __be16 sport, __be32 daddr, __be16 dport)
 }
 
 const struct kz_bind * const
-kz_instance_bind_lookup_v4(const struct kz_instance const *instance, u8 l4proto,
+kz_instance_bind_lookup_v4(const struct kz_instance *instance, u8 l4proto,
 			__be32 saddr, __be16 sport,
 			__be32 daddr, __be16 dport)
 {
 	unsigned int bind_num;
 	unsigned int lookup_bind_num;
 	enum kz_bind_l4proto bind_l4proto = bind_lookup_get_l4proto(l4proto);
-	const struct kz_bind const *bind;
+	const struct kz_bind *bind;
 
 	pr_debug("lookup bind; l4proto='%d', saddr='%pI4', sport='%d', daddr='%pI4', dport='%d'\n", l4proto, &saddr, htons(sport), &daddr, htons(dport));
 
@@ -2012,7 +2105,7 @@ kz_instance_bind_lookup_v4(const struct kz_instance const *instance, u8 l4proto,
 EXPORT_SYMBOL(kz_instance_bind_lookup_v4);
 
 static inline unsigned int
-bind_lookup_hash_v6(const struct in6_addr const *saddr, __be16 sport, const struct in6_addr const *daddr, __be16 dport)
+bind_lookup_hash_v6(const struct in6_addr *saddr, __be16 sport, const struct in6_addr *daddr, __be16 dport)
 {
 	/* FIXME: seed */
 	return jhash_3words(jhash2(saddr->s6_addr32, ARRAY_SIZE(saddr->s6_addr32), 0),
@@ -2021,14 +2114,14 @@ bind_lookup_hash_v6(const struct in6_addr const *saddr, __be16 sport, const stru
 }
 
 const struct kz_bind * const
-kz_instance_bind_lookup_v6(const struct kz_instance const *instance, u8 l4proto,
-			   const struct in6_addr const *saddr, __be16 sport,
-			   const struct in6_addr const *daddr, __be16 dport)
+kz_instance_bind_lookup_v6(const struct kz_instance *instance, u8 l4proto,
+			   const struct in6_addr *saddr, __be16 sport,
+			   const struct in6_addr *daddr, __be16 dport)
 {
 	unsigned int bind_num;
 	unsigned int lookup_bind_num;
 	enum kz_bind_l4proto bind_l4proto = bind_lookup_get_l4proto(l4proto);
-	const struct kz_bind const *bind;
+	const struct kz_bind *bind;
 
 	pr_debug("lookup bind; l4proto='%d', saddr='%pI6c', sport='%d', daddr='%pI6c', dport='%d'\n", l4proto, saddr, htons(sport), daddr, htons(dport));
 
@@ -2053,34 +2146,43 @@ EXPORT_SYMBOL_GPL(kz_instance_bind_lookup_v6);
  * NAT rule lookup
  ***********************************************************/
 
+static inline int
+iprange_ipv6_lt(const struct in6_addr *a, const struct in6_addr *b)
+{
+	unsigned int i;
+
+	for (i = 0; i < 4; ++i) {
+		if (a->s6_addr32[i] != b->s6_addr32[i])
+			return ntohl(a->s6_addr32[i]) < ntohl(b->s6_addr32[i]);
+	}
+
+	return 0;
+}
+
 /* FIXME: this is _heavily_ dependent on TCP and UDP port numbers
  * being mapped to the same offset in the ip_nat_range structure */
 static inline int
 nat_in_range(const struct nf_nat_range *r,
-	 const __be32 addr, const __be16 port,
-	 const u_int8_t proto)
+	     const union nf_inet_addr *addr, const u_int8_t l3proto)
 {
 	/* log messages: the IP addresses are in host-endian format due to usage of "<" and ">" relations */
-	pr_debug("comparing range; flags='%x', start_ip='%pI4', end_ip='%pI4', start_port='%u', end_port='%u'\n",
-		 r->flags,
-	         kz_nat_range_get_min_ip(r),
-	         kz_nat_range_get_max_ip(r),
-	         ntohs(*kz_nat_range_get_min_port(r)),
-	         ntohs(*kz_nat_range_get_max_port(r)));
-	pr_debug("with packet; proto='%d', ip='%pI4', port='%u'\n",
-		 proto, &addr, ntohs(port));
-
-	if (r->flags & NF_NAT_RANGE_MAP_IPS) {
-		if ((*kz_nat_range_get_min_ip(r) && ntohl(addr) < ntohl(*kz_nat_range_get_min_ip(r))) ||
-		    (*kz_nat_range_get_max_ip(r) && ntohl(addr) > ntohl(*kz_nat_range_get_max_ip(r))))
+	switch (l3proto) {
+	case NFPROTO_IPV4:
+		pr_debug("comparing range; start_ip='%pI4', end_ip='%pI4'\n",
+			 &r->min_addr.ip, &r->max_addr.ip);
+		pr_debug("with packet; ip='%pI4'\n", &addr->ip);
+		if (ntohl(addr->ip) < ntohl(r->min_addr.ip)
+		    || ntohl(addr->ip) > ntohl(r->max_addr.ip))
 			return 0;
-	}
-
-	if ((r->flags & NF_NAT_RANGE_PROTO_SPECIFIED) &&
-	    ((proto == IPPROTO_TCP) || (proto == IPPROTO_UDP))) {
-		if ((*kz_nat_range_get_min_port(r) && ntohs(port) < ntohs(*kz_nat_range_get_min_port(r))) ||
-		    (*kz_nat_range_get_max_port(r) && ntohs(port) > ntohs(*kz_nat_range_get_max_port(r))))
+		break;
+	case NFPROTO_IPV6:
+		pr_debug("comparing range; start_ip='%pI6c', end_ip='%pI6c'\n",
+			 &r->min_addr.ip6, &r->max_addr.ip6);
+		pr_debug("with packet; ip='%pI6c'\n", &addr->ip6);
+		if (iprange_ipv6_lt(&addr->in6, &r->min_addr.in6)
+		    || iprange_ipv6_lt(&r->max_addr.in6, &addr->in6))
 			return 0;
+		break;
 	}
 
 	pr_debug("match\n");
@@ -2088,23 +2190,31 @@ nat_in_range(const struct nf_nat_range *r,
 	return 1;
 }
 
-const struct nf_nat_range *
-kz_service_nat_lookup(const struct list_head * const head,
-		      const __be32 saddr, const __be32 daddr,
-		      const __be16 sport, const __be16 dport,
-		  const u_int8_t proto)
+const struct nf_nat_range *kz_service_nat_lookup(const struct list_head *const
+						 head,
+						 const union nf_inet_addr
+						 *saddr,
+						 const union nf_inet_addr
+						 *daddr, const u_int8_t l3proto)
 {
 	struct kz_service_nat_entry *i;
 
-	pr_debug("proto='%u', src='%pI4:%u', dst='%pI4:%u'\n",
-		 proto, &saddr, ntohs(sport), &daddr, ntohs(dport));
+	switch (l3proto) {
+	case NFPROTO_IPV4:
+		pr_debug("src='%pI4', dst='%pI4'\n", &saddr->ip, &daddr->ip);
+		break;
+	case NFPROTO_IPV6:
+		pr_debug("src='%pI6c', dst='%pI6c'\n",
+			 &saddr->ip6, &daddr->ip6);
+		break;
+	}
 
 	list_for_each_entry(i, head, list) {
 		/* source range _must_ match, destination either matches or
 		 * the destination range is empty in the rule */
-		if (nat_in_range(&i->src, saddr, sport, proto) &&
-		    (((*kz_nat_range_get_min_ip(&i->dst) == 0) && (*kz_nat_range_get_max_ip(&i->dst) == 0)) ||
-		    nat_in_range(&i->dst, daddr, dport, proto))) {
+		if (l3proto == i->l3proto &&
+		    nat_in_range(&i->src, saddr, l3proto) &&
+		    nat_in_range(&i->dst, daddr, l3proto)) {
 			return &i->map;
 		}
 	}

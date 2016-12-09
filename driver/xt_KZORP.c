@@ -51,13 +51,6 @@
 
 static const char *const kz_log_null = "(NULL)";
 
-static struct kz_zone *
-kz_zone_lookup(const struct kz_config *cfg, __be32 _addr)
-{
-	const union nf_inet_addr addr = { .ip = _addr };
-	return kz_head_zone_lookup(&cfg->zones, &addr, NFPROTO_IPV4);
-}
-
 /**
  * v4_get_instance_bind_address() - look up the matching listener socket of the instance
  * @dpt: The dispatcher we've found.
@@ -77,7 +70,7 @@ v4_lookup_instance_bind_address(const struct kz_dispatcher *dpt,
 {
 	const struct iphdr *iph = ip_hdr(skb);
 	struct sock *sk = NULL;
-	const struct kz_bind const *bind = kz_instance_bind_lookup_v4(dpt->instance, l4proto,
+	const struct kz_bind *bind = kz_instance_bind_lookup_v4(dpt->instance, l4proto,
 								      iph->saddr, sport,
 								      iph->daddr, dport);
 	if (bind) {
@@ -121,9 +114,8 @@ v4_get_socket_to_redirect_to(const struct kz_dispatcher *dpt,
 			if (sk) {
 				if (sk->sk_state == TCP_TIME_WAIT &&
 				    tcp_header->syn && !tcp_header->rst && !tcp_header->ack && !tcp_header->fin)
-					kz_inet_twsk_deschedule(inet_twsk(sk));
-
-				if (sk->sk_state == TCP_TIME_WAIT)
+					kz_inet_twsk_deschedule_put(inet_twsk(sk));
+				else if (sk->sk_state == TCP_TIME_WAIT)
 					inet_twsk_put(inet_twsk(sk));
 				else
 					sock_put(sk);
@@ -239,8 +231,7 @@ relookup_time_wait6(struct sk_buff *skb, int l4proto, int thoff,
 					    proxy_port,
 					    skb->dev, NFT_LOOKUP_LISTENER);
 		if (sk2) {
-			kz_inet_twsk_deschedule(inet_twsk(sk));
-			inet_twsk_put(inet_twsk(sk));
+			kz_inet_twsk_deschedule_put(inet_twsk(sk));
 			sk = sk2;
 		}
 	}
@@ -287,7 +278,7 @@ redirect_v6(struct sk_buff *skb, u8 l4proto,
 				   skb->dev, NFT_LOOKUP_ESTABLISHED);
 	if (sk == NULL || sk->sk_state == TCP_TIME_WAIT) {
 
-		const struct kz_bind const *bind = kz_instance_bind_lookup_v6(dpt->instance, l4proto,
+		const struct kz_bind *bind = kz_instance_bind_lookup_v6(dpt->instance, l4proto,
 									      &iph->saddr, sport,
 									      &iph->daddr, dport);
 		if (bind) {
@@ -371,40 +362,51 @@ redirect_to_proxy(struct sk_buff *skb,
 
 static inline unsigned int
 process_forwarded_session(unsigned int hooknum, struct sk_buff *skb,
-			  const struct net_device *in, const struct net_device *out,
-			  const struct kz_config *cfg,
-			  u8 l3proto, u8 l4proto,
-			  __be16  sport, __be16 dport, 
-			  struct nf_conn * const ct,
+			  const struct net_device *in,
+			  const struct net_device *out,
+			  const struct kz_config *cfg, u8 l3proto, u8 l4proto,
+			  __be16 sport, __be16 dport, struct nf_conn *const ct,
 			  const enum ip_conntrack_info ctinfo,
-			  struct kz_zone ** const szone,
-			  struct kz_service *svc)
+			  struct kz_zone **const szone, struct kz_service *svc)
 {
 	unsigned int verdict = NF_ACCEPT;
 	const struct nf_nat_range *map;
 	struct nf_nat_range fakemap;
-	__be32 raddr;
+	union nf_inet_addr saddr, raddr;
 	__be16 rport;
 	const struct list_head *head = NULL;
 
-	/* new IPv4 connections only */
-	if (l3proto == NFPROTO_IPV4 && ct && (ctinfo == IP_CT_NEW) &&
-	    !nf_nat_initialized(ct, HOOK2MANIP(hooknum))) {
+	if (ct && (ctinfo == IP_CT_NEW)
+	    && !nf_nat_initialized(ct, HOOK2MANIP(hooknum))) {
 
-		const struct iphdr * const iph = ip_hdr(skb);
+		if (l3proto == NFPROTO_IPV4)
+			saddr.ip = ip_hdr(skb)->saddr;
+		else
+			saddr.in6 = ipv6_hdr(skb)->saddr;
 
 		/* destination address:
 		 *   - original destination if the service is transparent
 		 *   - specified destination otherwise */
 		if (svc->flags & KZF_SERVICE_TRANSPARENT) {
-			raddr = ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple.dst.u3.ip;
+			raddr = ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple.dst.u3;
 			rport = ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple.dst.u.udp.port;
 		} else {
-			raddr = svc->a.fwd.router_dst_addr.ip;
+			raddr = svc->a.fwd.router_dst_addr;
 			rport = htons(svc->a.fwd.router_dst_port);
 		}
 
-		pr_debug("processing forwarded session; remote_address='%pI4:%u'\n", &raddr, ntohs(rport));
+		switch (l3proto) {
+		case NFPROTO_IPV4:
+			pr_debug
+			    ("processing forwarded session; remote_address='%pI4:%u'\n",
+			     &raddr.ip, ntohs(rport));
+			break;
+		case NFPROTO_IPV6:
+			pr_debug
+			    ("processing forwarded session; remote_address='[%pI6c]:%u'\n",
+			     &raddr.ip6, ntohs(rport));
+			break;
+		}
 
 		switch (hooknum) {
 		case NF_INET_PRE_ROUTING:
@@ -420,8 +422,7 @@ process_forwarded_session(unsigned int hooknum, struct sk_buff *skb,
 			BUG();
 		}
 
-		map = kz_service_nat_lookup(head, iph->saddr, raddr,
-					sport, rport, l4proto);
+		map = kz_service_nat_lookup(head, &saddr, &raddr, l3proto);
 		pr_debug("NAT rule lookup done; map='%p'\n", map);
 
 		if (hooknum == NF_INET_PRE_ROUTING) {
@@ -429,23 +430,34 @@ process_forwarded_session(unsigned int hooknum, struct sk_buff *skb,
 				if (!(svc->flags & KZF_SERVICE_TRANSPARENT)) {
 					/* PFService with DirectedRouter, we have to DNAT to
 					 * the specified address */
-					fakemap.flags = NF_NAT_RANGE_MAP_IPS | NF_NAT_RANGE_PROTO_SPECIFIED;
-					kz_nat_range_set_min_ip(&fakemap, raddr);
-					kz_nat_range_set_max_ip(&fakemap, raddr);
-					kz_nat_range_set_min_port(&fakemap, rport);
-					kz_nat_range_set_max_port(&fakemap, rport);
+					fakemap.flags = NF_NAT_RANGE_MAP_IPS |
+					                NF_NAT_RANGE_PROTO_SPECIFIED;
+					fakemap.min_addr = raddr;
+					fakemap.max_addr = raddr;
+					fakemap.min_proto.udp.port = rport;
+					fakemap.max_proto.udp.port = rport;
 					map = &fakemap;
-					pr_debug("setting up destination NAT for DirectedRouter; new_dst='%pI4:%u'\n",
-						 &raddr, ntohs(rport));
+					switch (l3proto) {
+					case NFPROTO_IPV4:
+						pr_debug
+						    ("setting up destination NAT for DirectedRouter; new_dst='%pI4:%u'\n",
+						     &raddr.ip, ntohs(rport));
+						break;
+					case NFPROTO_IPV6:
+						pr_debug
+						    ("setting up destination NAT for DirectedRouter; new_dst='[%pI6c]:%u'\n",
+						     &raddr.ip6, ntohs(rport));
+						break;
+					}
 				}
 			} else {
 				/* DNAT entry with no specified destination port */
-				if (!(map->flags & NF_NAT_RANGE_PROTO_SPECIFIED)) {
-					fakemap.flags = NF_NAT_RANGE_MAP_IPS | NF_NAT_RANGE_PROTO_SPECIFIED;
-					kz_nat_range_set_min_ip(&fakemap, *kz_nat_range_get_min_ip(map));
-					kz_nat_range_set_max_ip(&fakemap, *kz_nat_range_get_max_ip(map));
-					kz_nat_range_set_min_port(&fakemap, rport);
-					kz_nat_range_set_max_port(&fakemap, rport);
+				if (!
+				    (map->
+				     flags & NF_NAT_RANGE_PROTO_SPECIFIED)) {
+					fakemap.flags = NF_NAT_RANGE_MAP_IPS;
+					fakemap.min_addr = map->min_addr;
+					fakemap.max_addr = map->max_addr;
 					map = &fakemap;
 				}
 			}
@@ -455,20 +467,31 @@ process_forwarded_session(unsigned int hooknum, struct sk_buff *skb,
 			struct kz_zone *fzone = NULL;
 
 			/* mapping found */
-			pr_debug("NAT rule found; hooknum='%d', min_ip='%pI4', max_ip='%pI4', min_port='%u', max_port='%u'\n",
-				 hooknum,
-				 kz_nat_range_get_min_ip(map),
-				 kz_nat_range_get_max_ip(map),
-				 ntohs(*kz_nat_range_get_min_port(map)),
-				 ntohs(*kz_nat_range_get_max_port(map)));
+			switch (l3proto) {
+			case NFPROTO_IPV4:
+				pr_debug
+				    ("NAT rule found; hooknum='%d', min_ip='%pI4', max_ip='%pI4'\n",
+				     hooknum, &map->min_addr.ip,
+				     &map->max_addr.ip);
+				break;
+			case NFPROTO_IPV6:
+				pr_debug
+				    ("NAT rule found; hooknum='%d', min_ip='%pI6c', max_ip='%pI6c'\n",
+				     hooknum, &map->min_addr.ip6,
+				     &map->max_addr.ip6);
+				break;
+			}
 
 			if (hooknum == NF_INET_PRE_ROUTING) {
 				/* XXX: Assumed: map->min_ip == map->max_ip */
-				fzone = kz_zone_lookup(cfg, *kz_nat_range_get_min_ip(map));
+				fzone = kz_head_zone_lookup(&cfg->zones,
+							    &map->min_addr,
+							    l3proto);
 
-				pr_debug("re-lookup zone after NAT; old_zone='%s', new_zone='%s'\n",
-					 *szone ? (*szone)->name : kz_log_null,
-					 fzone ? fzone->name : kz_log_null);
+				pr_debug
+				    ("re-lookup zone after NAT; old_zone='%s', new_zone='%s'\n",
+				     *szone ? (*szone)->name : kz_log_null,
+				     fzone ? fzone->name : kz_log_null);
 
 				if (fzone != *szone) {
 					*szone = fzone;
@@ -487,27 +510,55 @@ process_forwarded_session(unsigned int hooknum, struct sk_buff *skb,
 			    !(svc->flags & KZF_SERVICE_FORGE_ADDR)) {
 				struct rtable *rt;
 				struct nf_nat_range range;
-				__be32 laddr;
+				union nf_inet_addr laddr;
 
 				rt = skb_rtable(skb);
-				laddr = inet_select_addr(out, rt->rt_gateway, RT_SCOPE_UNIVERSE);
-				if (!laddr) {
-					pr_debug("failed to select source address; out_iface='%s'\n",
-						 out ? out->name : kz_log_null);
-					goto done;
+				range.flags = NF_NAT_RANGE_MAP_IPS;
+				if (l3proto == NFPROTO_IPV4) {
+					laddr.ip = inet_select_addr(out,
+								    rt->rt_gateway,
+								    RT_SCOPE_UNIVERSE);
+					if (!laddr.ip) {
+						pr_debug
+						    ("failed to select source address; out_iface='%s'\n",
+						     out ? out->
+						     name : kz_log_null);
+						goto done;
+					}
+				} else {
+					if (ipv6_dev_get_saddr
+					    (dev_net(out), out, &raddr.in6, 0,
+					     &laddr.in6)) {
+						pr_debug
+						    ("failed to select source address; out_iface='%s'\n",
+						     out ? out->
+						     name : kz_log_null);
+						goto done;
+					}
 				}
 
-				range.flags = NF_NAT_RANGE_MAP_IPS;
-				kz_nat_range_set_min_ip(&range, laddr);
-				kz_nat_range_set_max_ip(&range, laddr);
+				range.min_addr = laddr;
+				range.max_addr = laddr;
 
-				pr_debug("setting up implicit SNAT as FORGE_ADDR is off; new_src='%pI4'\n", &laddr);
-				verdict = nf_nat_setup_info(ct, &range, HOOK2MANIP(hooknum));
+				switch (l3proto) {
+				case NFPROTO_IPV4:
+					pr_debug
+					    ("setting up implicit SNAT as FORGE_ADDR is off; new_src='%pI4'\n",
+					     &laddr.ip);
+					break;
+				case NFPROTO_IPV6:
+					pr_debug
+					    ("setting up implicit SNAT as FORGE_ADDR is off; new_src='%pI6c'\n",
+					     &laddr.ip6);
+					break;
+				}
+				verdict = nf_nat_setup_info(ct, &range,
+						            HOOK2MANIP(hooknum));
 			}
 		}
 	}
 
-done:
+ done:
 	pr_debug("verdict='%d'\n", verdict);
 	return verdict;
 }
@@ -645,7 +696,7 @@ send_reset_v4(struct sk_buff *oldskb, int hook)
 	skb_dst_set_noref(nskb, skb_dst(oldskb));
 
 	nskb->protocol = htons(ETH_P_IP);
-	if (ip_route_me_harder(nskb, RTN_UNICAST))
+	if (kz_ip_route_me_harder(nskb, RTN_UNICAST))
 		goto free_nskb;
 
 	niph->ttl	= ip4_dst_hoplimit(skb_dst(nskb));
@@ -656,7 +707,7 @@ send_reset_v4(struct sk_buff *oldskb, int hook)
 
 	nf_ct_attach(nskb, oldskb);
 
-	ip_local_out(nskb);
+	kz_ip_local_out(nskb);
 	return;
 
  free_nskb:
@@ -803,7 +854,7 @@ send_reset_v6(struct net *net, struct sk_buff *oldskb)
 
 	nf_ct_attach(nskb, oldskb);
 
-	ip6_local_out(nskb);
+	kz_ip6_local_out(nskb);
 }
 
 static void
@@ -824,7 +875,7 @@ process_denied_session(unsigned int hooknum, struct sk_buff *skb,
 		       u8 l3proto, u8 l4proto,
 		       u16 sport, u16 dport,
 		       const struct nf_conn *ct,
-		       const struct nf_conntrack_kzorp *kzorp)
+		       const struct kz_extension *kzorp)
 {
 	struct kz_service *svc = kzorp->svc;
 	struct net *net = dev_net(in);
@@ -919,10 +970,10 @@ process_denied_session(unsigned int hooknum, struct sk_buff *skb,
 }
 
 /* cast away constness */
-static inline struct nf_conntrack_kzorp *
-patch_kzorp(const struct nf_conntrack_kzorp *kzorp)
+static inline struct kz_extension *
+patch_kzorp(const struct kz_extension *kzorp)
 {
-	return (struct nf_conntrack_kzorp *) kzorp;
+	return (struct kz_extension *) kzorp;
 }
 
 static inline struct kz_rule *
@@ -942,7 +993,7 @@ find_rule_by_id(struct kz_dispatcher *dispatcher, u_int64_t rule_id)
 
 static bool
 service_assign_session_id(const struct nf_conn *ct,
-			  const struct nf_conntrack_kzorp *kzorp)
+			  const struct kz_extension *kzorp)
 {
 	struct kz_service *svc = kzorp->svc;
 
@@ -951,7 +1002,7 @@ service_assign_session_id(const struct nf_conn *ct,
 				       ct, kzorp);
 		return false;
 	} else {
-		struct nf_conntrack_kzorp *patchable_kzorp = patch_kzorp(kzorp);
+		struct kz_extension *patchable_kzorp = patch_kzorp(kzorp);
 		struct kz_dispatcher *dispatcher = patchable_kzorp->dpt;
 		struct kz_rule *rule = NULL;
 
@@ -979,7 +1030,7 @@ kz_prerouting_verdict(struct sk_buff *skb,
 		      __be16 sport, __be16 dport,
 		      enum ip_conntrack_info ctinfo,
 		      struct nf_conn *ct,
-		      const struct nf_conntrack_kzorp *kzorp,
+		      const struct kz_extension *kzorp,
 		      const struct xt_kzorp_target_info *tgi)
 {
 	struct kz_dispatcher *dpt = kzorp->dpt; 
@@ -1060,7 +1111,7 @@ kz_input_newconn_verdict(struct sk_buff *skb,
 			 u8 l3proto, u8 l4proto,
 			 u16 sport, u16 dport,
 			 const struct nf_conn *ct,
-			 const struct nf_conntrack_kzorp *kzorp)
+			 const struct kz_extension *kzorp)
 {
 	unsigned int verdict = NF_ACCEPT;
 	struct kz_service *svc = kzorp->svc;
@@ -1084,7 +1135,7 @@ kz_forward_newconn_verdict(struct sk_buff *skb,
 			   u8 l3proto, u8 l4proto,
 			   u16 sport, u16 dport,
 			   const struct nf_conn *ct,
-			   const struct nf_conntrack_kzorp *kzorp)
+			   const struct kz_extension *kzorp)
 {
 	unsigned int verdict = NF_ACCEPT;
 	struct kz_service *svc = kzorp->svc;
@@ -1136,7 +1187,7 @@ kz_postrouting_newconn_verdict(struct sk_buff *skb,
 			       u8 l4proto,
 			       u16 sport, u16 dport,
 			       struct nf_conn *ct,
-			       const struct nf_conntrack_kzorp *kzorp,
+			       const struct kz_extension *kzorp,
 			       const struct xt_kzorp_target_info *tgi)
 {
 	struct kz_dispatcher *dpt = kzorp->dpt; 
@@ -1164,8 +1215,7 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	unsigned int verdict = NF_ACCEPT;
 	enum ip_conntrack_info ctinfo;
 	struct nf_conn *ct;
-	const struct nf_conntrack_kzorp *kzorp;
-	struct nf_conntrack_kzorp local_kzorp;
+	struct kz_extension *kzorp;
 	const struct kz_config *cfg = NULL;
 	u_int8_t l4proto = 0;
 	struct {
@@ -1242,7 +1292,7 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	}
 
 	rcu_read_lock();
-	kz_extension_get_from_ct_or_lookup(skb, in, par->family, &local_kzorp, &kzorp, &cfg);
+	kzorp = kz_extension_find_or_evaluate(skb, in, par->family, &cfg);
 
 	pr_debug("lookup data for kzorp hook; dpt='%s', client_zone='%s', server_zone='%s', svc='%s'\n",
 		 kzorp->dpt ? kzorp->dpt->name : kz_log_null,
@@ -1281,10 +1331,8 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 		BUG();
 		break;
 	}
-
-	if (kzorp == &local_kzorp)
-		kz_destroy_kzorp(&local_kzorp);
 	rcu_read_unlock();
+	kz_extension_put(kzorp);
 
 	return verdict;
 }

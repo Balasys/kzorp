@@ -55,9 +55,6 @@ esac
 
 TestRoot="${Root}/tests"
 OSImageDir="${Root}/disk_images"
-OSImageName="disk.img.dist_${OSVersion}_${Architecture}"
-OSImagePath="${OSImageDir}/${OSImageName}"
-OSImagePathSeed="${OSImageDir}/${OSImageName}.seed"
 
 if [ -z ${KMemLeakURL} ]; then
   ImageURL="http://cloud-images.ubuntu.com/server/releases/${OSVersion}/release"
@@ -65,6 +62,10 @@ if [ -z ${KMemLeakURL} ]; then
 else
   ImageURL=${KMemLeakURL}
 fi
+
+OSImageName="${ImageURL##*/}"  # The part after the last '/' character (the actual filename)
+OSImagePath="${OSImageDir}/${OSImageName}"
+OSImagePathSeed="${OSImageDir}/${OSImageName}.seed"
 
 if [ ! -d ${OSImageDir} ]; then
   mkdir -p ${OSImageDir}
@@ -80,6 +81,7 @@ fi
 mkdir -p $TestRoot
 touch $TestRoot/result.xml
 touch $TestRoot/kmemleak
+touch $TestRoot/dmesg
 
 ## Packages to install
 Packages="
@@ -88,7 +90,8 @@ Packages="
  - autoconf
  - libtool
  - python-prctl
- - python-nose"
+ - python-nose
+ - python-netaddr"
 if [ -z ${KMemLeakURL} ]; then
   Packages="$Packages
  - linux-headers-generic"
@@ -100,7 +103,7 @@ cat > $TestSeedConf <<EOF
 password: zorp
 chpasswd: { expire: False }
 ssh_pwauth: True
-apt_proxy: http://proxy.balabit:3128
+apt_mirror: http://mirror.balasys/ubuntu/
 packages: $Packages
 runcmd:
  - set -x
@@ -121,6 +124,7 @@ runcmd:
  - echo scan | sudo tee /sys/kernel/debug/kmemleak  # kmemleak is more reliable when scanning twice:
  - echo scan | sudo tee /sys/kernel/debug/kmemleak  # http://stackoverflow.com/questions/12943906/debug-kernel-module-memory-corruption
  - sudo cp /sys/kernel/debug/kmemleak ${TestRoot}/kmemleak
+ - dmesg | sudo tee ${TestRoot}/dmesg > /dev/null
  - cp nosetests.xml ${TestRoot}/result.xml
  - sudo poweroff
 EOF
@@ -140,4 +144,7 @@ cp ${TestRoot}/result.xml result.xml
 if [ ! -z $KMemLeakURL ]; then
   cp ${TestRoot}/kmemleak kmemleak
   ./driver/tests/kmemleak2junit.py
+
+  cp ${TestRoot}/dmesg dmesg
+  ./driver/tests/kasan2junit.py
 fi

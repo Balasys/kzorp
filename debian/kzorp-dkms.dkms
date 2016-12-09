@@ -1,5 +1,8 @@
 PACKAGE_NAME="kzorp"
-PACKAGE_VERSION="@VERSION@"
+PACKAGE_VERSION="#MODULE_VERSION#"
+
+MAKE[0]="KBUILD=$kernel_source_dir make"
+CLEAN="make clean"
 
 BUILT_MODULE_NAME[0]="xt_KZORP"
 DEST_MODULE_LOCATION[0]="/updates"

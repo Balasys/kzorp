@@ -1,4 +1,7 @@
-check_SCRIPTS = KZorpTestCaseQueryNDim.py
+check_SCRIPTS = \
+	KZorpTestCaseQueryNDim.py \
+	KZorpTestCaseQueryZones.py
+
 AM_TESTS_ENVIRONMENT = export PYTHONPATH=$(top_srcdir)/driver/tests/base:$(top_srcdir)/pylib;
 
 TEST_EXTENSIONS = .py

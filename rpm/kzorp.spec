@@ -1,5 +1,5 @@
 Name:                   kzorp
-Version:                6.0.9
+Version:                6.0.10
 Release:                1
 URL:                    https://www.balabit.com/network-security/zorp-gpl
 Source0:                kzorp_%{version}.tar.gz
@@ -34,6 +34,7 @@ BuildRequires:          kmod-compat
 %else
 %{!?kernel_release: %global kernel_release %(sh -c "rpm -q kernel-default-devel | sed 's/kernel-default-devel-\\([0-9.]\\+-[0-9]\\+\\).*/\\1-default/'")}
 %endif
+%global kernel_dir /lib/modules/%{kernel_release}
 
 %{!?__python2: %global __python2 /usr/bin/python2}
 %{!?python2_sitelib: %global python2_sitelib %(%{__python2} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())")}
@@ -55,18 +56,18 @@ This package provides the binary kernel modules.
 autoreconf -fi
 %configure --prefix=/usr
 make DESTDIR=${RPM_BUILD_ROOT}
-make KERNELRELEASE=%{kernel_release} DESTDIR=${RPM_BUILD_ROOT} -C driver
+make KBUILD=%{kernel_dir}/build DESTDIR=${RPM_BUILD_ROOT} -C driver
 
 %install
 make DESTDIR=${RPM_BUILD_ROOT} install
-make KERNELRELEASE=%{kernel_release} DESTDIR=${RPM_BUILD_ROOT} -C driver install
+make KBUILD=%{kernel_dir}/build DESTDIR=${RPM_BUILD_ROOT} -C driver install
 
 %files
-%dir /lib/modules/%{kernel_release}
-%dir /lib/modules/%{kernel_release}/kernel
-%dir /lib/modules/%{kernel_release}/kernel/net
-%dir /lib/modules/%{kernel_release}/kernel/net/netfilter
-/lib/modules/%{kernel_release}/kernel/net/netfilter/*.ko
+%dir %{kernel_dir}
+%dir %{kernel_dir}/kernel
+%dir %{kernel_dir}/kernel/net
+%dir %{kernel_dir}/kernel/net/netfilter
+%{kernel_dir}/kernel/net/netfilter/*.ko
 
 %pre
 getent group zorp >/dev/null || groupadd -r zorp
@@ -104,7 +105,32 @@ General python bindings for kzorp.
 %dir %{python2_sitelib}/Zorp
 %{python2_sitelib}/Zorp/KZorp.py
 
+%package munin-plugins
+Summary:                Munin monitoring plugins for kZorp
+Group:                  System/Daemons
+Requires:               munin-node
+
+%description munin-plugins
+
+Zorp is a new generation firewall. It is essentially a transparent proxy
+firewall, with strict protocol analyzing proxies, a modular architecture,
+and fine-grained control over the mediated traffic. Configuration decisions
+are scriptable with the Python based configuration language.
+ 
+This package contains plugins for the Munin monitoring tool.
+
+%files munin-plugins
+%dir %{_datadir}/munin/
+%dir %{_datadir}/munin/plugins/
+%attr(755,root,root) %{_datadir}/munin/plugins/*
+%dir %{_sysconfdir}/munin
+%dir %{_sysconfdir}/munin/plugin-conf.d
+%config %attr(644,root,root) %{_sysconfdir}/munin/plugin-conf.d/*
+
+
 %changelog
+* Fri Nov 25 2016 Balasys Zorp GPL Team <zorp@lists.balabit.hu> - 6.0.10-1
+  - New upstream release 6.0.10
 * Wed Apr 13 2016 Balasys Zorp GPL Team <zorp@lists.balabit.hu> - 6.0.9-1
   - New upstream release 6.0.9
 * Fri Feb 26 2016 Balasys Zorp GPL Team <zorp@lists.balabit.hu> - 6.0.8-1

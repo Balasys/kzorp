@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 #
 # Copyright (C) 2006-2012, BalaBit IT Ltd.
 # This program/include file is free software; you can redistribute it and/or
@@ -30,7 +30,7 @@ class KZorpTestCaseGetVersion(KZorpComm):
 
     def test_get_version(self):
         self.assertEqual(self._major_version, 4)
-        self.assertEqual(self._compat_version, 5)
+        self.assertEqual(self._compat_version, 6)
 
 if __name__ == "__main__":
     testutil.main()

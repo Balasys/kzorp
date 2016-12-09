@@ -127,9 +127,12 @@ attrmap = {
             messages.KZNL_ATTR_SVC_PARAMS: (messages.create_service_params_attr, messages.parse_service_params_attr),
             messages.KZNL_ATTR_SVC_ROUTER_DST_ADDR: (messages.create_inet_addr_attr, messages.parse_inet_addr_attr),
             messages.KZNL_ATTR_SVC_ROUTER_DST_PORT: (messages.create_port_attr, messages.parse_port_attr),
-            messages.KZNL_ATTR_SVC_NAT_SRC: (messages.create_nat_range_attr, messages.parse_nat_range_attr),
-            messages.KZNL_ATTR_SVC_NAT_DST: (messages.create_nat_range_attr, messages.parse_nat_range_attr),
-            messages.KZNL_ATTR_SVC_NAT_MAP: (messages.create_nat_range_attr, messages.parse_nat_range_attr),
+            messages.KZNL_ATTR_SVC_NAT_SRC_MIN_IP: (messages.create_inet_addr_attr, messages.parse_inet_addr_attr),
+            messages.KZNL_ATTR_SVC_NAT_SRC_MAX_IP: (messages.create_inet_addr_attr, messages.parse_inet_addr_attr),
+            messages.KZNL_ATTR_SVC_NAT_DST_MIN_IP: (messages.create_inet_addr_attr, messages.parse_inet_addr_attr),
+            messages.KZNL_ATTR_SVC_NAT_DST_MAX_IP: (messages.create_inet_addr_attr, messages.parse_inet_addr_attr),
+            messages.KZNL_ATTR_SVC_NAT_MAP_MIN_IP: (messages.create_inet_addr_attr, messages.parse_inet_addr_attr),
+            messages.KZNL_ATTR_SVC_NAT_MAP_MAX_IP: (messages.create_inet_addr_attr, messages.parse_inet_addr_attr),
             messages.KZNL_ATTR_ACCOUNTING_COUNTER_NUM: (netlink.NetlinkAttribute.create_be32, netlink.NetlinkAttribute.parse_be32),
           }
 

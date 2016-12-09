@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 #
 # Copyright (C) 2006-2012, BalaBit IT Ltd.
 # This program/include file is free software; you can redistribute it and/or
@@ -22,6 +22,7 @@ import errno
 from functools import partial
 from KZorpComm import KZorpComm
 from KZorpBaseTestCaseCommon import KZorpTestCaseDump
+from netaddr import IPRange
 
 class KZorpTestCaseServiceDump(KZorpTestCaseDump):
     _dump_message = messages.KZorpGetServiceMessage(None)
@@ -168,10 +169,17 @@ class KZorpTestCaseServices(KZorpComm):
         self.start_transaction()
         self.send_message(messages.KZorpAddForwardServiceMessage('test-nat', flags=messages.KZF_SVC_TRANSPARENT))
         self.send_message(nat_message_class('test-nat',
-                                            nat_src=(messages.KZ_SVC_NAT_MAP_IPS + messages.KZ_SVC_NAT_MAP_PROTO_SPECIFIC, 12345688, 12345689, 1024, 1025),
-                                            nat_map=(messages.KZ_SVC_NAT_MAP_IPS + messages.KZ_SVC_NAT_MAP_PROTO_SPECIFIC, 12345688, 12345689, 1024, 1025)))
+                                            nat_src=IPRange('10.0.0.0', '10.0.0.255'),
+                                            nat_dst=IPRange('0.0.0.0', '255.255.255.255'),
+                                            nat_map=IPRange('192.168.0.0', '192.168.0.255'),
+                                            version=2))
+        self.send_message(nat_message_class('test-nat',
+                                            nat_src=IPRange('fd00::', 'fd00::ffff'),
+                                            nat_dst=IPRange('::', 'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff'),
+                                            nat_map=IPRange('fd00:1::', 'fd00:1::ffff'),
+                                            version=2))
         self.end_transaction()
-        service_cnt += 2
+        service_cnt += 3
 
         self.check_svc_num(service_cnt)
 

@@ -20,20 +20,30 @@
 static bool
 zone_mt_v1_eval(const struct sk_buff *skb, const struct xt_zone_info_v1 *info, const struct xt_action_param *par)
 {
-	struct kz_zone *zone;
-	const struct nf_conntrack_kzorp *kzorp;
-	struct nf_conntrack_kzorp local_kzorp;
-	int reply;
-	bool res;
+	struct nf_conn *ct;
+	enum ip_conntrack_info ctinfo;
+	struct kz_zone *zone, *src_zone = NULL, *dst_zone = NULL;
+	struct kz_extension *kzorp;
+	bool res, reply;
 
-	rcu_read_lock();
-	kz_extension_get_from_ct_or_lookup(skb, par->in, par->family, &local_kzorp, &kzorp, NULL);
-
-	reply = skb->nfctinfo >= IP_CT_IS_REPLY;
-	if (info->flags & IPT_ZONE_SRC)
-		zone = reply ? kzorp->szone : kzorp->czone;
-	else
-		zone = reply ? kzorp->czone : kzorp->szone;
+	ct = nf_ct_get((struct sk_buff *)skb, &ctinfo);
+	reply = ctinfo >= IP_CT_IS_REPLY;
+	kzorp = kz_extension_find(ct);
+	if (kzorp) {
+		if (info->flags & IPT_ZONE_SRC)
+			zone = reply ? kzorp->szone : kzorp->czone;
+		else
+			zone = reply ? kzorp->czone : kzorp->szone;
+	} else {
+		if (kz_zone_lookup_from_skb(skb, par->family, &src_zone, &dst_zone)) {
+			if (info->flags & IPT_ZONE_SRC)
+				zone = reply ? dst_zone : src_zone;
+			else
+				zone = reply ? src_zone : dst_zone;
+		} else {
+			zone = NULL;
+		}
+	}
 
 	while (zone != NULL) {
 		int i;
@@ -56,9 +66,13 @@ ret_true:
 	if ((info->flags & IPT_ZONE_NOCOUNT) == 0)
 		kz_zone_count_inc(zone);
 done:
-	if (kzorp == &local_kzorp)
-		kz_destroy_kzorp(&local_kzorp);
-	rcu_read_unlock();
+	if (kzorp) {
+		kz_extension_put(kzorp);
+	} else {
+		kz_zone_put(src_zone);
+		kz_zone_put(dst_zone);
+	}
+
 	return res;
 }
 
