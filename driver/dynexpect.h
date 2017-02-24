@@ -6,16 +6,24 @@
 #define SO_DYNEXPECT_DESTROY 11283
 #define SO_DYNEXPECT_MARK 11284
 
+#define CONFIG_NF_DYNEXPECT_MAX_EXPECTED 1024
+#define CONFIG_NF_DYNEXPECT_HELPER_TIMEOUT 60
+
 struct nf_ct_dynexpect_map
 {
 	u_int32_t mapping_id;
 	__be32 orig_ip;
 	__be32 new_ip;
+	__be32 client_master_ip;
+	__be32 server_master_ip;
+	__be16 client_master_port;
+	__be16 server_master_port;
 	__be16 orig_port;
 	u_int16_t n_ports;
 	__be16 new_port;
 	u_int8_t proto;
-	u_int8_t __res1;
+	u_int8_t master_l4proto;
+//	u_int8_t __res1;
 	u_int32_t n_active;
 } __attribute__((packed));
 

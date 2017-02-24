@@ -27,9 +27,15 @@
 #include <net/netfilter/nf_conntrack_helper.h>
 #include <net/netfilter/nf_conntrack_tuple.h>
 #include <net/netfilter/nf_nat.h>
-#include <linux/netfilter_ipv4/nf_conntrack_dynexpect.h>
+#include "dynexpect.h"
+#include "kzorp_compat.h"
 
-#define dyn_debug(format, args...) pr_debug("%s: " format, __FUNCTION__, ##args)
+#ifdef pr_fmt
+#undef pr_fmt
+#define pr_fmt(fmt) "%s: " fmt, __func__
+#endif
+
+#define CONFIG_NF_DYNEXPECT_MAX_RANGE_SIZE 8
 
 typedef enum {
 	MAPPING_EMPTY = 0,
@@ -80,6 +86,9 @@ struct dynexpect_mapping {
 
 	/* reference count */
 	atomic_t references;
+
+	/* master conntrack */
+	struct nf_conn *master_ct;
 };
 
 /* module parameters */
@@ -95,11 +104,8 @@ static struct kmem_cache *dynexpect_mapping_cache __read_mostly;
 static struct hlist_head *dynexpect_htable_by_id = NULL;
 static struct hlist_head *dynexpect_htable_by_addr = NULL;
 
-static spinlock_t dynexpect_lock = SPIN_LOCK_UNLOCKED;
-static spinlock_t dynexpect_rover_lock = SPIN_LOCK_UNLOCKED;
-
-/* fake conntrack entry */
-static struct nf_conn nf_ct_dynexpect __read_mostly;
+static spinlock_t dynexpect_lock = __SPIN_LOCK_UNLOCKED(dynexpect_lock);
+static spinlock_t dynexpect_rover_lock = __SPIN_LOCK_UNLOCKED(dynexpect_rover_lock);
 
 /****************************************************************/
 /* Mapping creation/destruction					*/
@@ -107,16 +113,53 @@ static struct nf_conn nf_ct_dynexpect __read_mostly;
 
 static void dynexpect_timeout(unsigned long);
 
+static struct nf_conn *get_master_ct_from_tuple(struct net *net,
+			const u32 client_master_ip, const u16 client_master_port,
+			const u32 server_master_ip, const u16 server_master_port,
+			const u8 master_l4proto)
+{
+	struct nf_conntrack_tuple tuple;
+	struct nf_conntrack_tuple_hash *h;
+	struct nf_conn *master_ct = NULL;
+
+	memset(&tuple, 0, sizeof(tuple));
+	tuple.src.l3num = AF_INET;
+	tuple.src.u3.ip = htonl(client_master_ip);
+	tuple.src.u.udp.port = htons(client_master_port);
+	tuple.dst.u3.ip = htonl(server_master_ip);
+	tuple.dst.protonum = master_l4proto;
+	tuple.dst.u.udp.port = htons(server_master_port);
+
+	h = kz_nf_conntrack_find_get(net, &tuple);
+	if (!h) {
+			pr_debug("Cannot find MASTER ct tuple hash;");
+			return NULL;
+	}
+	master_ct = nf_ct_tuplehash_to_ctrack(h);
+
+	if (!master_ct) {
+			pr_debug("Cannot find MASTER ct;");
+			return NULL;
+	}
+
+	pr_debug("MASTER ct found;");
+
+	/* get ref for master ct */
+	nf_conntrack_get(&master_ct->ct_general);
+
+	return master_ct;
+}
+
 static struct dynexpect_mapping *
 dynexpect_mapping_new(void)
 {
 	struct dynexpect_mapping *m;
 
-	dyn_debug("creating mapping\n");
+	pr_debug("creating mapping\n");
 
 	m = kmem_cache_alloc(dynexpect_mapping_cache, GFP_ATOMIC);
 	if (m == NULL) {
-		dyn_debug("memory allocation failure\n");
+		pr_debug("memory allocation failure\n");
 		return NULL;
 	}
 
@@ -185,9 +228,8 @@ dynexpect_lookup_id(u_int32_t id)
 {
 	unsigned int bucket = dynexpect_hashfn_id(id);
 	struct dynexpect_mapping *m;
-	struct hlist_node *n;
 
-	hlist_for_each_entry(m, n, &dynexpect_htable_by_id[bucket], entry_id) {
+	hlist_for_each_entry(m, &dynexpect_htable_by_id[bucket], entry_id) {
 		if (m->id == id) {
 			dynexpect_mapping_ref(m);
 			return m;
@@ -218,9 +260,8 @@ dynexpect_lookup_addr(u_int8_t proto, u_int32_t addr, u_int16_t port)
 {
 	unsigned int bucket = dynexpect_hashfn_addr(proto, addr, port);
 	struct dynexpect_mapping *m;
-	struct hlist_node *n;
 
-	hlist_for_each_entry(m, n, &dynexpect_htable_by_addr[bucket], entry_addr) {
+	hlist_for_each_entry(m, &dynexpect_htable_by_addr[bucket], entry_addr) {
 		if (m->proto == proto &&
 		    m->orig_ip == addr &&
 		    m->orig_port == port) {
@@ -241,11 +282,10 @@ dynexpect_iterate_mappings(int (*check)(const struct dynexpect_mapping *, void *
 {
 	unsigned int bucket;
 	struct dynexpect_mapping *m;
-	struct hlist_node *n;
 	int found = 0;
 
 	for (bucket = 0; bucket < hashsize; bucket++)
-		hlist_for_each_entry(m, n, &dynexpect_htable_by_id[bucket], entry_addr) {
+		hlist_for_each_entry(m, &dynexpect_htable_by_id[bucket], entry_addr) {
 			if ((found = check(m, user_data)) != 0)
 				break;
 		}
@@ -258,28 +298,30 @@ dynexpect_iterate_mappings(int (*check)(const struct dynexpect_mapping *, void *
 /****************************************************************/
 
 void
-dynexpect_remove_expectation(const struct nf_conntrack_tuple *tuple)
+dynexpect_remove_expectation(const struct nf_conntrack_tuple *tuple, const struct dynexpect_mapping *m)
 {
-	struct nf_conn_help *help = nfct_help(&nf_ct_dynexpect);
+	struct nf_conn_help *help;
 	struct nf_conntrack_expect *exp;
-	struct hlist_node *n, *next;
+	struct hlist_node *next;
+
+	help = nfct_help(m->master_ct);
 
 	/* check if we have extensions at all */
 	if (unlikely(help == NULL)) {
-		dyn_debug("no helper data present\n");
+		pr_debug("no helper data present\n");
 		return;
 	}
 
-	dyn_debug("removing expectations for tuple:\n");
+	pr_debug("removing expectations for tuple:\n");
 	nf_ct_dump_tuple(tuple);
 
-	hlist_for_each_entry_safe(exp, n, next, &help->expectations, lnode) {
-		dyn_debug("comparing with expectation\n");
+	hlist_for_each_entry_safe(exp, next, &help->expectations, lnode) {
+		pr_debug("comparing with expectation\n");
 		nf_ct_dump_tuple(&exp->tuple);
 
 		if (!(exp->flags & NF_CT_EXPECT_INACTIVE) &&
 		    nf_ct_tuple_mask_cmp(tuple, &exp->tuple, &exp->mask)) {
-			dyn_debug("removing expectation; exp='%p'\n", exp);
+			pr_debug("removing expectation; exp='%p'\n", exp);
 			nf_ct_unexpect_related(exp);
 		}
 	}
@@ -315,15 +357,17 @@ dynexpect_check_port_clash(const struct dynexpect_mapping *m, void *u)
 
 static int
 dynexpect_mapping_alloc(struct dynexpect_mapping *m,
-			struct nf_ct_dynexpect_map *req)
+			struct nf_ct_dynexpect_map *req, struct net *net)
 {
 	struct dynexpect_mapping *n;
 	int rover, min, max, left;
 	static int dynexpect_alloc_port_rover = 1;
 	int succeeded = 0;
 
-	dyn_debug("mapping; id='%u', proto='%hhu', nports='%u', orig='%pI4:%hu', new='%pI4'\n",
-		  m->id, req->proto, req->n_ports, &req->orig_ip, req->orig_port, &req->new_ip);
+	pr_debug("mapping; id='%u', proto='%hhu', nports='%u', orig='%pI4:%hu', new='%pI4', client_master='%pI4:%hu', server_master='%pI4:%hu', master_l4proto='%hhu'\n",
+		  m->id, req->proto, req->n_ports, &req->orig_ip, req->orig_port, &req->new_ip,
+		  &req->client_master_ip, req->client_master_port, &req->server_master_ip, req->server_master_port,
+		  req->master_l4proto);
 
 	/* About locking: _alloc() is called with an unhashed, empty mapping with only
 	 * the calling function holding a reference to it. Thus it's not necessary to
@@ -336,7 +380,9 @@ dynexpect_mapping_alloc(struct dynexpect_mapping *m,
 	 * structure is empty, and the request arguments are there */
 	if ((m->state != MAPPING_EMPTY) ||
 	    (req->proto == 0) || (req->n_ports == 0) || (req->n_ports > CONFIG_NF_DYNEXPECT_MAX_RANGE_SIZE) ||
-	    (req->orig_ip == 0) || (req->orig_port == 0) || (req->new_ip == 0))
+	    (req->orig_ip == 0) || (req->orig_port == 0) || (req->new_ip == 0) || (req->client_master_ip == 0) ||
+	    (req->client_master_port == 0) || (req->server_master_ip == 0) || (req->server_master_port == 0) ||
+	    (req->master_l4proto == 0))
 		return -EINVAL;
 
 	/* look up if such mapping already exists */
@@ -357,7 +403,7 @@ dynexpect_mapping_alloc(struct dynexpect_mapping *m,
 		m->flags |= MAPPING_FLAG_NAT;
 
 		/* get first port to try */
-		inet_get_local_port_range(&min, &max);
+		inet_get_local_port_range(net, &min, &max);
 		left = (max - min) + 1;
 		rover = dynexpect_alloc_port_rover;
 
@@ -395,6 +441,10 @@ dynexpect_mapping_alloc(struct dynexpect_mapping *m,
 	m->new_port = rover;
 	m->proto = req->proto;
 	m->n_ports = req->n_ports;
+	m->master_ct = get_master_ct_from_tuple(net, req->client_master_ip, req->client_master_port, req->server_master_ip, req->server_master_port, req->master_l4proto);
+	if (m->master_ct == NULL) {
+		return -EINVAL;
+	}
 
 	/* assign next id */
 	spin_lock(&dynexpect_rover_lock);
@@ -409,7 +459,7 @@ dynexpect_mapping_hash(struct dynexpect_mapping *m)
 {
 	int res = -EINVAL;
 
-	dyn_debug("mapping; id='%u'\n", m->id);
+	pr_debug("mapping; id='%u'\n", m->id);
 
 	spin_lock_bh(&dynexpect_lock);
 
@@ -437,13 +487,13 @@ dynexpect_mapping_refresh(struct dynexpect_mapping *m)
 {
 	int res = -ENOENT;
 
-	dyn_debug("mapping; id='%u'\n", m->id);
+	pr_debug("mapping; id='%u'\n", m->id);
 
 	spin_lock_bh(&dynexpect_lock);
 
 	if (m->state < MAPPING_HASHED ||
 	    m->state > MAPPING_ACTIVE) {
-		dyn_debug("invalid state, cannot be refreshed\n");
+		pr_debug("invalid state, cannot be refreshed\n");
 		res = -EINVAL;
 		goto exit;
 	}
@@ -472,19 +522,19 @@ dynexpect_mapping_expect(struct dynexpect_mapping *m,
 	int success = 1;
 	int res = -EINVAL;
 
-	dyn_debug("called; id='%u', peer_ip='%pI4', peer_port='%hu'\n",
+	pr_debug("called; id='%u', peer_ip='%pI4', peer_port='%hu'\n",
 		  m->id, &req->peer_ip, req->peer_port);
 
 	spin_lock_bh(&dynexpect_lock);
 
 	if (m->state != MAPPING_HASHED) {
-		dyn_debug("mapping in invalid state; state='%d'\n", m->state);
+		pr_debug("mapping in invalid state; state='%d'\n", m->state);
 		goto exit;
 	}
 
 	if ((req->mapping_id == 0) || (req->peer_ip == 0) ||
 	    (req->peer_port == 0)) {
-		dyn_debug("invalid arguments\n");
+		pr_debug("invalid arguments\n");
 		goto exit;
 	}
 
@@ -496,9 +546,9 @@ dynexpect_mapping_expect(struct dynexpect_mapping *m,
 		union nf_inet_addr saddr, daddr;
 		__be16 nsport, ndport;
 
-		exp = nf_ct_expect_alloc(&nf_ct_dynexpect);
+		exp = nf_ct_expect_alloc(m->master_ct);
 		if (exp == NULL) {
-			dyn_debug("failed to create expectation\n");
+			pr_debug("failed to create expectation\n");
 			success = 0;
 			break;
 		}
@@ -509,7 +559,7 @@ dynexpect_mapping_expect(struct dynexpect_mapping *m,
 		nsport = htons(sport + i);
 		ndport = htons(dport + i);
 
-		dyn_debug("expecting connection; src='%pI4:%hu', dst='%pI4:%hu'\n",
+		pr_debug("expecting connection; src='%pI4:%hu', dst='%pI4:%hu'\n",
 			  &saddr.ip, sport + i, &daddr.ip, dport + i);
 
 		nf_ct_expect_init(exp, NF_CT_EXPECT_CLASS_DEFAULT,
@@ -519,10 +569,9 @@ dynexpect_mapping_expect(struct dynexpect_mapping *m,
 
 		/* set expected callback */
 		exp->expectfn = dynexpect_nat_expected;
-		exp->help.exp_dyn_info.mapping_id = m->id;
 
 		if (nf_ct_expect_related(exp) != 0) {
-			dyn_debug("expect_related() failed\n");
+			pr_debug("expect_related() failed\n");
 			nf_ct_expect_put(exp);
 			success = 0;
 			break;
@@ -541,7 +590,7 @@ dynexpect_mapping_expect(struct dynexpect_mapping *m,
 		tuple.dst.u3.ip = htonl(req->peer_ip);
 		tuple.dst.protonum = m->proto;
 
-		dyn_debug("cleaning up expectations\n");
+		pr_debug("cleaning up expectations\n");
 
 		/* clean up registered expectations */
 		for (i--, sport--, dport--; i >= 0; i--) {
@@ -549,14 +598,14 @@ dynexpect_mapping_expect(struct dynexpect_mapping *m,
 			tuple.src.u.udp.port = htons(sport + i);
 			tuple.dst.u.udp.port = htons(dport + i);
 
-			dynexpect_remove_expectation(&tuple);
+			dynexpect_remove_expectation(&tuple, m);
 		}
 
 		res = -EEXIST;
 		goto exit;
 	}
 
-	dyn_debug("expectations created\n");
+	pr_debug("expectations created\n");
 
 	m->peer_ip = req->peer_ip;
 	m->peer_port = req->peer_port;
@@ -575,7 +624,7 @@ dynexpect_mapping_unhash(struct dynexpect_mapping *m)
 {
 	int res = -EINVAL;
 
-	dyn_debug("mapping; id='%u'\n", m->id);
+	pr_debug("mapping; id='%u'\n", m->id);
 
 	spin_lock_bh(&dynexpect_lock);
 
@@ -601,7 +650,7 @@ dynexpect_mapping_destroy(struct dynexpect_mapping *m)
 	int i;
 	int res = -EINVAL;
 
-	dyn_debug("mapping; id='%u'\n", m->id);
+	pr_debug("mapping; id='%u'\n", m->id);
 
 	spin_lock_bh(&dynexpect_lock);
 
@@ -626,7 +675,7 @@ dynexpect_mapping_destroy(struct dynexpect_mapping *m)
 			tuple.src.u.udp.port = htons(m->orig_port + i);
 			tuple.dst.u.udp.port = htons(m->peer_port + i);
 
-			h = nf_conntrack_find_get(&init_net, 0, &tuple);
+			h = kz_nf_conntrack_find_get(nf_ct_net(m->master_ct), &tuple);
 
 			if (h != NULL) {
 				struct nf_conn *ct = nf_ct_tuplehash_to_ctrack(h);
@@ -641,7 +690,7 @@ dynexpect_mapping_destroy(struct dynexpect_mapping *m)
 	if (m->state >= MAPPING_EXPECTED) {
 		struct nf_conntrack_tuple tuple;
 
-		dyn_debug("removing expectations\n");
+		pr_debug("removing expectations\n");
 
 		/* fill "static" fields */
 		memset(&tuple, 0, sizeof(tuple));
@@ -654,9 +703,12 @@ dynexpect_mapping_destroy(struct dynexpect_mapping *m)
 			tuple.src.u.udp.port = htons(m->orig_port + i);
 			tuple.dst.u.udp.port = htons(m->peer_port + i);
 
-			dynexpect_remove_expectation(&tuple);
+			dynexpect_remove_expectation(&tuple, m);
 		}
 	}
+
+	/* remove ref from master ct */
+	nf_ct_put(m->master_ct);
 
 	m->state = MAPPING_DESTROYED;
 	res = 0;
@@ -676,7 +728,7 @@ dynexpect_timeout(unsigned long um)
 {
 	struct dynexpect_mapping *m = (void *)um;
 
-	dyn_debug("mapping; id='%u'\n", m->id);
+	pr_debug("mapping; id='%u'\n", m->id);
 
 	dynexpect_mapping_ref(m);
 
@@ -701,7 +753,7 @@ dynexpect_timeout(unsigned long um)
 /****************************************************************/
 
 static int
-dynexpect_setsockopt_map(void *user, int len)
+dynexpect_setsockopt_map(void *user, int len, struct net *net)
 {
 	struct nf_ct_dynexpect_map arg;
 	struct dynexpect_mapping *m;
@@ -713,13 +765,13 @@ dynexpect_setsockopt_map(void *user, int len)
 	}
 
 	if (copy_from_user(&arg, user, len)) {
-		dyn_debug("failed to copy request from user-space\n");
+		pr_debug("failed to copy request from user-space\n");
 		return -EFAULT;
 	}
 
 	/* check args */
 	if ((arg.proto == 0) || (arg.orig_ip == 0) || (arg.orig_port == 0)) {
-		dyn_debug("invalid request fields\n");
+		pr_debug("invalid request fields\n");
 		return -EINVAL;
 	}
 
@@ -730,7 +782,7 @@ dynexpect_setsockopt_map(void *user, int len)
 
 	if (m != NULL) {
 		dynexpect_mapping_unref(m);
-		dyn_debug("mapping clash\n");
+		pr_debug("mapping clash\n");
 		return -EEXIST;
 	}
 
@@ -740,7 +792,7 @@ dynexpect_setsockopt_map(void *user, int len)
 		return -ENOMEM;
 
 	/* allocate mapping */
-	res = dynexpect_mapping_alloc(m, &arg);
+	res = dynexpect_mapping_alloc(m, &arg, net);
 	if (res != 0) {
 		dynexpect_mapping_unref(m);
 		return res;
@@ -758,6 +810,7 @@ dynexpect_setsockopt_map(void *user, int len)
 	arg.mapping_id = m->id;
 	arg.new_port = m->new_port;
 	if (copy_to_user(user, &arg, len)) {
+		pr_err_ratelimited("failed to copy request to user-space\n");
 		dynexpect_mapping_unhash(m);
 		dynexpect_mapping_destroy(m);
 		dynexpect_mapping_unref(m);
@@ -782,7 +835,7 @@ dynexpect_setsockopt_expect(void *user, int len)
 	}
 
 	if (copy_from_user(&arg, user, len)) {
-		dyn_debug("failed to copy request from user-space\n");
+		pr_err_ratelimited("failed to copy request from user-space\n");
 		return -EFAULT;
 	}
 
@@ -791,7 +844,7 @@ dynexpect_setsockopt_expect(void *user, int len)
 	spin_unlock_bh(&dynexpect_lock);
 
 	if (m == NULL) {
-		dyn_debug("no mapping found; id='%u'\n", arg.mapping_id);
+		pr_debug("no mapping found; id='%u'\n", arg.mapping_id);
 		return -ENOENT;
 	}
 
@@ -812,8 +865,10 @@ dynexpect_setsockopt_destroy(void *user, int len)
 	if (len != sizeof(struct nf_ct_dynexpect_destroy))
 		return -EINVAL;
 
-	if (copy_from_user(&arg, user, len))
+	if (copy_from_user(&arg, user, len)) {
+		pr_err_ratelimited("failed to copy request from user-space\n");
 		return -EFAULT;
+	}
 
 	/* check args */
 	if (arg.mapping_id == 0)
@@ -851,8 +906,10 @@ dynexpect_setsockopt_mark(void *user, int len)
 	if (len != sizeof(struct nf_ct_dynexpect_mark))
 		return -EINVAL;
 
-	if (copy_from_user(&arg, user, len))
+	if (copy_from_user(&arg, user, len)) {
+		pr_err_ratelimited("failed to copy request from user-space\n");
 		return -EFAULT;
+	}
 
 	/* check args */
 	if (arg.mapping_id == 0)
@@ -883,8 +940,10 @@ dynexpect_getsockopt_map(void *user, int *len)
 	if (*len != sizeof(struct nf_ct_dynexpect_map))
 		return -EINVAL;
 
-	if (copy_from_user(&arg, user, sizeof(arg)))
+	if (copy_from_user(&arg, user, sizeof(arg))) {
+		pr_err_ratelimited("failed to copy request from user-space\n");
 		return -EFAULT;
+	}
 
 	/* check args */
 	if (arg.mapping_id == 0)
@@ -916,13 +975,13 @@ dynexpect_getsockopt_map(void *user, int *len)
 			tuple.src.u.udp.port = htons(m->orig_port + i);
 			tuple.dst.u.udp.port = htons(m->peer_port + i);
 
-			dyn_debug("checking if conntrack exists for tuple:\n");
+			pr_debug("checking if conntrack exists for tuple:\n");
 			nf_ct_dump_tuple(&tuple);
 
-			h = nf_conntrack_find_get(&init_net, 0, &tuple);
+			h = kz_nf_conntrack_find_get(nf_ct_net(m->master_ct), &tuple);
 
 			if (h != NULL) {
-				dyn_debug("found; ct='%p'\n", nf_ct_tuplehash_to_ctrack(h));
+				pr_debug("found; ct='%p'\n", nf_ct_tuplehash_to_ctrack(h));
 				n_active++;
 				nf_ct_put(nf_ct_tuplehash_to_ctrack(h));
 			}
@@ -949,8 +1008,10 @@ dynexpect_getsockopt_map(void *user, int *len)
 
         dynexpect_mapping_unref(m);
 
-	if (copy_to_user(user, &arg, sizeof(arg)))
+	if (copy_to_user(user, &arg, sizeof(arg))) {
+		pr_err_ratelimited("failed to copy request to user-space\n");
 		return -EFAULT;
+	}
         *len = sizeof(arg);
 
 	return 0;
@@ -959,12 +1020,16 @@ dynexpect_getsockopt_map(void *user, int *len)
 static int
 dynexpect_setsockopt(struct sock *sk, int optval, void *user, unsigned int len)
 {
+	struct net *net = NULL;
+
 	if (!capable(CAP_NET_ADMIN))
 		return -EPERM;
 
+	net = sock_net(sk);
+
 	switch (optval) {
 	case SO_DYNEXPECT_MAP:
-		return dynexpect_setsockopt_map(user, len);
+		return dynexpect_setsockopt_map(user, len, net);
 		break;
 	case SO_DYNEXPECT_EXPECT:
 		return dynexpect_setsockopt_expect(user, len);
@@ -1010,33 +1075,77 @@ static struct nf_sockopt_ops dynexpect_sockopt = {
 /* Conntrack/NAT helpers					*/
 /****************************************************************/
 
+static inline void dynexpect_dump_tuple(const struct nf_conntrack_tuple *t)
+{
+	pr_debug("tuple %p: %u %pI4:%hu -> %pI4:%hu\n",
+	  t, t->dst.protonum,
+	  &t->src.u3.ip, ntohs(t->src.u.all),
+	  &t->dst.u3.ip, ntohs(t->dst.u.all));
+}
+
+u32
+dynexpect_find_id_for_tuple(struct nf_conntrack_expect *exp)
+{
+	unsigned int bucket;
+	struct dynexpect_mapping *m;
+	struct nf_conntrack_tuple mtuple;
+	int i;
+
+	memset(&mtuple, 0, sizeof(mtuple));
+
+	pr_debug("searching for m->id for this tuple:");
+	dynexpect_dump_tuple(&exp->tuple);
+	for (bucket = 0; bucket < hashsize; bucket++) {
+		hlist_for_each_entry(m, &dynexpect_htable_by_id[bucket], entry_id) {
+			if (m->state >= MAPPING_EXPECTED) {
+				for (i = 0; i < m->n_ports; i++) {
+					mtuple.src.l3num = AF_INET;
+					mtuple.src.u3.ip = htonl(m->orig_ip);
+					mtuple.dst.u3.ip = htonl(m->peer_ip);
+					mtuple.dst.protonum = m->proto;
+					mtuple.src.u.udp.port = htons(m->orig_port + i);
+					mtuple.dst.u.udp.port = htons(m->peer_port + i);
+					pr_debug("  m->state=%d, comparing with this tuple:", m->state);
+					dynexpect_dump_tuple(&mtuple);
+					if (nf_ct_tuple_mask_cmp(&mtuple, &exp->tuple, &exp->mask)) {
+						pr_debug("  m->id found; id=%d", m->id);
+						return m->id;
+					}
+				}
+			}
+		}
+	}
+
+	pr_debug("  m->id not found;");
+	return 0;
+}
+
 void
 dynexpect_nat_expected(struct nf_conn *ct,
 		       struct nf_conntrack_expect *exp)
 {
 	struct nf_nat_range r;
-	struct nf_ct_dyn_expect *dynexpect_info;
 	struct dynexpect_mapping *m;
 	u_int16_t port = ntohs(ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple.src.u.udp.port);
 
 	/* ************* */
-	dynexpect_info = &exp->help.exp_dyn_info;
-
-	dyn_debug("expected connection arrived; mapping_id='%d', src_port='%hu'\n", dynexpect_info->mapping_id, port);
+	int mapping_id = 0;
+	mapping_id = dynexpect_find_id_for_tuple(exp);
+	pr_debug("expected connection arrived; mapping_id='%d', src_port='%hu'\n", mapping_id, port);
 
 	/* FIXME: this is risky, we have to think it over again to make
 	 * sure this won't cause deadlocks */
 	spin_lock_bh(&dynexpect_lock);
 
-	m = dynexpect_lookup_id(dynexpect_info->mapping_id);
+	m = dynexpect_lookup_id(mapping_id);
 	if (m == NULL) {
 		spin_unlock_bh(&dynexpect_lock);
-		dyn_debug("no mapping found\n");
+		pr_debug("no mapping found\n");
 		return;
 	}
 
 	if ((m->state < MAPPING_EXPECTED) || (m->state > MAPPING_ACTIVE)) {
-		dyn_debug("invalid state; id='%u', state='%d'\n",
+		pr_debug("invalid state; id='%u', state='%d'\n",
 			 m->id, m->state);
 		spin_unlock_bh(&dynexpect_lock);
 		dynexpect_mapping_unref(m);
@@ -1050,24 +1159,24 @@ dynexpect_nat_expected(struct nf_conn *ct,
 
 	if (m->flags & MAPPING_FLAG_NAT) {
 		/* fill range structure */
-		r.flags = IP_NAT_RANGE_MAP_IPS |
-			IP_NAT_RANGE_PROTO_SPECIFIED;
+		r.flags = NF_NAT_RANGE_MAP_IPS |
+			NF_NAT_RANGE_PROTO_SPECIFIED;
 
 		/* for SRC manip, set the mapped address */
-		r.min_ip = r.max_ip = htonl(m->new_ip);
-		r.min.udp.port = r.max.udp.port =
+		r.min_addr.ip = r.max_addr.ip = htonl(m->new_ip);
+		r.min_proto.udp.port = r.max_proto.udp.port =
 			htons(m->new_port + port - m->orig_port);
-		dyn_debug("SNATting; to='%pI4:%hu'\n",
-			  &r.min_ip, ntohs(r.min.udp.port));
-		nf_nat_setup_info(ct, &r, IP_NAT_MANIP_SRC);
+		pr_debug("SNATting; to='%pI4:%hu'\n",
+			  &r.min_addr.ip, ntohs(r.min_proto.udp.port));
+		nf_nat_setup_info(ct, &r, NF_NAT_MANIP_SRC);
 
 		/* for DST manip, set the peer address */
-		r.min_ip = r.max_ip = htonl(m->peer_ip);
-		r.min.udp.port = r.max.udp.port =
+		r.min_addr.ip = r.max_addr.ip = htonl(m->peer_ip);
+		r.min_proto.udp.port = r.max_proto.udp.port =
 			htons(m->peer_port);
-		dyn_debug("DNATting; to='%pI4:%hu'\n",
-			  &r.min_ip, ntohs(r.min.udp.port));
-		nf_nat_setup_info(ct, &r, IP_NAT_MANIP_DST);
+		pr_debug("DNATting; to='%pI4:%hu'\n",
+			  &r.min_addr.ip, ntohs(r.min_proto.udp.port));
+		nf_nat_setup_info(ct, &r, NF_NAT_MANIP_DST);
 	}
 
 #ifdef CONFIG_NF_CONNTRACK_MARK
@@ -1076,6 +1185,12 @@ dynexpect_nat_expected(struct nf_conn *ct,
 #endif
 
 	dynexpect_mapping_unref(m);
+}
+
+static int dynexpect_help_udp(struct sk_buff *skb, unsigned int protoff,
+                              struct nf_conn *ct, enum ip_conntrack_info ctinfo)
+{
+	return NF_ACCEPT;
 }
 
 static const struct nf_conntrack_expect_policy dynexpect_exp_policy = {
@@ -1087,6 +1202,16 @@ static struct nf_conntrack_helper dynexpect_ct_helper = {
 	.name			= "dynexpect",
 	.me			= THIS_MODULE,
 	.expect_policy		= &dynexpect_exp_policy,
+	//.flags   = NF_CT_HELPER_F_CONFIGURED,
+	.tuple.src.l3num        = AF_INET,
+	.tuple.dst.protonum     = IPPROTO_UDP,
+	.tuple.src.u.udp.port = htons(5060),
+	.help = dynexpect_help_udp,
+};
+ 
+static struct nf_ct_helper_expectfn dynexpect_nat = {
+	.name    = "dynexpect",
+	.expectfn =  dynexpect_nat_expected
 };
 
 /****************************************************************/
@@ -1099,19 +1224,9 @@ int init_or_cleanup(const int cleanup)
 	int ret = -ENOMEM;
 	static unsigned int htable_by_addr_allocated_size;
 	static unsigned int htable_by_id_allocated_size;
-	static int htable_by_addr_vmalloced;
-	static int htable_by_id_vmalloced;
 
 	if (cleanup)
 		goto cleanup;
-
-	/* set up fake conntrack */
-	atomic_set(&nf_ct_dynexpect.ct_general.use, 1);
-#ifdef CONFIG_NET_NS
-	nf_ct_dynexpect.ct_net = &init_net;
-#endif
-	nf_ct_dynexpect.status = IPS_CONFIRMED | IPS_NAT_DONE_MASK;
-	nf_ct_helper_ext_add(&nf_ct_dynexpect, GFP_KERNEL);
 
 	/* check hash size */
 	if (hashsize > 16384)
@@ -1131,7 +1246,7 @@ int init_or_cleanup(const int cleanup)
 
 	/* ID hash */
 	htable_by_id_allocated_size = sizeof(struct hlist_head) * hashsize;
-	dynexpect_htable_by_id = nf_ct_alloc_hashtable(&htable_by_id_allocated_size, &htable_by_id_vmalloced, 0);
+	dynexpect_htable_by_id = nf_ct_alloc_hashtable(&htable_by_id_allocated_size, 0);
 	if (!dynexpect_htable_by_id) {
 		pr_err("unable to allocate dynexpect hash table: id\n");
 		goto err_alloc_hash;
@@ -1139,7 +1254,7 @@ int init_or_cleanup(const int cleanup)
 
 	/* address hash */
 	htable_by_addr_allocated_size = sizeof(struct hlist_head) * hashsize;
-	dynexpect_htable_by_addr = nf_ct_alloc_hashtable(&htable_by_addr_allocated_size, &htable_by_addr_vmalloced, 0);
+	dynexpect_htable_by_addr = nf_ct_alloc_hashtable(&htable_by_addr_allocated_size, 0);
 	if (!dynexpect_htable_by_addr) {
 		pr_err("unable to allocate dynexpect hash table: address\n");
 		goto err_alloc_hash;
@@ -1156,8 +1271,8 @@ int init_or_cleanup(const int cleanup)
 		pr_err("unable to register conntrack helper\n");
 		goto err_register_ct_helper;
 	}
-
-	rcu_assign_pointer(nfct_help(&nf_ct_dynexpect)->helper, &dynexpect_ct_helper);
+  
+	nf_ct_helper_expectfn_register(&dynexpect_nat);
 
 	/* register setsockopt/getsockopt callbacks */
 	ret = nf_register_sockopt(&dynexpect_sockopt);
@@ -1172,14 +1287,16 @@ int init_or_cleanup(const int cleanup)
 	nf_unregister_sockopt(&dynexpect_sockopt);
 
  err_register_sockopt:
+	nf_ct_helper_expectfn_unregister(&dynexpect_nat);
 	nf_conntrack_helper_unregister(&dynexpect_ct_helper);
 
  err_register_ct_helper:
  err_alloc_hash:
 	if (dynexpect_htable_by_id != NULL)
-		nf_ct_free_hashtable(dynexpect_htable_by_id, htable_by_id_vmalloced, htable_by_id_allocated_size);
+		nf_ct_free_hashtable(dynexpect_htable_by_id, htable_by_id_allocated_size);
 	if (dynexpect_htable_by_addr != NULL)
-		nf_ct_free_hashtable(dynexpect_htable_by_addr, htable_by_addr_vmalloced, htable_by_addr_allocated_size);
+		nf_ct_free_hashtable(dynexpect_htable_by_addr, htable_by_addr_allocated_size);
+
 
 	kmem_cache_destroy(dynexpect_mapping_cache);
 
