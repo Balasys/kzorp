@@ -285,7 +285,7 @@ dynexpect_iterate_mappings(int (*check)(const struct dynexpect_mapping *, void *
 	int found = 0;
 
 	for (bucket = 0; bucket < hashsize; bucket++)
-		hlist_for_each_entry(m, &dynexpect_htable_by_id[bucket], entry_addr) {
+		hlist_for_each_entry(m, &dynexpect_htable_by_id[bucket], entry_id) {
 			if ((found = check(m, user_data)) != 0)
 				break;
 		}
