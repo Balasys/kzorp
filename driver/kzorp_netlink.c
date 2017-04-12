@@ -464,7 +464,8 @@ kznl_parse_inet_addr(const struct nlattr *attr, union nf_inet_addr *addr, sa_fam
 	int res = 0;
 	struct nlattr *tb[KZNL_ATTR_TYPE_COUNT + 1];
 
-	res = nla_parse_nested(tb, KZNL_ATTR_TYPE_COUNT, attr, inet_addr_nla_policy);
+	res = nla_parse_nested(tb, KZNL_ATTR_TYPE_COUNT, attr,
+			       inet_addr_nla_policy, NULL);
 	if (res < 0) {
 		pr_err_ratelimited("failed to parse nested attribute\n");
 		return res;
@@ -550,7 +551,8 @@ kznl_parse_inet_subnet(const struct nlattr *attr, union nf_inet_addr *addr, unio
 	int res = 0;
 	struct nlattr *tb[KZNL_ATTR_TYPE_COUNT + 1];
 
-	res = nla_parse_nested(tb, KZNL_ATTR_TYPE_COUNT, attr, inet_subnet_nla_policy);
+	res = nla_parse_nested(tb, KZNL_ATTR_TYPE_COUNT, attr,
+			       inet_subnet_nla_policy, NULL);
 	if (res < 0) {
 		pr_err_ratelimited("failed to parse nested attribute\n");
 		return res;
