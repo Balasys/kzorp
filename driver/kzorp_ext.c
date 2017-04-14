@@ -302,13 +302,11 @@ kz_extension_conntrack_destroy(struct nf_conntrack *nfct)
 	struct nf_conn *ct = (struct nf_conn *) nfct;
 	void (*destroy_orig)(struct nf_conntrack *);
 
-	if (likely(!nf_ct_is_untracked(ct))) {
-		struct kz_extension *kzorp = kz_extension_find(ct);
-		if (likely(kzorp)) {
-			kz_extension_remove_from_cache(kzorp);
-			kz_log_accounting(kzorp, ct);
-			kz_extension_put(kzorp);
-		}
+	struct kz_extension *kzorp = kz_extension_find(ct);
+	if (likely(kzorp)) {
+		kz_extension_remove_from_cache(kzorp);
+		kz_log_accounting(kzorp, ct);
+		kz_extension_put(kzorp);
 	}
 
 	rcu_read_lock();

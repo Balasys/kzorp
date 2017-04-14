@@ -1232,7 +1232,7 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	   at all -- for that here a warning could be emitted, preferably
 	   only once.  but that means slightly worse performance, so
 	   the former bahavior is kept.*/
-	if (ct == NULL || nf_ct_is_untracked(ct) || ctinfo >= IP_CT_IS_REPLY)
+	if (ct == NULL || ctinfo >= IP_CT_IS_REPLY)
 		return NF_ACCEPT;
 
 	switch (par->family) {

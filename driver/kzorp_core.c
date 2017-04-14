@@ -659,7 +659,7 @@ kz_extension_find_or_evaluate(const struct sk_buff *skb,
 	struct kz_extension *kzorp;
 
 	ct = nf_ct_get((struct sk_buff *)skb, &ctinfo);
-	if (ct && !nf_ct_is_untracked(ct)) {
+	if (ct) {
 		// ctinfo filled by nf_ct_get
 		kzorp = kz_extension_find_or_add(ct, ctinfo, skb, in, l3proto, cfg);
 	} else {
