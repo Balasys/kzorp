@@ -5,7 +5,8 @@ Maintainer: BalaSys Development Team <devel@balasys.hu>
 Build-Depends: debhelper (>= 9),
                dh-autoreconf,
                python-all (>= 2.7),
-               dkms (>= 1.95)
+               dkms (>= 1.95),
+               dh-systemd
 Standards-Version: 3.9.5
 Homepage: https://github.com/balasys/kzorp/
 

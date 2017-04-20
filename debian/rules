@@ -8,7 +8,7 @@ ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 endif
 
 %:
-	dh $@ --with autoreconf,dkms --parallel
+	dh $@ --with autoreconf,dkms,systemd --parallel
 
 override_dh_dkms:
 	dh_dkms -V$(version)
@@ -28,6 +28,3 @@ override_dh_auto_install-indep:
 	dh_auto_install --destdir=debian/kzorp-munin-plugins -- -C munin_plugins install
 	dh_auto_install --destdir=debian/kzorp-utils -- -C scripts install
 	dh_auto_install --destdir=debian/kzorpd -- -C daemon install
-
-override_dh_installinit:
-	dh_installinit -i -- defaults 19 21

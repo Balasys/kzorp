@@ -1,0 +1,16 @@
+[Unit]
+Description=kZorpd Service
+After=syslog.target
+
+[Service]
+Type=forking
+PIDFile=/var/run/zorp/kzorpd.pid
+PermissionsStartOnly=true
+ExecStartPre=/bin/mkdir -p /var/run/zorp/
+ExecStartPre=/bin/chown -R zorp /var/run/zorp/
+ExecStart=/usr/sbin/kzorpd -u zorp -g zorp
+WatchdogSec=30s
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
