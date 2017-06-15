@@ -1755,7 +1755,8 @@ kz_log_session_verdict(enum kz_verdict verdict,
 				 "server_local='%s', "
 				 "server_local_port='%u', "
 				 "verdict='%s', "
-				 "info='%s'\n",
+				 "info='%s', "
+				 "auth_user='(NULL)'\n",
 				 service_name, kzorp->sid,
 				 kzorp->rule_id,
 				 kzorp->session_start, session_end,
@@ -1788,7 +1789,8 @@ kz_log_session_verdict(enum kz_verdict verdict,
 				 "server_local='%s', "
 				 "server_local_port='%u', "
 				 "verdict='%s', "
-				 "info='%s'\n",
+				 "info='%s', "
+				 "auth_user='(NULL)'\n",
 				 service_name, kzorp->sid,
 				 kzorp->rule_id,
 				 kzorp->session_start, session_end,
