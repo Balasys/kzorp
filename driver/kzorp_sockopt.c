@@ -98,7 +98,7 @@ kzorp_getsockopt_results(u8 family, struct sock *sk, int optval, void __user *us
 		rcu_read_lock_bh();
 		kzorp = kz_extension_find(ct);
 		if (kzorp == NULL) {
-			pr_debug("no kzorp extension structure found\n");
+			pr_err("no kzorp extension structure found\n");
 			res = -ENOENT;
 			goto error_put_ct;
 		}
@@ -140,7 +140,7 @@ error_put_ct:
 		return res;
 	}
 
-	pr_debug("conntrack entry not found\n");
+	pr_err("conntrack entry not found\n");
 
 	return -ENOENT;
 }
