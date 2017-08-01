@@ -28,6 +28,7 @@ AC_SUBST(ZORP_PYTHON_DIR)
 AC_CONFIG_FILES([
 Makefile
 daemon/Makefile
+debian/Makefile
 driver/tests/Makefile
 driver/tests/communication/Makefile
 driver/tests/query/Makefile
