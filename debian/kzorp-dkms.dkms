@@ -16,5 +16,7 @@ BUILT_MODULE_NAME[4]="xt_rule"
 DEST_MODULE_LOCATION[4]="/updates"
 BUILT_MODULE_NAME[5]="xt_socket_kzorp"
 DEST_MODULE_LOCATION[5]="/updates"
+BUILT_MODULE_NAME[6]="dynexpect"
+DEST_MODULE_LOCATION[6]="/updates"
 
 AUTOINSTALL="yes"
