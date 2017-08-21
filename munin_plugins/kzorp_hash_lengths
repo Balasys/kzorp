@@ -4,7 +4,7 @@ import sys
 
 def print_config():
   print 'graph_title kZorp hash lengths'
-  print 'graph_args --base 1024 -l 0'
+  print 'graph_args --base 1000'
   print 'graph_vlabel Hash chain lengths'
   print 'graph_category Zorp'
 
