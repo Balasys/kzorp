@@ -111,7 +111,7 @@ static spinlock_t dynexpect_rover_lock = __SPIN_LOCK_UNLOCKED(dynexpect_rover_lo
 /* Mapping creation/destruction					*/
 /****************************************************************/
 
-static void dynexpect_timeout(unsigned long);
+static void dynexpect_timeout(struct timer_list *tl);
 
 static struct nf_conn *get_master_ct_from_tuple(struct net *net,
 			const u32 client_master_ip, const u16 client_master_port,
@@ -168,9 +168,7 @@ dynexpect_mapping_new(void)
 	INIT_HLIST_NODE(&m->entry_addr);
 	atomic_set(&m->references, 1);
 
-	init_timer(&m->timeout);
-	m->timeout.data = (unsigned long)m;
-	m->timeout.function = dynexpect_timeout;
+	timer_setup(&m->timeout, dynexpect_timeout, 0);
 
 	m->state = MAPPING_EMPTY;
 
@@ -728,9 +726,9 @@ dynexpect_mapping_destroy(struct dynexpect_mapping *m)
 /****************************************************************/
 
 static void
-dynexpect_timeout(unsigned long um)
+dynexpect_timeout(struct timer_list *tl)
 {
-	struct dynexpect_mapping *m = (void *)um;
+	struct dynexpect_mapping *m = from_timer(m, tl, timeout);
 
 	pr_debug("mapping; id='%u'\n", m->id);
 
