@@ -65,7 +65,8 @@ Depends: ${misc:Depends},
          zorp-kernel-module,
          python-kzorp (= ${source:Version}),
          python-zorp-base (>= 7.0.1~alpha0),
-         python-prctl
+         python-prctl,
+         python-systemd
 Description: Python bindings for kzorp.
  Zorp is a new generation firewall. It is essentially a transparent proxy
  firewall, with strict protocol analyzing proxies, a modular architecture,
