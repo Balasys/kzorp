@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 #
 # Copyright (C) 2016-2016, BalaSys IT Ltd.
 # This program/include file is free software; you can redistribute it and/or
