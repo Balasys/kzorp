@@ -10,13 +10,17 @@ branches:
     - /^6\.0\.[0-9]*$/
 
 before_install:
+  - dpkg -l linux-headers\*
+  - ls -lad /lib/modules/*
   - source ci/obs_common.sh
   - source ci/obs_before_install.sh
 
 before_script:
+  - dpkg -l linux-headers\*
+  - ls -lad /lib/modules/*
   - sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu/ trusty main universe multiverse"
   - sudo apt-get update
-  - sudo apt-get install --yes devscripts equivs
+  - sudo apt-get install --yes devscripts equivs linux-headers-generic
   - sudo mk-build-deps -i -r -t " apt-get --no-install-recommends --yes"
 
 script:
@@ -38,9 +42,9 @@ env:
     - OBS_PROJECT=Zorp
     - OBS_MAJOR_VERSION=6
     - OBS_MINOR_VERSION=0
-    - OBS_MAINTENANCE_VERSION=10
+    - OBS_MAINTENANCE_VERSION=11
     - OBS_PACKAGE=kzorp
-    - KBUILD=/lib/modules/3.13.0-105-generic/build
+    - KBUILD=/lib/modules/3.13.0-137-generic/build
     - TEST_OS=Ubuntu
     - TEST_OS_VERSION=14.04
     - secure: "LE92W8HweNQjNPN5qx1/GA9iaAy3j/ix7GvBinne0F3aHF3oeXobj/Q1fx5XEHT1cXl2J1VWepVe5ONrWaXS/euc5pdtqfSLHDzxNfCwlB8XI5I3SGLurzoi7YW8uT+aPy5kB9vkPxNeyXoCVNLtWMbWAYWs2ZJakEIoOAuDJsQrzt6PDZZsMd+Bwt3mjREXSuV61ZVmNxP7VcfuSZz6QCCrR2ajqcp2yompmUBFsNbyYqDydr2jVdF5zEIcLrh+lCoVYzW7wGWMVZ31mHMsjqLlbkbTaVJrg23lgVuYnJL4cPTFDCn54H1KarGjCPe6gmZIVMBOfRxlEckZ6Wqty4wtFLcYhShlcOcGz8VUJGUVCUuF/4yCNZWIBI5rnvQQ8EjQ8/NzEwWSQMRnIZD/WvdznEGND7CKSEqxkfDDenURsmTSUl8mFMhUM4GvrWqU6lynCc3NGnpgerXgOkvfhK7nenUgTyZWS7Kf/K1+m94WnGOqSeneBZU1PpG8FYq8kIHobmZdWRmyUIsd0KHCJGVnnbwUFv9lffzV8aA7XKBVn8updGYpfLOR4D1l3EM/AaY4H5zI4cpvtVSOU/5085pPy77HHgffF4nmn1GHprdBn5+mWjba0/GcqMl0gPv2PKX6AHXKFcfEoItDGBu22PrFMiN4SiI9QfdND3l/mxA="
@@ -53,4 +57,4 @@ addons:
     notification_email: coroner@pfeifferszilard.hu
     build_command_prepend: "autoreconf -if; ./configure; make clean"
     build_command:   "make all-driver -j4"
-    branch_pattern: 6.0.10
+    branch_pattern: 6.0.11

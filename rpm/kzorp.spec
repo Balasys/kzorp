@@ -1,5 +1,5 @@
 Name:                   kzorp
-Version:                6.0.10
+Version:                6.0.11
 Release:                1
 URL:                    https://www.balabit.com/network-security/zorp-gpl
 Source0:                kzorp_%{version}.tar.gz
@@ -74,7 +74,7 @@ getent group zorp >/dev/null || groupadd -r zorp
 getent passwd zorp >/dev/null || useradd -r -g zorp -d /var/run/zorp -s /bin/bash -c "user for Zorp" zorp
 
 %package utils
-Summary:                Mixed packet filter/application level gateway 
+Summary:                Mixed packet filter/application level gateway
 Group:                  Development/Languages
 
 %description utils
@@ -116,7 +116,7 @@ Zorp is a new generation firewall. It is essentially a transparent proxy
 firewall, with strict protocol analyzing proxies, a modular architecture,
 and fine-grained control over the mediated traffic. Configuration decisions
 are scriptable with the Python based configuration language.
- 
+
 This package contains plugins for the Munin monitoring tool.
 
 %files munin-plugins
@@ -129,6 +129,8 @@ This package contains plugins for the Munin monitoring tool.
 
 
 %changelog
+* Fri Dec 08 2017 Balasys Zorp GPL Team <zorp@googlegroups.com> - 6.0.11-1
+  - New upstream release 6.0.11
 * Fri Nov 25 2016 Balasys Zorp GPL Team <zorp@lists.balabit.hu> - 6.0.10-1
   - New upstream release 6.0.10
 * Wed Apr 13 2016 Balasys Zorp GPL Team <zorp@lists.balabit.hu> - 6.0.9-1

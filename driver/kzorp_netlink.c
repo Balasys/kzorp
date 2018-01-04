@@ -27,6 +27,7 @@
 
 #include <net/ipv6.h>
 #include <net/sock.h>
+#include <net/genetlink.h>
 
 #define list_nth(pos, head, member, n) \
 	list_for_each_entry(pos, head, member) { \
@@ -4250,7 +4251,7 @@ int __init kz_netlink_init(void)
 
 	/* register netlink notifier and genetlink family */
 	netlink_register_notifier(&kz_rtnl_notifier);
-	res = genl_register_family_with_ops_and_size(&kznl_family, kznl_ops, ARRAY_SIZE(kznl_ops));
+	res = genl_register_family_with_ops(&kznl_family, kznl_ops);
 	if (res < 0) {
 		pr_err_ratelimited("failed to register generic netlink family; err='%d'\n", res);
 		goto cleanup_notifier;

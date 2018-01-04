@@ -27,9 +27,9 @@ EXTRA_CFLAGS += -I$(src)/include -I$(src)
 PATCHED_UPSTREAM_MODULES = xt_socket_kzorp
 PATCHED_UPSTREAM_OBJECTS = xt_socket_kzorp.o
 
-MODULE_NAMES = kzorp xt_KZORP xt_rule xt_service xt_zone $(PATCHED_UPSTREAM_MODULES)
+MODULE_NAMES = dynexpect kzorp xt_KZORP xt_rule xt_service xt_zone $(PATCHED_UPSTREAM_MODULES)
 
-obj-m := kzorp.o xt_KZORP.o xt_rule.o xt_service.o xt_zone.o $(PATCHED_UPSTREAM_OBJECTS)
+obj-m := dynexpect.o kzorp.o xt_KZORP.o xt_rule.o xt_service.o xt_zone.o $(PATCHED_UPSTREAM_OBJECTS)
 kzorp-y := kzorp_core.o kzorp_lookup.o kzorp_sockopt.o kzorp_netlink.o kzorp_ext.o
 
 all: config_check modules
