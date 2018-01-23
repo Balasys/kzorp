@@ -1,7 +1,7 @@
 /*
  * Transparent proxy support for Linux/iptables
  *
- * Copyright (C) 2007-2008 BalaBit IT Ltd.
+ * Copyright (C) 2007-2015 BalaBit IT Security, 2015-2017 BalaSys IT Security.
  * Author: Krisztian Kovacs
  *
  * This program is free software; you can redistribute it and/or modify

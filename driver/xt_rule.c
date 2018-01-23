@@ -1,7 +1,7 @@
 /*
  * kZorp `rule' match
  *
- * Copyright (C) 2014, BalaBit IT Ltd.
+ * Copyright (C) 2014-2015 BalaBit IT Security, 2015-2017 BalaSys IT Security.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published

@@ -1,7 +1,7 @@
 /*
  * KZorp support for Linux/iptables
  *
- * Copyright (c) 2011-2011 BalaBit IT Ltd.
+ * Copyright (c) 2011-2015 BalaBit IT Security, 2015-2017 BalaSys IT Security.
  * Author: Krisztian Kovacs
  *
  * This program is free software; you can redistribute it and/or modify
