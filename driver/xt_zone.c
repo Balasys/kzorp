@@ -156,7 +156,7 @@ static void __exit zone_mt_exit(void)
 	xt_unregister_matches(xt_zone_match, ARRAY_SIZE(xt_zone_match));
 }
 
-MODULE_AUTHOR("Krisztian Kovacs <hidden@balabit.hu>");
+MODULE_AUTHOR("BalaSys Development Team <devel@balasys.hu>");
 MODULE_DESCRIPTION("kzorp zone match");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("ipt_zone");

@@ -69,7 +69,7 @@ static void __exit rule_mt_exit(void)
 	xt_unregister_matches(xt_rule_match, ARRAY_SIZE(xt_rule_match));
 }
 
-MODULE_AUTHOR("Szilárd Pfeiffer coroner@balabit.hu>");
+MODULE_AUTHOR("BalaSys Development Team <devel@balasys.hu>");
 MODULE_DESCRIPTION("kzorp rule match");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("ipt_rule");

@@ -1936,7 +1936,7 @@ static void __exit kzorp_core_fini(void)
 }
 
 MODULE_DESCRIPTION("kzorp core");
-MODULE_AUTHOR("Krisztian Kovacs <hidden@balabit.com>");
+MODULE_AUTHOR("BalaSys Development Team <devel@balasys.hu>");
 MODULE_LICENSE("GPL");
 
 module_init(kzorp_core_init);

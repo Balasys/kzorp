@@ -1397,7 +1397,7 @@ static void __exit kzorp_tg_exit(void)
 module_init(kzorp_tg_init);
 module_exit(kzorp_tg_exit);
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Krisztian Kovacs <hidden@balabit.com>");
+MODULE_AUTHOR("BalaSys Development Team <devel@balasys.hu>");
 MODULE_DESCRIPTION("Netfilter KZorp target module.");
 MODULE_ALIAS("ipt_KZORP");
 MODULE_ALIAS("ip6t_KZORP");

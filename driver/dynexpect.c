@@ -1322,6 +1322,6 @@ MODULE_PARM_DESC(mapping_timeout, "timeout for the dynamic mappings");
 module_param(hashsize, int, 0400);
 MODULE_PARM_DESC(hashsize, "mapping lookup hash size");
 
-MODULE_AUTHOR("Krisztian Kovacs <hidden@balabit.hu>");
+MODULE_AUTHOR("BalaSys Development Team <devel@balasys.hu>");
 MODULE_DESCRIPTION("Dynamic expectation handler module");
 MODULE_LICENSE("GPL");

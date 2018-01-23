@@ -154,7 +154,7 @@ static void __exit service_mt_exit(void)
 	xt_unregister_matches(service_match, ARRAY_SIZE(service_match));
 }
 
-MODULE_AUTHOR("Krisztian Kovacs <hidden@balabit.hu>");
+MODULE_AUTHOR("BalaSys Development Team <devel@balasys.hu>");
 MODULE_DESCRIPTION("kzorp service match");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("ipt_service");
