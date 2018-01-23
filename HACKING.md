@@ -1,7 +1,7 @@
 These are the agreements (technical and otherwise) on the development of Kzorp:
 
-The coordination of development is done on http://huboard.com/balabit/kzorp/board using kanban.
-Everyone is welcome on board!
+The coordination of development is done on GitHub issue tracker.  Everyone is
+welcome on board!
 
 Every now code or bugfix should have the appropriate unit classes, and unit
 classes for legacy code should be created.
