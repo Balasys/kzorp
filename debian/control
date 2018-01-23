@@ -1,7 +1,7 @@
 Source: kzorp
 Section: net
 Priority: extra
-Maintainer: BalaBit Development Team <devel@balabit.hu>
+Maintainer: BalaSys Development Team <devel@balasys.hu>
 Build-Depends: debhelper (>= 9),
                dh-autoreconf,
                python-all (>= 2.7),
