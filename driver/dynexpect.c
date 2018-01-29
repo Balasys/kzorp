@@ -130,7 +130,7 @@ static struct nf_conn *get_master_ct_from_tuple(struct net *net,
 	tuple.dst.protonum = master_l4proto;
 	tuple.dst.u.udp.port = htons(server_master_port);
 
-	h = kz_nf_conntrack_find_get(net, &tuple);
+	h = nf_conntrack_find_get(net, &nf_ct_zone_dflt, &tuple);
 	if (!h) {
 			pr_debug("Cannot find MASTER ct tuple hash;");
 			return NULL;
@@ -677,7 +677,9 @@ dynexpect_mapping_destroy(struct dynexpect_mapping *m)
 			tuple.src.u.udp.port = htons(m->orig_port + i);
 			tuple.dst.u.udp.port = htons(m->peer_port + i);
 
-			h = kz_nf_conntrack_find_get(nf_ct_net(m->master_ct), &tuple);
+			h = nf_conntrack_find_get(nf_ct_net(m->master_ct),
+						  &nf_ct_zone_dflt,
+						  &tuple);
 
 			if (h != NULL) {
 				struct nf_conn *ct = nf_ct_tuplehash_to_ctrack(h);
@@ -980,7 +982,9 @@ dynexpect_getsockopt_map(void *user, int *len)
 			pr_debug("checking if conntrack exists for tuple:\n");
 			nf_ct_dump_tuple(&tuple);
 
-			h = kz_nf_conntrack_find_get(nf_ct_net(m->master_ct), &tuple);
+			h = nf_conntrack_find_get(nf_ct_net(m->master_ct),
+						  &nf_ct_zone_dflt,
+						  &tuple);
 
 			if (h != NULL) {
 				pr_debug("found; ct='%p'\n", nf_ct_tuplehash_to_ctrack(h));

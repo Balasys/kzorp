@@ -114,7 +114,7 @@ v4_get_socket_to_redirect_to(const struct kz_dispatcher *dpt,
 			if (sk) {
 				if (sk->sk_state == TCP_TIME_WAIT &&
 				    tcp_header->syn && !tcp_header->rst && !tcp_header->ack && !tcp_header->fin)
-					kz_inet_twsk_deschedule_put(inet_twsk(sk));
+					inet_twsk_deschedule_put(inet_twsk(sk));
 				else if (sk->sk_state == TCP_TIME_WAIT)
 					inet_twsk_put(inet_twsk(sk));
 				else
@@ -231,7 +231,7 @@ relookup_time_wait6(struct sk_buff *skb, int l4proto, int thoff,
 					    proxy_port,
 					    skb->dev, NFT_LOOKUP_LISTENER);
 		if (sk2) {
-			kz_inet_twsk_deschedule_put(inet_twsk(sk));
+			inet_twsk_deschedule_put(inet_twsk(sk));
 			sk = sk2;
 		}
 	}
@@ -696,10 +696,10 @@ send_reset_v4(struct sk_buff *oldskb, int hook)
 	skb_dst_set_noref(nskb, skb_dst(oldskb));
 
 	nskb->protocol = htons(ETH_P_IP);
-	if (kz_ip_route_me_harder(nskb, RTN_UNICAST))
+	if (ip_route_me_harder(dev_net(skb_dst(nskb)->dev), nskb, RTN_UNICAST))
 		goto free_nskb;
 
-	niph->ttl	= ip4_dst_hoplimit(skb_dst(nskb));
+	niph->ttl = ip4_dst_hoplimit(skb_dst(nskb));
 
 	/* "Never happens" */
 	if (nskb->len > dst_mtu(skb_dst(nskb)))
@@ -707,7 +707,7 @@ send_reset_v4(struct sk_buff *oldskb, int hook)
 
 	nf_ct_attach(nskb, oldskb);
 
-	kz_ip_local_out(nskb);
+	ip_local_out(dev_net(skb_dst(nskb)->dev), nskb->sk, nskb);
 	return;
 
  free_nskb:
@@ -854,7 +854,7 @@ send_reset_v6(struct net *net, struct sk_buff *oldskb)
 
 	nf_ct_attach(nskb, oldskb);
 
-	kz_ip6_local_out(nskb);
+	ip6_local_out(dev_net(skb_dst(nskb)->dev), nskb->sk, nskb);
 }
 
 static void

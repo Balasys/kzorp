@@ -88,7 +88,7 @@ kzorp_getsockopt_results(u8 family, struct sock *sk, int optval, void __user *us
 		BUG();
 	}
 
-	h = kz_nf_conntrack_find_get(sock_net(sk), &tuple);
+	h = nf_conntrack_find_get(sock_net(sk), &nf_ct_zone_dflt, &tuple);
 	if (h) {
 		struct nf_conn *ct = nf_ct_tuplehash_to_ctrack(h);
 		struct kz_extension *kzorp;

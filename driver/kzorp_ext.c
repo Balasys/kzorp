@@ -212,7 +212,7 @@ kz_extension_add_to_cache(struct kz_extension *kzorp, const struct nf_conn *ct)
 	struct hlist_nulls_node *n;
 	struct kz_extension *kzorp_find;
 	const struct nf_conntrack_tuple *tuple = &ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple;
-	const u16 zone_id = kz_nf_ct_zone_id(ct);
+	const u16 zone_id = nf_ct_zone_id(nf_ct_zone(ct), NF_CT_ZONE_DIR_ORIG);
 
 	kz_extension_prepare_to_cache_addition(kzorp, ct, tuple, zone_id);
 
