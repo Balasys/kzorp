@@ -760,7 +760,7 @@ dynexpect_setsockopt_map(void *user, int len, struct net *net)
 	int res;
 
 	if (len != sizeof(struct nf_ct_dynexpect_map)) {
-		pr_err("invalid user data length; len='%d', expected='%lu'\n", len, sizeof(struct nf_ct_dynexpect_map));
+		pr_err("invalid user data length; len='%d', expected='%zu'\n", len, sizeof(struct nf_ct_dynexpect_map));
 		return -EINVAL;
 	}
 
@@ -830,7 +830,7 @@ dynexpect_setsockopt_expect(void *user, int len)
 	int res;
 
 	if (len != sizeof(struct nf_ct_dynexpect_expect)) {
-		pr_err("invalid user data length; len='%d', expected='%lu'\n", len, sizeof(struct nf_ct_dynexpect_expect));
+		pr_err("invalid user data length; len='%d', expected='%zu'\n", len, sizeof(struct nf_ct_dynexpect_expect));
 		return -EINVAL;
 	}
 

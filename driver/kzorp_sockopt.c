@@ -65,7 +65,7 @@ kzorp_getsockopt_results(u8 family, struct sock *sk, int optval, void __user *us
 	}
 
 	if ((unsigned int) *len < sizeof(struct kz_lookup_result)) {
-		pr_debug("buffer size is too small for the result; len='%d', required='%lu'\n", *len, sizeof(struct kz_lookup_result));
+		pr_debug("buffer size is too small for the result; len='%d', required='%zu'\n", *len, sizeof(struct kz_lookup_result));
 		return -EINVAL;
 	}
 
