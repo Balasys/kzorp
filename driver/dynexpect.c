@@ -545,6 +545,7 @@ dynexpect_mapping_expect(struct dynexpect_mapping *m,
 		struct nf_conntrack_expect *exp;
 		union nf_inet_addr saddr, daddr;
 		__be16 nsport, ndport;
+		int ret;
 
 		exp = nf_ct_expect_alloc(m->master_ct);
 		if (exp == NULL) {
@@ -570,8 +571,9 @@ dynexpect_mapping_expect(struct dynexpect_mapping *m,
 		/* set expected callback */
 		exp->expectfn = dynexpect_nat_expected;
 
-		if (nf_ct_expect_related(exp) != 0) {
-			pr_debug("expect_related() failed\n");
+		ret = nf_ct_expect_related(exp);
+		if (ret != 0) {
+			pr_debug("expect_related() failed: %d\n", ret);
 			nf_ct_expect_put(exp);
 			success = 0;
 			break;
