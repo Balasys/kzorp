@@ -32,7 +32,7 @@
 
 #ifdef pr_fmt
 #undef pr_fmt
-#define pr_fmt(fmt) "%s: " fmt, __func__
+#define pr_fmt(fmt) "dynexpect:%s:%d: " fmt, __func__, __LINE__
 #endif
 
 #define CONFIG_NF_DYNEXPECT_MAX_RANGE_SIZE 8
