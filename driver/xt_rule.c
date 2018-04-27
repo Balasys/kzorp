@@ -1,7 +1,7 @@
 /*
  * kZorp `rule' match
  *
- * Copyright (C) 2014, BalaBit IT Ltd.
+ * Copyright (C) 2014-2015 BalaBit IT Security, 2015-2017 BalaSys IT Security.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published
@@ -69,7 +69,7 @@ static void __exit rule_mt_exit(void)
 	xt_unregister_matches(xt_rule_match, ARRAY_SIZE(xt_rule_match));
 }
 
-MODULE_AUTHOR("Szilárd Pfeiffer coroner@balabit.hu>");
+MODULE_AUTHOR("BalaSys Development Team <devel@balasys.hu>");
 MODULE_DESCRIPTION("kzorp rule match");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("ipt_rule");

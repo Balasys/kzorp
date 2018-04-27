@@ -1,7 +1,7 @@
 /*
  * KZorp core
  *
- * Copyright (C) 2006-2010, BalaBit IT Ltd.
+ * Copyright (C) 2006-2015 BalaBit IT Security, 2015-2017 BalaSys IT Security.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published
@@ -1936,7 +1936,7 @@ static void __exit kzorp_core_fini(void)
 }
 
 MODULE_DESCRIPTION("kzorp core");
-MODULE_AUTHOR("Krisztian Kovacs <hidden@balabit.com>");
+MODULE_AUTHOR("BalaSys Development Team <devel@balasys.hu>");
 MODULE_LICENSE("GPL");
 
 module_init(kzorp_core_init);

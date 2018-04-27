@@ -1,7 +1,7 @@
 /*
  * KZorp support for Linux/iptables
  *
- * Copyright (c) 2011-2011 BalaBit IT Ltd.
+ * Copyright (c) 2011-2015 BalaBit IT Security, 2015-2017 BalaSys IT Security.
  * Author: Krisztian Kovacs
  *
  * This program is free software; you can redistribute it and/or modify
@@ -1397,7 +1397,7 @@ static void __exit kzorp_tg_exit(void)
 module_init(kzorp_tg_init);
 module_exit(kzorp_tg_exit);
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Krisztian Kovacs <hidden@balabit.com>");
+MODULE_AUTHOR("BalaSys Development Team <devel@balasys.hu>");
 MODULE_DESCRIPTION("Netfilter KZorp target module.");
 MODULE_ALIAS("ipt_KZORP");
 MODULE_ALIAS("ip6t_KZORP");

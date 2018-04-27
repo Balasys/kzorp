@@ -1,7 +1,7 @@
 /*
  * Transparent proxy support for Linux/iptables
  *
- * Copyright (C) 2007-2008 BalaBit IT Ltd.
+ * Copyright (C) 2007-2015 BalaBit IT Security, 2015-2017 BalaSys IT Security.
  * Author: Krisztian Kovacs
  *
  * This program is free software; you can redistribute it and/or modify
@@ -571,7 +571,7 @@ module_init(socket_mt_init);
 module_exit(socket_mt_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Krisztian Kovacs, Balazs Scheidler, Szilárd Pfeiffer");
+MODULE_AUTHOR("BalaSys Development Team <devel@balasys.hu>");
 MODULE_DESCRIPTION("x_tables socket_kzorp match module");
 MODULE_ALIAS("ipt_socket_kzorp");
 MODULE_ALIAS("ip6t_socket_kzorp");

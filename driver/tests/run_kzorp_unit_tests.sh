@@ -22,7 +22,7 @@ function print_help(){
 "   -h | --help - Display this information \n"
 }
 
-Repository="https://github.com/balabit/kzorp.git"
+Repository="https://github.com/balasys/kzorp.git"
 Branch="master"
 
 Root="/tmp/kzorp_test_run"
