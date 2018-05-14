@@ -42,4 +42,4 @@ env:
     - OBS_MINOR_VERSION=0
     - OBS_MAINTENANCE_VERSION=12
     - OBS_PACKAGE=kzorp
-    - KBUILD=/lib/modules/4.4.0-112-generic/build
+    - KBUILD=/lib/modules/4.4.0-124-generic/build
