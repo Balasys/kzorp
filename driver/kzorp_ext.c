@@ -46,7 +46,7 @@ struct kzorp_hash_stats __percpu *kz_hash_stats;
 static __cacheline_aligned_in_smp spinlock_t kz_hash_locks[KZ_HASH_LOCK_NUM];
 PRIVATE struct kmem_cache *kz_cachep;
 
-static void (*nf_ct_destroy_orig)(struct nf_conntrack *) __rcu __read_mostly;
+static struct nf_ct_hook __rcu *nf_ct_hook_orig __read_mostly;
 
 static unsigned int kz_ext_hashrnd __read_mostly;
 
@@ -300,7 +300,7 @@ static void
 kz_extension_conntrack_destroy(struct nf_conntrack *nfct)
 {
 	struct nf_conn *ct = (struct nf_conn *) nfct;
-	void (*destroy_orig)(struct nf_conntrack *);
+	struct nf_ct_hook *ct_hook_orig = NULL;
 
 	struct kz_extension *kzorp = kz_extension_find(ct);
 	if (likely(kzorp)) {
@@ -310,9 +310,9 @@ kz_extension_conntrack_destroy(struct nf_conntrack *nfct)
 	}
 
 	rcu_read_lock();
-	destroy_orig = rcu_dereference(nf_ct_destroy_orig);
-	BUG_ON(destroy_orig == NULL);
-	destroy_orig(nfct);
+	ct_hook_orig = rcu_dereference(nf_ct_hook_orig);
+	BUG_ON(ct_hook_orig == NULL);
+	ct_hook_orig->destroy(nfct);
 	rcu_read_unlock();
 }
 
@@ -412,6 +412,10 @@ static const struct file_operations kz_hash_stats_file_ops = {
 	.release = seq_release,
 };
 
+static struct nf_ct_hook kz_nf_ct_hook = {
+	.destroy = kz_extension_conntrack_destroy,
+};
+
 static int __net_init kz_extension_net_init(struct net *net)
 {
 	if (!proc_create("kz_hash_lengths", S_IRUGO, NULL, &kz_hash_lengths_file_ops))
@@ -425,11 +429,11 @@ static int __net_init kz_extension_net_init(struct net *net)
 		goto err_pcpu_lists;
 
 	rcu_read_lock();
-	nf_ct_destroy_orig = rcu_dereference(nf_ct_destroy);
-	BUG_ON(nf_ct_destroy_orig == NULL);
+	nf_ct_hook_orig = rcu_dereference(nf_ct_hook);
+	BUG_ON(nf_ct_hook_orig == NULL);
 	rcu_read_unlock();
 
-	rcu_assign_pointer(nf_ct_destroy, kz_extension_conntrack_destroy);
+	rcu_assign_pointer(nf_ct_hook, &kz_nf_ct_hook);
 
 	return 0;
 
@@ -443,14 +447,14 @@ err_proc_entry:
 
 void kz_extension_net_exit(struct net *net)
 {
-	void (*destroy_orig)(struct nf_conntrack *);
+	struct nf_ct_hook *ct_hook_orig = NULL;
 
 	rcu_read_lock();
-	destroy_orig = rcu_dereference(nf_ct_destroy_orig);
-	BUG_ON(destroy_orig == NULL);
+	ct_hook_orig = rcu_dereference(nf_ct_hook_orig);
+	BUG_ON(ct_hook_orig == NULL);
 	rcu_read_unlock();
 
-	rcu_assign_pointer(nf_ct_destroy, destroy_orig);
+	rcu_assign_pointer(nf_ct_hook, ct_hook_orig);
 
 	remove_proc_entry("kz_hash_stats", NULL);
 	remove_proc_entry("kz_hash_lengths", NULL);
