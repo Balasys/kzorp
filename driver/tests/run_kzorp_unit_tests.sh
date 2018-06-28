@@ -31,7 +31,7 @@ TestSeedConf="run_test.conf"
 
 Architecture="amd64"
 
-OSVersion="14.04"
+OSVersion="18.04"
 
 while (( $# )); do
   case $1 in
@@ -57,8 +57,11 @@ TestRoot="${Root}/tests"
 OSImageDir="${Root}/disk_images"
 
 if [ -z ${KMemLeakURL} ]; then
-  ImageURL="http://cloud-images.ubuntu.com/server/releases/${OSVersion}/release"
-  ImageURL="${ImageURL}/ubuntu-${OSVersion}-server-cloudimg-${Architecture}-disk1.img"
+  ImageURL="http://cloud-images.ubuntu.com/releases/${OSVersion}/release"
+  case ${OSVersion} in
+    "18.04") ImageURL="${ImageURL}/ubuntu-${OSVersion}-server-cloudimg-${Architecture}.img";;
+    *)       ImageURL="${ImageURL}/ubuntu-${OSVersion}-server-cloudimg-${Architecture}-disk1.img";;
+  esac
 else
   ImageURL=${KMemLeakURL}
 fi
