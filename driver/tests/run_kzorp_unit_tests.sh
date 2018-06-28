@@ -110,7 +110,7 @@ fi
 ## Download the image (only once)
 if [ ! -f ${OSImagePath} ]; then
   echo "Image not found under ${OSImagePath}"
-  wget $ImageURL -O ${OSImagePath}
+  curl "${ImageURL}" -L -o "${OSImagePath}" -z "${OSImagePath}"
 fi
 
 ## Create the result file so the VM will be able to write it
