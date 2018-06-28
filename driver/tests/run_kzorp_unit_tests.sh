@@ -141,6 +141,8 @@ chpasswd: { expire: False }
 ssh_pwauth: True
 apt_mirror: http://mirror.balasys/ubuntu/
 packages: $Packages
+hostname: kzorp
+manage_etc_hosts: localhost
 runcmd:
  - set -x
  - mkdir -p $TestRoot
