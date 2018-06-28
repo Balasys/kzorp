@@ -22,6 +22,39 @@ function print_help(){
 "   -h | --help - Display this information \n"
 }
 
+function check_architecture_and_software(){
+  programs=( curl cloud-localds )
+  packages=( curl cloud-image-utils )
+
+  case "${Architecture}" in
+    "amd64")
+      Qemu="qemu-system-x86_64 --enable-kvm"
+      programs+=( qemu-system-x86_64 )
+      packages+=( qemu-system-x86 )
+      ;;
+    "i386")
+      Qemu="qemu-system-i386 --enable-kvm"
+      programs+=( qemu-system-i386 )
+      packages+=( qemu-system-x86 )
+      ;;
+    "arm64")
+      Qemu="qemu-system-arm -machine virt"
+      programs+=( qemu-system-arm )
+      packages+=( qemu-system-arm )
+      ;;
+    *) echo "Error: ${Architecture} is not a supported architecture. Only amd64, i386 and arm64 are supported."; exit 1;;
+  esac
+
+  length=$(expr "${#programs[@]}" - 1)
+  for i in $(seq 0 "$length"); do
+    if ! which "${programs[$i]}" >/dev/null; then
+      echo "${programs[$i]} not found!"
+      echo "Please install it with: sudo apt-get install ${packages[$i]}"
+      exit 1
+    fi
+  done
+}
+
 Repository="https://github.com/balasys/kzorp.git"
 Branch="master"
 
@@ -46,12 +79,7 @@ while (( $# )); do
   esac
 done
 
-case ${Architecture} in
-  "amd64") Qemu="qemu-system-x86_64 --enable-kvm";;
-  "i386") Qemu="qemu-system-i386 --enable-kvm";;
-  "arm64") Qemu="qemu-system-arm -machine virt";;
-  *) echo "Error: ${Architecture} is not a supported architecture. Only amd64, i386 and arm64 are supported."; exit 1;;
-esac
+check_architecture_and_software
 
 TestRoot="${Root}/tests"
 OSImageDir="${Root}/disk_images"
