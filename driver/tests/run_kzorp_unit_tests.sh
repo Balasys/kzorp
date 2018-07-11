@@ -144,6 +144,8 @@ packages: $Packages
 hostname: kzorp
 manage_etc_hosts: localhost
 runcmd:
+ - uname -a
+ - lsb_release -a
  - set -x
  - mkdir -p $TestRoot
  - sudo mount -t 9p -o trans=virtio,version=9p2000.L hostshare $TestRoot
