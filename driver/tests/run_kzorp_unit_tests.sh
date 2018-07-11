@@ -13,7 +13,7 @@ function print_help(){
 "Usage of $0:\n" \
 "   $0 [options]\n" \
 "Options:\n" \
-"   -k | --kmemleak IMAGE - Base cloud image with a kmemleak-enabled kernel to download, ignores ARCHITECTURE and VERSION\n" \
+"   -k | --kmemleak IMAGE - Base cloud image with a kmemleak-enabled kernel, ignores ARCHITECTURE and VERSION\n" \
 "   -r | --repository REPO - GIT repository of kZorp \n" \
 "   -b | --branch BRANCH - branch name of the repository where kZorp is compiled from \n" \
 "   -a | --arch ARCHITECTURE - Architecture name of the package to be installed\n" \
@@ -35,7 +35,7 @@ OSVersion="18.04"
 
 while (( $# )); do
   case $1 in
-    "-k" | "--kmemleak") KMemLeakURL="$2"; shift 2;;
+    "-k" | "--kmemleak") KMemLeakImage="$2"; shift 2;;
     "-r" | "--Repository") Repository="$2"; shift 2;;
     "-b" | "--branch") Branch="$2"; shift 2;;
     "-a" | "--arch") Architecture="$2"; shift 2;;
@@ -56,14 +56,14 @@ esac
 TestRoot="${Root}/tests"
 OSImageDir="${Root}/disk_images"
 
-if [ -z ${KMemLeakURL} ]; then
-  ImageURL="http://cloud-images.ubuntu.com/releases/${OSVersion}/release"
+if [ -z ${KMemLeakImage} ]; then
+  BaseURL="http://cloud-images.ubuntu.com/releases/${OSVersion}/release"
   case ${OSVersion} in
-    "18.04") ImageURL="${ImageURL}/ubuntu-${OSVersion}-server-cloudimg-${Architecture}.img";;
-    *)       ImageURL="${ImageURL}/ubuntu-${OSVersion}-server-cloudimg-${Architecture}-disk1.img";;
+    "18.04") ImageURL="${BaseURL}/ubuntu-${OSVersion}-server-cloudimg-${Architecture}.img";;
+    *)       ImageURL="${BaseURL}/ubuntu-${OSVersion}-server-cloudimg-${Architecture}-disk1.img";;
   esac
 else
-  ImageURL=${KMemLeakURL}
+  ImageURL=${KMemLeakImage}
 fi
 
 OSImageName="${ImageURL##*/}"  # The part after the last '/' character (the actual filename)
@@ -72,6 +72,11 @@ OSImagePathSeed="${OSImageDir}/${OSImageName}.seed"
 
 if [ ! -d ${OSImageDir} ]; then
   mkdir -p ${OSImageDir}
+fi
+
+if [ -f ${KMemLeakImage} ]; then
+  echo "Copy kmemleak image file ${KMemLeakImage}"
+  cp -f ${KMemLeakImage} ${OSImagePath}
 fi
 
 ## Download the image (only once)
@@ -95,7 +100,7 @@ Packages="
  - python-prctl
  - python-nose
  - python-netaddr"
-if [ -z ${KMemLeakURL} ]; then
+if [ -z ${KMemLeakImage} ]; then
   Packages="$Packages
  - linux-headers-generic"
 fi
@@ -144,7 +149,7 @@ ${Qemu} -nographic -net nic -net user -hda ${OSImagePath} -hdb ${OSImagePathSeed
 
 ## Copy the test result to the CWD, so Jenkins can access it
 cp ${TestRoot}/result.xml result.xml
-if [ ! -z $KMemLeakURL ]; then
+if [ ! -z $KMemLeakImage ]; then
   cp ${TestRoot}/kmemleak kmemleak
   ./driver/tests/kmemleak2junit.py
 
