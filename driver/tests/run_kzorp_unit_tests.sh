@@ -84,9 +84,9 @@ check_architecture_and_software
 TestRoot="${Root}/tests"
 OSImageDir="${Root}/disk_images"
 
-if [ -z ${KMemLeakImage} ]; then
+if [ -z "${KMemLeakImage}" ]; then
   BaseURL="http://cloud-images.ubuntu.com/releases/${OSVersion}/release"
-  case ${OSVersion} in
+  case "${OSVersion}" in
     "18.04") ImageURL="${BaseURL}/ubuntu-${OSVersion}-server-cloudimg-${Architecture}.img";;
     *)       ImageURL="${BaseURL}/ubuntu-${OSVersion}-server-cloudimg-${Architecture}-disk1.img";;
   esac
@@ -98,17 +98,17 @@ OSImageName="${ImageURL##*/}"  # The part after the last '/' character (the actu
 OSImagePath="${OSImageDir}/${OSImageName}"
 OSImagePathSeed="${OSImageDir}/${OSImageName}.seed"
 
-if [ ! -d ${OSImageDir} ]; then
-  mkdir -p ${OSImageDir}
+if [ ! -d "${OSImageDir}" ]; then
+  mkdir -p "${OSImageDir}"
 fi
 
-if [ -f ${KMemLeakImage} ]; then
-  echo "Copy kmemleak image file ${KMemLeakImage}"
-  cp -f ${KMemLeakImage} ${OSImagePath}
+if [ -f "${KMemLeakImage}" ]; then
+  echo "Copy kmemleak image file '${KMemLeakImage}'"
+  cp -f "${KMemLeakImage}" "${OSImagePath}"
 fi
 
 ## Download the image (only once)
-if [ ! -f ${OSImagePath} ]; then
+if [ ! -f "${OSImagePath}" ]; then
   echo "Image not found under ${OSImagePath}"
   curl "${ImageURL}" -L -o "${OSImagePath}" -z "${OSImagePath}"
 fi
@@ -181,7 +181,7 @@ ${Qemu} -nographic -net nic -net user -hda ${OSImagePath} -hdb ${OSImagePathSeed
 
 ## Copy the test result to the CWD, so Jenkins can access it
 cp ${TestRoot}/result.xml result.xml
-if [ ! -z $KMemLeakImage ]; then
+if [ ! -z "$KMemLeakImage" ]; then
   cp ${TestRoot}/kmemleak kmemleak
   ./driver/tests/kmemleak2junit.py
 
