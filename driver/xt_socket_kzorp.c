@@ -30,6 +30,8 @@
 #include <net/netfilter/nf_socket.h>
 #include <linux/netfilter/xt_socket_kzorp.h>
 
+#include "kzorp_compat.h"
+
 /* "socket" match based redirection (no specific rule)
  * ===================================================
  *
@@ -166,10 +168,10 @@ static int socket_mt_enable_defrag(struct net *net, int family)
 {
 	switch (family) {
 	case NFPROTO_IPV4:
-		return nf_defrag_ipv4_enable(net);
+		return kz_nf_defrag_ipv4_enable(net);
 #if IS_ENABLED(CONFIG_IP6_NF_IPTABLES)
 	case NFPROTO_IPV6:
-		return nf_defrag_ipv6_enable(net);
+		return kz_nf_defrag_ipv6_enable(net);
 #endif
 	}
 	WARN_ONCE(1, "Unknown family %d\n", family);

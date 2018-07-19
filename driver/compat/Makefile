@@ -26,17 +26,38 @@ nla_parse_nested_does_not_have_extack.h: nla_parse_nested_does_not_have_extack.c
 	make -C $(KBUILD) M=$(PWD) obj-m=nla_parse_nested_does_not_have_extack.o modules 2>/dev/null || \
 	echo "#define KZ_COMP_NLA_PARSE_NESTED_DOES_NOT_HAVE_EXTACK 1" > nla_parse_nested_does_not_have_extack.h
 
+x_tables_does_not_have_helpers.h: x_tables_does_not_have_helpers.c
+	truncate -s 0 x_tables_does_not_have_helpers.h
+	make -C $(KBUILD) M=$(PWD) obj-m=x_tables_does_not_have_helpers.o modules 2>/dev/null || \
+	echo "#define KZ_COMP_X_TABLES_DOES_NOT_HAVE_HELPERS 1" > x_tables_does_not_have_helpers.h
+
+nf_defrag_does_not_have_net.h: nf_defrag_does_not_have_net.c
+	truncate -s 0 nf_defrag_does_not_have_net.h
+	make -C $(KBUILD) M=$(PWD) obj-m=nf_defrag_does_not_have_net.o modules 2>/dev/null || \
+	echo "#define KZ_COMP_NF_DEFRAG_DOES_NOT_HAVE_NET 1" > nf_defrag_does_not_have_net.h
+
+inet_lookup_does_not_have_skb_doff.h: inet_lookup_does_not_have_skb_doff.c
+	truncate -s 0 inet_lookup_does_not_have_skb_doff.h
+	make -C $(KBUILD) M=$(PWD) obj-m=inet_lookup_does_not_have_skb_doff.o modules 2>/dev/null || \
+	echo "#define KZ_COMP_INET_LOOKUP_DOES_NOT_HAVE_SKB_DOFF 1" > inet_lookup_does_not_have_skb_doff.h
+
 compat.h: \
 		does_not_have_timer_setup.h \
 		inet_lookup_does_not_have_sdif.h \
 		does_not_have_refcount_inc_not_zero.h \
-		nla_parse_nested_does_not_have_extack.h
+		nla_parse_nested_does_not_have_extack.h \
+		x_tables_does_not_have_helpers.h \
+		nf_defrag_does_not_have_net.h \
+		inet_lookup_does_not_have_skb_doff.h
 
 	cat \
 	does_not_have_timer_setup.h \
 	inet_lookup_does_not_have_sdif.h \
 	does_not_have_refcount_inc_not_zero.h \
 	nla_parse_nested_does_not_have_extack.h \
+	x_tables_does_not_have_helpers.h \
+	nf_defrag_does_not_have_net.h \
+	inet_lookup_does_not_have_skb_doff.h \
 	> compat.h
 
 compat_h: compat.h

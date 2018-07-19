@@ -46,7 +46,36 @@ typedef struct timer_list * kz_timer_arg;
 
 #endif
 
-#ifdef KZ_COMP_INET_LOOKUP_DOES_NOT_HAVE_SDIF
+#ifdef KZ_COMP_INET_LOOKUP_DOES_NOT_HAVE_SKB_DOFF
+
+#define kz_inet_lookup(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif) \
+	inet_lookup(net, hashinfo, saddr, sport, daddr, dport, dif)
+
+#define kz_inet6_lookup(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif) \
+	inet6_lookup(net, hashinfo, saddr, sport, daddr, dport, dif)
+
+#else
+
+#define kz_inet_lookup(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif) \
+	inet_lookup(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif)
+
+#define kz_inet6_lookup(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif) \
+	inet6_lookup(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif)
+
+#endif
+
+#if defined KZ_COMP_INET_LOOKUP_DOES_NOT_HAVE_SKB_DOFF && defined KZ_COMP_INET_LOOKUP_DOES_NOT_HAVE_SDIF
+
+#define kz_inet_lookup_listener(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif, sdif) \
+	inet_lookup_listener(net, hashinfo, saddr, sport, daddr, dport, dif)
+
+#define kz_inet6_lookup_listener(net, hashinfo, skb, doff, saddr, sport, daddr, hnum, dif, sdif) \
+	inet6_lookup_listener(net, hashinfo, saddr, sport, daddr, hnum, dif)
+
+#define kz___inet6_lookup_established(net, hashinfo, saddr, sport, daddr, hnum, dif, sdif) \
+	__inet6_lookup_established(net, hashinfo, saddr, sport, daddr, hnum, dif)
+
+#elif defined KZ_COMP_INET_LOOKUP_DOES_NOT_HAVE_SDIF
 
 #define kz_inet_lookup_listener(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif, sdif) \
 	inet_lookup_listener(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif)
@@ -97,5 +126,37 @@ kz_refcount_inc_not_zero(refcount_t *r)
 #ifndef SLAB_TYPESAFE_BY_RCU
 #define SLAB_TYPESAFE_BY_RCU SLAB_DESTROY_BY_RCU
 #endif
+
+#ifdef KZ_COMP_X_TABLES_DOES_NOT_HAVE_HELPERS
+#define xt_in(par) par->in
+#define xt_out(par) par->out
+#define xt_hooknum(par) par->hooknum
+#define xt_family(par) par->family
+#define xt_net(par) par->net
+#endif
+
+#include <net/netfilter/ipv4/nf_defrag_ipv4.h>
+static inline int
+kz_nf_defrag_ipv4_enable(struct net *net)
+{
+#ifdef KZ_COMP_NF_DEFRAG_DOES_NOT_HAVE_NET
+	nf_defrag_ipv4_enable();
+	return 0;
+#else
+	return nf_defrag_ipv4_enable(net);
+#endif
+}
+
+#include <net/netfilter/ipv6/nf_defrag_ipv6.h>
+static inline int
+kz_nf_defrag_ipv6_enable(struct net *net)
+{
+#ifdef KZ_COMP_NF_DEFRAG_DOES_NOT_HAVE_NET
+	nf_defrag_ipv6_enable();
+	return 0;
+#else
+	return nf_defrag_ipv6_enable(net);
+#endif
+}
 
 #endif /* _KZORP_COMPAT_H */
