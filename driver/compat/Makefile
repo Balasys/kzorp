@@ -1,29 +1,28 @@
-$(eval HDR_ARCH ?= \
-	$(shell uname -m | sed -e s/i.86/x86/ -e s/x86_64/x86/\
-		-e s/sun4u/sparc64/ \
-		-e s/arm.*/arm/ -e s/sa110/arm/ \
-		-e s/s390x/s390/ -e s/parisc64/parisc/ \
-		-e s/ppc.*/powerpc/ -e s/mips.*/mips/ \
-		-e s/sh[234].*/sh/ -e s/aarch64.*/arm64/ \
-	))
-$(eval COMPAT_CPPFLAGS ?= \
-	-DKBUILD_MODNAME \
-	-isystem $(KBUILD)/include \
-	-isystem $(KBUILD)/arch/${HDR_ARCH}/include/ \
-	-isystem $(KBUILD)/arch/${HDR_ARCH}/include/generated/ \
-	-isystem $(KBUILD)/include/uapi/ \
-	-include $(KBUILD)/include/linux/kconfig.h \
-)
-$(eval COMPAT_CFLAGS ?= \
-	-D__KERNEL__ \
-)
+PWD=$(shell pwd)
 
 all: compat_h
 
 clean:
-	rm -f *.h *.o
+	rm -Rf *.mod.c
+	find . ! -name '*.c' ! -name Makefile -delete
 
-compat.h:
-	touch compat.h
+does_not_have_timer_setup.h: does_not_have_timer_setup.c
+	truncate -s 0 does_not_have_timer_setup.h
+	make -C $(KBUILD) M=$(PWD) obj-m=does_not_have_timer_setup.o modules 2>/dev/null || \
+	echo "#define KZ_COMP_DOES_NOT_HAVE_TIMER_SETUP 1" > does_not_have_timer_setup.h
+
+inet_lookup_does_not_have_sdif.h: inet_lookup_does_not_have_sdif.c
+	truncate -s 0 inet_lookup_does_not_have_sdif.h
+	make -C $(KBUILD) M=$(PWD) obj-m=inet_lookup_does_not_have_sdif.o modules 2>/dev/null || \
+	echo "#define KZ_COMP_INET_LOOKUP_DOES_NOT_HAVE_SDIF 1" > inet_lookup_does_not_have_sdif.h
+
+compat.h: \
+		does_not_have_timer_setup.h \
+		inet_lookup_does_not_have_sdif.h
+
+	cat \
+	does_not_have_timer_setup.h \
+	inet_lookup_does_not_have_sdif.h \
+	> compat.h
 
 compat_h: compat.h

@@ -110,12 +110,12 @@ nf_tproxy_get_sock_v4(struct net *net, struct sk_buff *skb, void *hp,
 		switch (lookup_type) {
 		case NFT_LOOKUP_LISTENER:
 			tcph = hp;
-			sk = inet_lookup_listener(net, &tcp_hashinfo, skb,
-						    ip_hdrlen(skb) +
-						      __tcp_hdrlen(tcph),
-						    saddr, sport,
-						    daddr, dport,
-						    in->ifindex, 0);
+			sk = kz_inet_lookup_listener(net, &tcp_hashinfo, skb,
+						     ip_hdrlen(skb) +
+						     __tcp_hdrlen(tcph),
+						     saddr, sport,
+						     daddr, dport,
+						     in->ifindex, 0);
 
 			if (sk && !refcount_inc_not_zero(&sk->sk_refcnt))
 				sk = NULL;
@@ -181,11 +181,11 @@ nf_tproxy_get_sock_v6(struct net *net, struct sk_buff *skb, int thoff, void *hp,
 		switch (lookup_type) {
 		case NFT_LOOKUP_LISTENER:
 			tcph = hp;
-			sk = inet6_lookup_listener(net, &tcp_hashinfo, skb,
-						   thoff + __tcp_hdrlen(tcph),
-						   saddr, sport,
-						   daddr, ntohs(dport),
-						   in->ifindex, 0);
+			sk = kz_inet6_lookup_listener(net, &tcp_hashinfo, skb,
+						      thoff + __tcp_hdrlen(tcph),
+						      saddr, sport,
+						      daddr, ntohs(dport),
+						      in->ifindex, 0);
 
 			if (sk && !refcount_inc_not_zero(&sk->sk_refcnt))
 				sk = NULL;
@@ -196,9 +196,9 @@ nf_tproxy_get_sock_v6(struct net *net, struct sk_buff *skb, int thoff, void *hp,
 			 */
 			break;
 		case NFT_LOOKUP_ESTABLISHED:
-			sk = __inet6_lookup_established(net, &tcp_hashinfo,
-							saddr, sport, daddr, ntohs(dport),
-							in->ifindex, 0);
+			sk = kz___inet6_lookup_established(net, &tcp_hashinfo,
+							   saddr, sport, daddr, ntohs(dport),
+							   in->ifindex, 0);
 			break;
 		default:
 			BUG();
