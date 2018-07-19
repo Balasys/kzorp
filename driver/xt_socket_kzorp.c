@@ -111,9 +111,9 @@ nf_socket_get_sock_v4(struct net *net, struct sk_buff *skb, const int doff,
 {
 	switch (protocol) {
 	case IPPROTO_TCP:
-		return inet_lookup(net, &tcp_hashinfo, skb, doff,
-				   saddr, sport, daddr, dport,
-				   in->ifindex);
+		return kz_inet_lookup(net, &tcp_hashinfo, skb, doff,
+				      saddr, sport, daddr, dport,
+				      in->ifindex);
 	case IPPROTO_UDP:
 		return udp4_lib_lookup(net, saddr, sport, daddr, dport,
 				       in->ifindex);
@@ -153,7 +153,7 @@ nf_sk_lookup_slow_v4(struct net *net, const struct sk_buff *skb,
 		dport = hp->dest;
 		data_skb = (struct sk_buff *)skb;
 		doff = iph->protocol == IPPROTO_TCP ?
-			ip_hdrlen(skb) + __tcp_hdrlen((struct tcphdr *)hp) :
+			ip_hdrlen(skb) + kz___tcp_hdrlen((struct tcphdr *)hp) :
 			ip_hdrlen(skb) + sizeof(*hp);
 
 	} else if (iph->protocol == IPPROTO_ICMP) {
@@ -254,9 +254,9 @@ nf_socket_get_sock_v6(struct net *net, struct sk_buff *skb, int doff,
 {
 	switch (protocol) {
 	case IPPROTO_TCP:
-		return inet6_lookup(net, &tcp_hashinfo, skb, doff,
-				    saddr, sport, daddr, dport,
-				    in->ifindex);
+		return kz_inet6_lookup(net, &tcp_hashinfo, skb, doff,
+				       saddr, sport, daddr, dport,
+				       in->ifindex);
 	case IPPROTO_UDP:
 		return udp6_lib_lookup(net, saddr, sport, daddr, dport,
 				       in->ifindex);
@@ -297,7 +297,7 @@ nf_sk_lookup_slow_v6(struct net *net, const struct sk_buff *skb,
 		dport = hp->dest;
 		data_skb = (struct sk_buff *)skb;
 		doff = tproto == IPPROTO_TCP ?
-			thoff + __tcp_hdrlen((struct tcphdr *)hp) :
+			thoff + kz___tcp_hdrlen((struct tcphdr *)hp) :
 			thoff + sizeof(*hp);
 
 	} else if (tproto == IPPROTO_ICMPV6) {
