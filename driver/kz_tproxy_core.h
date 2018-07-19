@@ -112,7 +112,7 @@ nf_tproxy_get_sock_v4(struct net *net, struct sk_buff *skb, void *hp,
 			tcph = hp;
 			sk = kz_inet_lookup_listener(net, &tcp_hashinfo, skb,
 						     ip_hdrlen(skb) +
-						     __tcp_hdrlen(tcph),
+						     kz___tcp_hdrlen(tcph),
 						     saddr, sport,
 						     daddr, dport,
 						     in->ifindex, 0);
@@ -182,7 +182,7 @@ nf_tproxy_get_sock_v6(struct net *net, struct sk_buff *skb, int thoff, void *hp,
 		case NFT_LOOKUP_LISTENER:
 			tcph = hp;
 			sk = kz_inet6_lookup_listener(net, &tcp_hashinfo, skb,
-						      thoff + __tcp_hdrlen(tcph),
+						      thoff + kz___tcp_hdrlen(tcph),
 						      saddr, sport,
 						      daddr, ntohs(dport),
 						      in->ifindex, 0);

@@ -159,4 +159,19 @@ kz_nf_defrag_ipv6_enable(struct net *net)
 #endif
 }
 
+#include <linux/tcp.h>
+static inline unsigned int
+kz___tcp_hdrlen(const struct tcphdr *th)
+{
+	return th->doff * 4;
+}
+
+#ifdef KZ_COMP_DOES_NOT_HAVE_NLA_PUT_U64_64BIT
+#define kz_nla_put_u64_64bit(skb, attrtype, value, padattr) \
+	nla_put_u64(skb, attrtype, value)
+#else
+#define kz_nla_put_u64_64bit(skb, attrtype, value, padattr) \
+	nla_put_u64_64bit(skb, attrtype, value, padattr)
+#endif
+
 #endif /* _KZORP_COMPAT_H */

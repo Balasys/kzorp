@@ -41,6 +41,11 @@ inet_lookup_does_not_have_skb_doff.h: inet_lookup_does_not_have_skb_doff.c
 	make -C $(KBUILD) M=$(PWD) obj-m=inet_lookup_does_not_have_skb_doff.o modules 2>/dev/null || \
 	echo "#define KZ_COMP_INET_LOOKUP_DOES_NOT_HAVE_SKB_DOFF 1" > inet_lookup_does_not_have_skb_doff.h
 
+does_not_have_nla_put_u64_64bit.h: does_not_have_nla_put_u64_64bit.c
+	truncate -s 0 does_not_have_nla_put_u64_64bit.h
+	make -C $(KBUILD) M=$(PWD) obj-m=does_not_have_nla_put_u64_64bit.o modules 2>/dev/null || \
+	echo "#define KZ_COMP_DOES_NOT_HAVE_NLA_PUT_U64_64BIT 1" > does_not_have_nla_put_u64_64bit.h
+
 compat.h: \
 		does_not_have_timer_setup.h \
 		inet_lookup_does_not_have_sdif.h \
@@ -48,7 +53,8 @@ compat.h: \
 		nla_parse_nested_does_not_have_extack.h \
 		x_tables_does_not_have_helpers.h \
 		nf_defrag_does_not_have_net.h \
-		inet_lookup_does_not_have_skb_doff.h
+		inet_lookup_does_not_have_skb_doff.h \
+		does_not_have_nla_put_u64_64bit.h
 
 	cat \
 	does_not_have_timer_setup.h \
@@ -58,6 +64,7 @@ compat.h: \
 	x_tables_does_not_have_helpers.h \
 	nf_defrag_does_not_have_net.h \
 	inet_lookup_does_not_have_skb_doff.h \
+	does_not_have_nla_put_u64_64bit.h \
 	> compat.h
 
 compat_h: compat.h
