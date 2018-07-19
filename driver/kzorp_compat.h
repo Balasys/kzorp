@@ -70,4 +70,32 @@ typedef struct timer_list * kz_timer_arg;
 
 #endif
 
+#ifdef KZ_COMP_DOES_NOT_HAVE_REFCOUNT_INC_NOT_ZERO
+#include <linux/atomic.h>
+static inline bool
+kz_refcount_inc_not_zero(atomic_t *r)
+{
+	return atomic_add_unless(r, 1, 0);
+}
+#else
+#include <linux/refcount.h>
+static inline bool
+kz_refcount_inc_not_zero(refcount_t *r)
+{
+	return refcount_inc_not_zero(r);
+}
+#endif
+
+#ifdef KZ_COMP_NLA_PARSE_NESTED_DOES_NOT_HAVE_EXTACK
+#define kz_nla_parse_nested(tb, maxtype, nla, policy, extack) \
+	nla_parse_nested(tb, maxtype, nla, policy)
+#else
+#define kz_nla_parse_nested(tb, maxtype, nla, policy, extack) \
+	nla_parse_nested(tb, maxtype, nla, policy, extack)
+#endif
+
+#ifndef SLAB_TYPESAFE_BY_RCU
+#define SLAB_TYPESAFE_BY_RCU SLAB_DESTROY_BY_RCU
+#endif
+
 #endif /* _KZORP_COMPAT_H */

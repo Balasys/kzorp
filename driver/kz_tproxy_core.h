@@ -117,7 +117,7 @@ nf_tproxy_get_sock_v4(struct net *net, struct sk_buff *skb, void *hp,
 						     daddr, dport,
 						     in->ifindex, 0);
 
-			if (sk && !refcount_inc_not_zero(&sk->sk_refcnt))
+			if (sk && !kz_refcount_inc_not_zero(&sk->sk_refcnt))
 				sk = NULL;
 			/* NOTE: we return listeners even if bound to
 			 * 0.0.0.0, those are filtered out in
@@ -187,7 +187,7 @@ nf_tproxy_get_sock_v6(struct net *net, struct sk_buff *skb, int thoff, void *hp,
 						      daddr, ntohs(dport),
 						      in->ifindex, 0);
 
-			if (sk && !refcount_inc_not_zero(&sk->sk_refcnt))
+			if (sk && !kz_refcount_inc_not_zero(&sk->sk_refcnt))
 				sk = NULL;
 			/* NOTE: we return listeners even if bound to
 			 * 0.0.0.0, those are filtered out in
