@@ -167,6 +167,7 @@ write_files:
       cd $KzorpPath
       autoreconf -i
       ./configure
+      lsmod | grep kzorp && sudo rmmod kzorp || true # remove previous kzorp, if existed
       sudo make install-driver
       TEST_PYTHONPATH=\$PWD/pylib:\$PWD/driver/tests/base
       TEST_FILES=\$(find driver/tests/ -name KZorpTestCase\*.py -printf "%p ")
