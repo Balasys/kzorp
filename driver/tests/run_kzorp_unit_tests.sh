@@ -18,7 +18,7 @@ function print_help(){
 "   -b | --branch BRANCH - branch name of the repository where kZorp is compiled from \n" \
 "   -a | --arch ARCHITECTURE - Architecture name of the package to be installed\n" \
 "   -v | --version VERSION - Ubuntu version to run the test with\n" \
-"   -p | --path PATH - Path of the tests directory\n"
+"   -p | --path PATH - Path of the tests directory\n" \
 "   -h | --help - Display this information \n"
 }
 
@@ -69,7 +69,7 @@ OSVersion="18.04"
 while (( $# )); do
   case $1 in
     "-k" | "--kmemleak") KMemLeakImage="$2"; shift 2;;
-    "-r" | "--Repository") Repository="$2"; shift 2;;
+    "-r" | "--repository") Repository="$2"; shift 2;;
     "-b" | "--branch") Branch="$2"; shift 2;;
     "-a" | "--arch") Architecture="$2"; shift 2;;
     "-v" | "--version") OSVersion="$2"; shift 2;;
