@@ -19,6 +19,7 @@ function print_help(){
 "   -a | --arch ARCHITECTURE - Architecture name of the package to be installed\n" \
 "   -v | --version VERSION - Ubuntu version to run the test with\n" \
 "   -p | --path PATH - Path of the tests directory\n" \
+"   -m | --manual - Manual testing with running VM.\n" \
 "   -h | --help - Display this information \n"
 }
 
@@ -58,6 +59,7 @@ function check_architecture_and_software(){
 Repository="https://github.com/balasys/kzorp.git"
 Branch="master"
 
+KzorpPath="/tmp/kzorp"
 Root="/tmp/kzorp_test_run"
 
 TestSeedConf="run_test.conf"
@@ -65,6 +67,8 @@ TestSeedConf="run_test.conf"
 Architecture="amd64"
 
 OSVersion="18.04"
+
+ManualTesting=0
 
 while (( $# )); do
   case $1 in
@@ -74,6 +78,7 @@ while (( $# )); do
     "-a" | "--arch") Architecture="$2"; shift 2;;
     "-v" | "--version") OSVersion="$2"; shift 2;;
     "-p" | "--path") Root="$2"; shift 2;;
+    "-m" | "--manual") ManualTesting=1; shift 1;;
     "-h" | "--help") print_help; exit 0;;
     *) echo "Invalid option $1" >&2; print_help; exit 1;;
   esac
@@ -133,40 +138,59 @@ if [ -z ${KMemLeakImage} ]; then
  - linux-headers-generic"
 fi
 
+PowerOff="sudo poweroff"
+if [ $ManualTesting -gt 0 ]; then
+  PowerOff="echo -e '>> VM will not power off, manual testing can be started! <<\n \
+VM will not power off, manual testing can be started.\n \
+1. Login with \"ubuntu/balasys\"\n \
+2. Run \"cd $KzorpPath\" and edit kzorp code if needed\n \
+3. Execute \"run_kzorp_unit_tests.sh\" command\n \
+4. Run \"sudo poweroff\" when done\n'"
+fi
+
 ## Create the user-data file for cloud-init
 cat > $TestSeedConf <<EOF
 #cloud-config
-password: zorp
+# username is ubuntu
+password: balasys
 chpasswd: { expire: False }
 ssh_pwauth: True
 apt_mirror: http://mirror.balasys/ubuntu/
 packages: $Packages
 hostname: kzorp
 manage_etc_hosts: localhost
+write_files:
+  - content: |
+      #!/bin/bash
+      set -e
+      set -x
+      cd $KzorpPath
+      autoreconf -i
+      ./configure
+      sudo make install-driver
+      TEST_PYTHONPATH=\$PWD/pylib:\$PWD/driver/tests/base
+      TEST_FILES=\$(find driver/tests/ -name KZorpTestCase\*.py -printf "%p ")
+      echo clear | sudo tee /sys/kernel/debug/kmemleak
+      sudo bash -c "PYTHONPATH=\$PYTHONPATH:\$TEST_PYTHONPATH nosetests --with-xunit \$TEST_FILES"
+      sleep 5
+      echo scan | sudo tee /sys/kernel/debug/kmemleak  # kmemleak is more reliable when scanning twice:
+      echo scan | sudo tee /sys/kernel/debug/kmemleak  # http://stackoverflow.com/questions/12943906/debug-kernel-module-memory-corruption
+      sudo cp /sys/kernel/debug/kmemleak ${TestRoot}/kmemleak
+      dmesg | sudo tee ${TestRoot}/dmesg > /dev/null
+      cp nosetests.xml ${TestRoot}/result.xml
+    path: /bin/run_kzorp_unit_tests.sh
+    permissions: '0755'
 runcmd:
  - uname -a
  - lsb_release -a
  - set -x
  - mkdir -p $TestRoot
  - sudo mount -t 9p -o trans=virtio,version=9p2000.L hostshare $TestRoot
- - cd
- - git clone $Repository
- - cd kzorp
+ - git clone $Repository $KzorpPath
+ - cd $KzorpPath
  - git checkout $Branch
- - autoreconf -i
- - ./configure
- - sudo make install-driver
- - TEST_PYTHONPATH=\$PWD/pylib:\$PWD/driver/tests/base
- - TEST_FILES=\`find driver/tests/ -name KZorpTestCase\*.py -printf "%p "\`
- - echo clear | sudo tee /sys/kernel/debug/kmemleak
- - sudo bash -c "PYTHONPATH=\$PYTHONPATH:\$TEST_PYTHONPATH nosetests --with-xunit \$TEST_FILES"
- - sleep 5
- - echo scan | sudo tee /sys/kernel/debug/kmemleak  # kmemleak is more reliable when scanning twice:
- - echo scan | sudo tee /sys/kernel/debug/kmemleak  # http://stackoverflow.com/questions/12943906/debug-kernel-module-memory-corruption
- - sudo cp /sys/kernel/debug/kmemleak ${TestRoot}/kmemleak
- - dmesg | sudo tee ${TestRoot}/dmesg > /dev/null
- - cp nosetests.xml ${TestRoot}/result.xml
- - sudo poweroff
+ - run_kzorp_unit_tests.sh
+ - $PowerOff
 EOF
 
 ## create the disk with NoCloud data on it.
