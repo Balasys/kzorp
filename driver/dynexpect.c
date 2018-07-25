@@ -1297,9 +1297,9 @@ int init_or_cleanup(const int cleanup)
  err_register_ct_helper:
  err_alloc_hash:
 	if (dynexpect_htable_by_id != NULL)
-		nf_ct_free_hashtable(dynexpect_htable_by_id, htable_by_id_allocated_size);
+		kvfree(dynexpect_htable_by_id);
 	if (dynexpect_htable_by_addr != NULL)
-		nf_ct_free_hashtable(dynexpect_htable_by_addr, htable_by_addr_allocated_size);
+		kvfree(dynexpect_htable_by_addr);
 
 
 	kmem_cache_destroy(dynexpect_mapping_cache);
