@@ -5,7 +5,8 @@ Maintainer: BalaSys Development Team <devel@balasys.hu>
 Build-Depends: debhelper (>= 9),
                dh-autoreconf,
                python-all (>= 2.7),
-               dkms (>= 1.95)
+               dkms (>= 1.95),
+               dh-systemd
 Standards-Version: 3.9.5
 Homepage: https://github.com/balasys/kzorp/
 
@@ -64,7 +65,8 @@ Depends: ${misc:Depends},
          zorp-kernel-module,
          python-kzorp (= ${source:Version}),
          python-zorp-base (>= 7.0.1~alpha0),
-         python-prctl
+         python-prctl,
+         python-systemd
 Description: Python bindings for kzorp.
  Zorp is a new generation firewall. It is essentially a transparent proxy
  firewall, with strict protocol analyzing proxies, a modular architecture,

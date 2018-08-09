@@ -13,6 +13,6 @@ EXTRA_DIST =  \
 	kzorp-utils.dirs \
 	kzorp-utils.files \
 	kzorp.manpages \
-	kzorpd.init \
+	kzorpd.service \
 	kzorpd.postinst \
 	rules
