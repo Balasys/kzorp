@@ -66,7 +66,7 @@ Depends: ${misc:Depends},
          python-zorp-base (>= 7.0.1~alpha0),
          python-prctl
 Description: Python bindings for kzorp.
- 2Zorp is a new generation firewall. It is essentially a transparent proxy
+ Zorp is a new generation firewall. It is essentially a transparent proxy
  firewall, with strict protocol analyzing proxies, a modular architecture,
  and fine-grained control over the mediated traffic. Configuration decisions
  .

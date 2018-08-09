@@ -22,7 +22,7 @@ import sys
 sys.dont_write_bytecode = True
 
 import daemon
-from daemon.pidlockfile import PIDLockFile
+from lockfile.pidlockfile import PIDLockFile
 import itertools
 
 import os
