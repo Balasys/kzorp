@@ -116,6 +116,7 @@ fi
 if [ ! -f "${OSImagePath}" ]; then
   echo "Image not found under ${OSImagePath}"
   curl "${ImageURL}" -L -o "${OSImagePath}" -z "${OSImagePath}"
+  qemu-img check "${OSImagePath}"
 fi
 
 ## Create the result file so the VM will be able to write it
