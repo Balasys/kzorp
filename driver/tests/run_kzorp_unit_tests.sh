@@ -172,12 +172,12 @@ write_files:
       sudo make install-driver
       TEST_PYTHONPATH=\$PWD/pylib:\$PWD/driver/tests/base
       TEST_FILES=\$(find driver/tests/ -name KZorpTestCase\*.py -printf "%p ")
-      echo clear | sudo tee /sys/kernel/debug/kmemleak
+      echo clear | sudo tee /sys/kernel/debug/kmemleak || true
       sudo bash -c "PYTHONPATH=\$PYTHONPATH:\$TEST_PYTHONPATH nosetests --with-xunit \$TEST_FILES"
       sleep 5
-      echo scan | sudo tee /sys/kernel/debug/kmemleak  # kmemleak is more reliable when scanning twice:
-      echo scan | sudo tee /sys/kernel/debug/kmemleak  # http://stackoverflow.com/questions/12943906/debug-kernel-module-memory-corruption
-      sudo cp /sys/kernel/debug/kmemleak ${TestRoot}/kmemleak
+      echo scan | sudo tee /sys/kernel/debug/kmemleak || true  # kmemleak is more reliable when scanning twice:
+      echo scan | sudo tee /sys/kernel/debug/kmemleak || true  # http://stackoverflow.com/questions/12943906/debug-kernel-module-memory-corruption
+      sudo cp /sys/kernel/debug/kmemleak ${TestRoot}/kmemleak || true
       dmesg | sudo tee ${TestRoot}/dmesg > /dev/null
       cp nosetests.xml ${TestRoot}/result.xml
     path: /bin/run_kzorp_unit_tests.sh
