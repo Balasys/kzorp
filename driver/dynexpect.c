@@ -364,7 +364,7 @@ dynexpect_mapping_alloc(struct dynexpect_mapping *m,
 	static int dynexpect_alloc_port_rover = 1;
 	int succeeded = 0;
 
-	pr_debug("mapping; id='%u', proto='%hhu', nports='%u', orig='%pI4:%hu', new='%pI4', client_master='%pI4:%hu', server_master='%pI4:%hu', master_l4proto='%hhu'\n",
+	pr_debug("mapping; id='%u', proto='%hhu', nports='%u', orig='%pI4h:%hu', new='%pI4h', client_master='%pI4h:%hu', server_master='%pI4h:%hu', master_l4proto='%hhu'\n",
 		  m->id, req->proto, req->n_ports, &req->orig_ip, req->orig_port, &req->new_ip,
 		  &req->client_master_ip, req->client_master_port, &req->server_master_ip, req->server_master_port,
 		  req->master_l4proto);
@@ -522,7 +522,7 @@ dynexpect_mapping_expect(struct dynexpect_mapping *m,
 	int success = 1;
 	int res = -EINVAL;
 
-	pr_debug("called; id='%u', peer_ip='%pI4', peer_port='%hu'\n",
+	pr_debug("called; id='%u', peer_ip='%pI4h', peer_port='%hu'\n",
 		  m->id, &req->peer_ip, req->peer_port);
 
 	spin_lock_bh(&dynexpect_lock);
