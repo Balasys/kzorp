@@ -20,92 +20,158 @@
  * Foundation,Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include <net/netfilter/nf_conntrack_zones.h>
+#ifdef KZ_COMP_DOES_NOT_HAVE_TIMER_SETUP
 
-#ifdef NF_CT_DEFAULT_ZONE
-#define kz_nf_ct_zone_id(ct) nf_ct_zone((ct))
+typedef unsigned long kz_timer_arg;
+
+#define kz_from_timer(var, callback_timer, timer_fieldname) \
+	(void *)callback_timer;
+
+#define kz_timer_setup(timer, userdata, callback) \
+	do { \
+		init_timer(&timer); \
+		timer.data = (unsigned long)userdata; \
+		timer.function = callback; \
+	} while (0)
+
 #else
-#ifdef DIR_ADDED_NF_CT_ZONE
-#define NF_CT_DEFAULT_ZONE NF_CT_DEFAULT_ZONE_ID
-#define kz_nf_ct_zone_id(ct) nf_ct_zone_id(nf_ct_zone(ct), NF_CT_ZONE_DIR_ORIG)
-#else
-#define NF_CT_DEFAULT_ZONE NF_CT_DEFAULT_ZONE_ID
-#define kz_nf_ct_zone_id(ct) nf_ct_zone((ct))->id
-#endif
+
+typedef struct timer_list * kz_timer_arg;
+
+#define kz_from_timer(var, callback_timer, timer_fieldname) \
+	from_timer(var, callback_timer, timer_fieldname)
+
+#define kz_timer_setup(timer, userdata, callback) \
+	timer_setup(&timer, callback, 0)
+
 #endif
 
-/*
-static inline struct sock *
-kz_inet_lookup_listener(struct net *net,
-		struct inet_hashinfo *hashinfo,
-		struct sk_buff *skb, int doff,
-		__be32 saddr, __be16 sport,
-		__be32 daddr, __be16 dport, int dif)
+#ifdef KZ_COMP_INET_LOOKUP_DOES_NOT_HAVE_SKB_DOFF
+
+#define kz_inet_lookup(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif) \
+	inet_lookup(net, hashinfo, saddr, sport, daddr, dport, dif)
+
+#define kz_inet6_lookup(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif) \
+	inet6_lookup(net, hashinfo, saddr, sport, daddr, dport, dif)
+
+#else
+
+#define kz_inet_lookup(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif) \
+	inet_lookup(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif)
+
+#define kz_inet6_lookup(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif) \
+	inet6_lookup(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif)
+
+#endif
+
+#if defined KZ_COMP_INET_LOOKUP_DOES_NOT_HAVE_SKB_DOFF && defined KZ_COMP_INET_LOOKUP_DOES_NOT_HAVE_SDIF
+
+#define kz_inet_lookup_listener(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif, sdif) \
+	inet_lookup_listener(net, hashinfo, saddr, sport, daddr, dport, dif)
+
+#define kz_inet6_lookup_listener(net, hashinfo, skb, doff, saddr, sport, daddr, hnum, dif, sdif) \
+	inet6_lookup_listener(net, hashinfo, saddr, sport, daddr, hnum, dif)
+
+#define kz___inet6_lookup_established(net, hashinfo, saddr, sport, daddr, hnum, dif, sdif) \
+	__inet6_lookup_established(net, hashinfo, saddr, sport, daddr, hnum, dif)
+
+#elif defined KZ_COMP_INET_LOOKUP_DOES_NOT_HAVE_SDIF
+
+#define kz_inet_lookup_listener(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif, sdif) \
+	inet_lookup_listener(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif)
+
+#define kz_inet6_lookup_listener(net, hashinfo, skb, doff, saddr, sport, daddr, hnum, dif, sdif) \
+	inet6_lookup_listener(net, hashinfo, skb, doff, saddr, sport, daddr, hnum, dif)
+
+#define kz___inet6_lookup_established(net, hashinfo, saddr, sport, daddr, hnum, dif, sdif) \
+	__inet6_lookup_established(net, hashinfo, saddr, sport, daddr, hnum, dif)
+
+#else
+
+#define kz_inet_lookup_listener(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif, sdif) \
+	inet_lookup_listener(net, hashinfo, skb, doff, saddr, sport, daddr, dport, dif, sdif)
+
+#define kz_inet6_lookup_listener(net, hashinfo, skb, doff, saddr, sport, daddr, hnum, dif, sdif) \
+	inet6_lookup_listener(net, hashinfo, skb, doff, saddr, sport, daddr, hnum, dif, sdif)
+
+#define kz___inet6_lookup_established(net, hashinfo, saddr, sport, daddr, hnum, dif, sdif) \
+	__inet6_lookup_established(net, hashinfo, saddr, sport, daddr, hnum, dif, sdif)
+
+#endif
+
+#ifdef KZ_COMP_DOES_NOT_HAVE_REFCOUNT_INC_NOT_ZERO
+#include <linux/atomic.h>
+static inline bool
+kz_refcount_inc_not_zero(atomic_t *r)
 {
-	return inet_lookup_listener(net, hashinfo,
-#ifdef SKB_DOFF_ADDED_TO_LOOKUP_LISTENER_FUNCTIONS
-				    skb, doff,
-#endif
-				    saddr, sport,
-				    daddr, ntohs(dport), dif);
+	return atomic_add_unless(r, 1, 0);
 }
-*/
-
-#include <net/tcp.h>
-static inline void kz_inet_twsk_deschedule_put(struct inet_timewait_sock *tw) {
-#ifdef PUT_ADDED_TO_INET_TWSK_DESCHEDULE
-	inet_twsk_deschedule_put(tw);
 #else
-#ifdef inet_twsk_for_each
-	inet_twsk_deschedule(tw, &tcp_death_row);
-#else
-	inet_twsk_deschedule(tw);
-#endif
-	inet_twsk_put(tw);
-#endif
+#include <linux/refcount.h>
+static inline bool
+kz_refcount_inc_not_zero(refcount_t *r)
+{
+	return refcount_inc_not_zero(r);
 }
+#endif
 
-#include <net/ip.h>
-#include <linux/netfilter_ipv4.h>
+#ifdef KZ_COMP_NLA_PARSE_NESTED_DOES_NOT_HAVE_EXTACK
+#define kz_nla_parse_nested(tb, maxtype, nla, policy, extack) \
+	nla_parse_nested(tb, maxtype, nla, policy)
+#else
+#define kz_nla_parse_nested(tb, maxtype, nla, policy, extack) \
+	nla_parse_nested(tb, maxtype, nla, policy, extack)
+#endif
 
+#ifndef SLAB_TYPESAFE_BY_RCU
+#define SLAB_TYPESAFE_BY_RCU SLAB_DESTROY_BY_RCU
+#endif
+
+#ifdef KZ_COMP_X_TABLES_DOES_NOT_HAVE_HELPERS
+#define xt_in(par) par->in
+#define xt_out(par) par->out
+#define xt_hooknum(par) par->hooknum
+#define xt_family(par) par->family
+#define xt_net(par) par->net
+#endif
+
+#include <net/netfilter/ipv4/nf_defrag_ipv4.h>
 static inline int
-kz_ip_local_out(struct sk_buff *skb) {
-#ifdef NET_PARAM_ADDED_TO_IP_LOCAL_FUNCTIONS
-	return ip_local_out(dev_net(skb_dst(skb)->dev), skb->sk, skb);
+kz_nf_defrag_ipv4_enable(struct net *net)
+{
+#ifdef KZ_COMP_NF_DEFRAG_DOES_NOT_HAVE_NET
+	nf_defrag_ipv4_enable();
+	return 0;
 #else
-	return ip_local_out(skb);
+	return nf_defrag_ipv4_enable(net);
 #endif
 }
 
+#include <net/netfilter/ipv6/nf_defrag_ipv6.h>
 static inline int
-kz_ip6_local_out(struct sk_buff *skb) {
-#ifdef NET_PARAM_ADDED_TO_IP_LOCAL_FUNCTIONS
-	return ip6_local_out(dev_net(skb_dst(skb)->dev), skb->sk, skb);
+kz_nf_defrag_ipv6_enable(struct net *net)
+{
+#ifdef KZ_COMP_NF_DEFRAG_DOES_NOT_HAVE_NET
+	nf_defrag_ipv6_enable();
+	return 0;
 #else
-	return ip6_local_out(skb);
+	return nf_defrag_ipv6_enable(net);
 #endif
 }
 
-static inline int
-kz_ip_route_me_harder(struct sk_buff *skb, unsigned addr_type) {
-#ifdef NET_PARAM_ADDED_TO_IP_LOCAL_FUNCTIONS
-	return ip_route_me_harder(dev_net(skb_dst(skb)->dev), skb, addr_type);
-#else
-	return ip_route_me_harder(skb, addr_type);
-#endif
+#include <linux/tcp.h>
+static inline unsigned int
+kz___tcp_hdrlen(const struct tcphdr *th)
+{
+	return th->doff * 4;
 }
 
-#include <net/netfilter/nf_conntrack_core.h>
-
-static inline struct nf_conntrack_tuple_hash *
-kz_nf_conntrack_find_get(struct net *net,                                          
-			 const struct nf_conntrack_tuple *tuple) {
-#ifdef ZONE_STRUCT_ADDED_NF_CONNTRACK_FIND_GET
-	return nf_conntrack_find_get(net, &nf_ct_zone_dflt, tuple);
+#ifdef KZ_COMP_DOES_NOT_HAVE_NLA_PUT_U64_64BIT
+#define kz_nla_put_u64_64bit(skb, attrtype, value, padattr) \
+	nla_put_u64(skb, attrtype, value)
 #else
-	return nf_conntrack_find_get(net, NF_CT_DEFAULT_ZONE, tuple);
+#define kz_nla_put_u64_64bit(skb, attrtype, value, padattr) \
+	nla_put_u64_64bit(skb, attrtype, value, padattr)
 #endif
-}
-
 
 #endif /* _KZORP_COMPAT_H */

@@ -32,7 +32,7 @@
 
 #ifdef pr_fmt
 #undef pr_fmt
-#define pr_fmt(fmt) "%s: " fmt, __func__
+#define pr_fmt(fmt) "dynexpect:%s:%d: " fmt, __func__, __LINE__
 #endif
 
 #define CONFIG_NF_DYNEXPECT_MAX_RANGE_SIZE 8
@@ -111,7 +111,7 @@ static spinlock_t dynexpect_rover_lock = __SPIN_LOCK_UNLOCKED(dynexpect_rover_lo
 /* Mapping creation/destruction					*/
 /****************************************************************/
 
-static void dynexpect_timeout(unsigned long);
+static void dynexpect_timeout(kz_timer_arg tl);
 
 static struct nf_conn *get_master_ct_from_tuple(struct net *net,
 			const u32 client_master_ip, const u16 client_master_port,
@@ -130,7 +130,7 @@ static struct nf_conn *get_master_ct_from_tuple(struct net *net,
 	tuple.dst.protonum = master_l4proto;
 	tuple.dst.u.udp.port = htons(server_master_port);
 
-	h = kz_nf_conntrack_find_get(net, &tuple);
+	h = nf_conntrack_find_get(net, &nf_ct_zone_dflt, &tuple);
 	if (!h) {
 			pr_debug("Cannot find MASTER ct tuple hash;");
 			return NULL;
@@ -168,9 +168,7 @@ dynexpect_mapping_new(void)
 	INIT_HLIST_NODE(&m->entry_addr);
 	atomic_set(&m->references, 1);
 
-	init_timer(&m->timeout);
-	m->timeout.data = (unsigned long)m;
-	m->timeout.function = dynexpect_timeout;
+	kz_timer_setup(m->timeout, m, dynexpect_timeout);
 
 	m->state = MAPPING_EMPTY;
 
@@ -364,7 +362,7 @@ dynexpect_mapping_alloc(struct dynexpect_mapping *m,
 	static int dynexpect_alloc_port_rover = 1;
 	int succeeded = 0;
 
-	pr_debug("mapping; id='%u', proto='%hhu', nports='%u', orig='%pI4:%hu', new='%pI4', client_master='%pI4:%hu', server_master='%pI4:%hu', master_l4proto='%hhu'\n",
+	pr_debug("mapping; id='%u', proto='%hhu', nports='%u', orig='%pI4h:%hu', new='%pI4h', client_master='%pI4h:%hu', server_master='%pI4h:%hu', master_l4proto='%hhu'\n",
 		  m->id, req->proto, req->n_ports, &req->orig_ip, req->orig_port, &req->new_ip,
 		  &req->client_master_ip, req->client_master_port, &req->server_master_ip, req->server_master_port,
 		  req->master_l4proto);
@@ -522,7 +520,7 @@ dynexpect_mapping_expect(struct dynexpect_mapping *m,
 	int success = 1;
 	int res = -EINVAL;
 
-	pr_debug("called; id='%u', peer_ip='%pI4', peer_port='%hu'\n",
+	pr_debug("called; id='%u', peer_ip='%pI4h', peer_port='%hu'\n",
 		  m->id, &req->peer_ip, req->peer_port);
 
 	spin_lock_bh(&dynexpect_lock);
@@ -545,6 +543,7 @@ dynexpect_mapping_expect(struct dynexpect_mapping *m,
 		struct nf_conntrack_expect *exp;
 		union nf_inet_addr saddr, daddr;
 		__be16 nsport, ndport;
+		int ret;
 
 		exp = nf_ct_expect_alloc(m->master_ct);
 		if (exp == NULL) {
@@ -570,8 +569,9 @@ dynexpect_mapping_expect(struct dynexpect_mapping *m,
 		/* set expected callback */
 		exp->expectfn = dynexpect_nat_expected;
 
-		if (nf_ct_expect_related(exp) != 0) {
-			pr_debug("expect_related() failed\n");
+		ret = nf_ct_expect_related(exp);
+		if (ret != 0) {
+			pr_debug("expect_related() failed: %d\n", ret);
 			nf_ct_expect_put(exp);
 			success = 0;
 			break;
@@ -675,7 +675,9 @@ dynexpect_mapping_destroy(struct dynexpect_mapping *m)
 			tuple.src.u.udp.port = htons(m->orig_port + i);
 			tuple.dst.u.udp.port = htons(m->peer_port + i);
 
-			h = kz_nf_conntrack_find_get(nf_ct_net(m->master_ct), &tuple);
+			h = nf_conntrack_find_get(nf_ct_net(m->master_ct),
+						  &nf_ct_zone_dflt,
+						  &tuple);
 
 			if (h != NULL) {
 				struct nf_conn *ct = nf_ct_tuplehash_to_ctrack(h);
@@ -724,9 +726,9 @@ dynexpect_mapping_destroy(struct dynexpect_mapping *m)
 /****************************************************************/
 
 static void
-dynexpect_timeout(unsigned long um)
+dynexpect_timeout(kz_timer_arg tl)
 {
-	struct dynexpect_mapping *m = (void *)um;
+	struct dynexpect_mapping *m = kz_from_timer(m, tl, timeout);
 
 	pr_debug("mapping; id='%u'\n", m->id);
 
@@ -760,7 +762,7 @@ dynexpect_setsockopt_map(void *user, int len, struct net *net)
 	int res;
 
 	if (len != sizeof(struct nf_ct_dynexpect_map)) {
-		pr_err("invalid user data length; len='%d', expected='%lu'\n", len, sizeof(struct nf_ct_dynexpect_map));
+		pr_err("invalid user data length; len='%d', expected='%zu'\n", len, sizeof(struct nf_ct_dynexpect_map));
 		return -EINVAL;
 	}
 
@@ -830,7 +832,7 @@ dynexpect_setsockopt_expect(void *user, int len)
 	int res;
 
 	if (len != sizeof(struct nf_ct_dynexpect_expect)) {
-		pr_err("invalid user data length; len='%d', expected='%lu'\n", len, sizeof(struct nf_ct_dynexpect_expect));
+		pr_err("invalid user data length; len='%d', expected='%zu'\n", len, sizeof(struct nf_ct_dynexpect_expect));
 		return -EINVAL;
 	}
 
@@ -978,7 +980,9 @@ dynexpect_getsockopt_map(void *user, int *len)
 			pr_debug("checking if conntrack exists for tuple:\n");
 			nf_ct_dump_tuple(&tuple);
 
-			h = kz_nf_conntrack_find_get(nf_ct_net(m->master_ct), &tuple);
+			h = nf_conntrack_find_get(nf_ct_net(m->master_ct),
+						  &nf_ct_zone_dflt,
+						  &tuple);
 
 			if (h != NULL) {
 				pr_debug("found; ct='%p'\n", nf_ct_tuplehash_to_ctrack(h));

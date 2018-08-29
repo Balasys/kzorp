@@ -73,11 +73,15 @@ v4_lookup_instance_bind_address(const struct kz_dispatcher *dpt,
 	const struct kz_bind *bind = kz_instance_bind_lookup_v4(dpt->instance, l4proto,
 								      iph->saddr, sport,
 								      iph->daddr, dport);
+	struct tcphdr _hdr, *hp;
+	hp = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_hdr), &_hdr);
+
 	if (bind) {
 		__be16 proxy_port = htons(bind->port);
 		__be32 proxy_addr = bind->addr.in.s_addr;
 
-		sk = nf_tproxy_get_sock_v4(&init_net, l4proto,
+		sk = nf_tproxy_get_sock_v4(&init_net, (struct sk_buff *)skb, hp,
+					   l4proto,
 					   iph->saddr, proxy_addr,
 					   sport, proxy_port,
 					   skb->dev, NFT_LOOKUP_LISTENER);
@@ -97,16 +101,17 @@ v4_get_socket_to_redirect_to(const struct kz_dispatcher *dpt,
 	const struct iphdr *iph = ip_hdr(skb);
 	const struct net_device *in = skb->dev;
 	struct sock *sk;
+	struct tcphdr _tcp_header;
+	struct tcphdr *tcp_header = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_tcp_header), &_tcp_header);
 
 	/* lookup established first */
-	sk = nf_tproxy_get_sock_v4(&init_net, iph->protocol, iph->saddr, iph->daddr,
+	sk = nf_tproxy_get_sock_v4(&init_net, (struct sk_buff *)skb, tcp_header,
+				   iph->protocol, iph->saddr, iph->daddr,
 				   sport, dport, in, NFT_LOOKUP_ESTABLISHED);
 
 	if (sk == NULL || sk->sk_state == TCP_TIME_WAIT)
 	{
 		struct sock *listener_sk = NULL;
-		struct tcphdr _tcp_header;
-		const struct tcphdr *tcp_header = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_tcp_header), &_tcp_header);
 
 		/* N-dimension dispatchers use the bind addresses registered for the instance */
 		listener_sk = v4_lookup_instance_bind_address(dpt, skb, l4proto, sport, dport);
@@ -114,7 +119,7 @@ v4_get_socket_to_redirect_to(const struct kz_dispatcher *dpt,
 			if (sk) {
 				if (sk->sk_state == TCP_TIME_WAIT &&
 				    tcp_header->syn && !tcp_header->rst && !tcp_header->ack && !tcp_header->fin)
-					kz_inet_twsk_deschedule_put(inet_twsk(sk));
+					inet_twsk_deschedule_put(inet_twsk(sk));
 				else if (sk->sk_state == TCP_TIME_WAIT)
 					inet_twsk_put(inet_twsk(sk));
 				else
@@ -224,14 +229,15 @@ relookup_time_wait6(struct sk_buff *skb, int l4proto, int thoff,
 		 * to a listener socket if there's one */
 		struct sock *sk2;
 
-		sk2 = nf_tproxy_get_sock_v6(dev_net(skb->dev), l4proto,
+		sk2 = nf_tproxy_get_sock_v6(dev_net(skb->dev), skb, thoff, hp,
+					    l4proto,
 					    &iph->saddr,
 					    tproxy_laddr6(skb, proxy_addr),
 					    hp->source,
 					    proxy_port,
 					    skb->dev, NFT_LOOKUP_LISTENER);
 		if (sk2) {
-			kz_inet_twsk_deschedule_put(inet_twsk(sk));
+			inet_twsk_deschedule_put(inet_twsk(sk));
 			sk = sk2;
 		}
 	}
@@ -272,7 +278,8 @@ redirect_v6(struct sk_buff *skb, u8 l4proto,
 	 * addresses, this happens if the redirect already happened
 	 * and the current packet belongs to an already established
 	 * connection */
-	sk = nf_tproxy_get_sock_v6(dev_net(skb->dev), tproto,
+	sk = nf_tproxy_get_sock_v6(dev_net(skb->dev), skb, thoff, hp,
+				   tproto,
 				   &iph->saddr, &iph->daddr,
 				   hp->source, hp->dest,
 				   skb->dev, NFT_LOOKUP_ESTABLISHED);
@@ -288,7 +295,8 @@ redirect_v6(struct sk_buff *skb, u8 l4proto,
 			if (sk == NULL)
 				/* no there's no established connection, check if
 				 * there's a listener on the redirected addr/port */
-				sk = nf_tproxy_get_sock_v6(dev_net(skb->dev), tproto,
+				sk = nf_tproxy_get_sock_v6(dev_net(skb->dev), skb, thoff, hp,
+							   tproto,
 							   &iph->saddr, proxy_addr,
 							   hp->source, proxy_port,
 							   skb->dev, NFT_LOOKUP_LISTENER);
@@ -696,10 +704,10 @@ send_reset_v4(struct sk_buff *oldskb, int hook)
 	skb_dst_set_noref(nskb, skb_dst(oldskb));
 
 	nskb->protocol = htons(ETH_P_IP);
-	if (kz_ip_route_me_harder(nskb, RTN_UNICAST))
+	if (ip_route_me_harder(dev_net(skb_dst(nskb)->dev), nskb, RTN_UNICAST))
 		goto free_nskb;
 
-	niph->ttl	= ip4_dst_hoplimit(skb_dst(nskb));
+	niph->ttl = ip4_dst_hoplimit(skb_dst(nskb));
 
 	/* "Never happens" */
 	if (nskb->len > dst_mtu(skb_dst(nskb)))
@@ -707,7 +715,7 @@ send_reset_v4(struct sk_buff *oldskb, int hook)
 
 	nf_ct_attach(nskb, oldskb);
 
-	kz_ip_local_out(nskb);
+	ip_local_out(dev_net(skb_dst(nskb)->dev), nskb->sk, nskb);
 	return;
 
  free_nskb:
@@ -854,7 +862,7 @@ send_reset_v6(struct net *net, struct sk_buff *oldskb)
 
 	nf_ct_attach(nskb, oldskb);
 
-	kz_ip6_local_out(nskb);
+	ip6_local_out(dev_net(skb_dst(nskb)->dev), nskb->sk, nskb);
 }
 
 static void
@@ -1209,8 +1217,8 @@ static unsigned int
 kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 {
 	const struct xt_kzorp_target_info * const tgi = par->targinfo;
-	const struct net_device * const in = par->in;
-	const struct net_device * const out = par->out;
+	const struct net_device * const in = xt_in(par);
+	const struct net_device * const out = xt_out(par);
 
 	unsigned int verdict = NF_ACCEPT;
 	enum ip_conntrack_info ctinfo;
@@ -1232,10 +1240,10 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	   at all -- for that here a warning could be emitted, preferably
 	   only once.  but that means slightly worse performance, so
 	   the former bahavior is kept.*/
-	if (ct == NULL || nf_ct_is_untracked(ct) || ctinfo >= IP_CT_IS_REPLY)
+	if (ct == NULL || ctinfo >= IP_CT_IS_REPLY)
 		return NF_ACCEPT;
 
-	switch (par->family) {
+	switch (xt_family(par)) {
 	case NFPROTO_IPV4:
 	{
 		const struct iphdr * const iph = ip_hdr(skb);
@@ -1253,7 +1261,7 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 		}
 
 		pr_debug("kzorp hook processing packet: hook='%u', protocol='%u', src='%pI4:%u', dst='%pI4:%u'\n",
-			 par->hooknum, l4proto, &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
+			 xt_hooknum(par), l4proto, &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
 	}
 		break;
 	case NFPROTO_IPV6:
@@ -1284,7 +1292,7 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 		}
 
 		pr_debug("kzorp hook processing packet: hook='%u', protocol='%u', src='%pI6c:%u', dst='%pI6c:%u'\n",
-			 par->hooknum, l4proto, &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
+			 xt_hooknum(par), l4proto, &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
 	}
 		break;
 	default:
@@ -1292,7 +1300,7 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	}
 
 	rcu_read_lock();
-	kzorp = kz_extension_find_or_evaluate(skb, in, par->family, &cfg);
+	kzorp = kz_extension_find_or_evaluate(skb, in, xt_family(par), &cfg);
 
 	pr_debug("lookup data for kzorp hook; dpt='%s', client_zone='%s', server_zone='%s', svc='%s'\n",
 		 kzorp->dpt ? kzorp->dpt->name : kz_log_null,
@@ -1300,30 +1308,30 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 		 kzorp->szone ? kzorp->szone->name : kz_log_null,
 		 kzorp->svc ? kzorp->svc->name : kz_log_null);
 
-	switch (par->hooknum)
+	switch (xt_hooknum(par))
 	{
 	case NF_INET_PRE_ROUTING:
 		verdict = kz_prerouting_verdict(skb, in, out, cfg,
-						par->family, l4proto,
+						xt_family(par), l4proto,
 						ports->src, ports->dst, 
 						ctinfo, ct, kzorp, tgi);
 		break;
 	case NF_INET_LOCAL_IN:
 		if (ctinfo == IP_CT_NEW)
-			verdict = kz_input_newconn_verdict(skb, in, par->family, l4proto,
+			verdict = kz_input_newconn_verdict(skb, in, xt_family(par), l4proto,
 							   ports->src, ports->dst,
 							   ct, kzorp);
 		break;
 	case NF_INET_FORWARD:
 		if (ctinfo == IP_CT_NEW)
-			verdict = kz_forward_newconn_verdict(skb, in, par->family, l4proto,
+			verdict = kz_forward_newconn_verdict(skb, in, xt_family(par), l4proto,
 							     ports->src, ports->dst,
 							     ct, kzorp);
 		break;
 	case NF_INET_POST_ROUTING:
 		if (ctinfo == IP_CT_NEW)
 			verdict = kz_postrouting_newconn_verdict(skb, in, out, cfg,
-								 par->family, l4proto,
+								 xt_family(par), l4proto,
 								 ports->src, ports->dst,
 								 ct, kzorp, tgi);
 		break;
@@ -1341,6 +1349,12 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 static int kzorp_tg_check(const struct xt_tgchk_param *par)
 {
 	const struct xt_kzorp_target_info * const tgi = par->targinfo;
+
+	int err;
+
+	err = kz_nf_defrag_ipv4_enable(par->net);
+	if (err)
+		return err;
 
 	/* flags can be used in the future to support extension vithout versioning */
 	if (tgi->flags != 0)
@@ -1385,7 +1399,6 @@ static struct xt_target kzorp_tg_reg[] __read_mostly = {
 
 static int __init kzorp_tg_init(void)
 {
-	nf_defrag_ipv4_enable();
 	return xt_register_targets(kzorp_tg_reg, ARRAY_SIZE(kzorp_tg_reg));
 }
 

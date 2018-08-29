@@ -464,7 +464,8 @@ kznl_parse_inet_addr(const struct nlattr *attr, union nf_inet_addr *addr, sa_fam
 	int res = 0;
 	struct nlattr *tb[KZNL_ATTR_TYPE_COUNT + 1];
 
-	res = nla_parse_nested(tb, KZNL_ATTR_TYPE_COUNT, attr, inet_addr_nla_policy);
+	res = kz_nla_parse_nested(tb, KZNL_ATTR_TYPE_COUNT, attr,
+			          inet_addr_nla_policy, NULL);
 	if (res < 0) {
 		pr_err_ratelimited("failed to parse nested attribute\n");
 		return res;
@@ -550,7 +551,8 @@ kznl_parse_inet_subnet(const struct nlattr *attr, union nf_inet_addr *addr, unio
 	int res = 0;
 	struct nlattr *tb[KZNL_ATTR_TYPE_COUNT + 1];
 
-	res = nla_parse_nested(tb, KZNL_ATTR_TYPE_COUNT, attr, inet_subnet_nla_policy);
+	res = kz_nla_parse_nested(tb, KZNL_ATTR_TYPE_COUNT, attr,
+			          inet_subnet_nla_policy, NULL);
 	if (res < 0) {
 		pr_err_ratelimited("failed to parse nested attribute\n");
 		return res;
@@ -854,7 +856,7 @@ nla_put_failure:
 static int
 kznl_dump_count(struct sk_buff *skb, unsigned int attr, u_int64_t count)
 {
-	if (nla_put_u64(skb, attr, cpu_to_be64(count)))
+	if (kz_nla_put_u64_64bit(skb, attr, cpu_to_be64(count), KZNL_ATTR_TYPE_COUNT))
 		goto nla_put_failure;
 
 	return 0;
@@ -1016,12 +1018,7 @@ nla_put_failure:
  * Netlink message processing
  ***********************************************************/
 
-static struct genl_family kznl_family = {
-	.id = GENL_ID_GENERATE,
-	.name = "kzorp",
-	.version = 2,
-	.maxattr = KZNL_ATTR_TYPE_COUNT,
-};
+static struct genl_family kznl_family;
 
 static int
 kznl_recv_start(struct sk_buff *skb, struct genl_info *info)
@@ -4238,6 +4235,15 @@ static struct genl_ops kznl_ops[] = {
 #undef SETUP_kznl_ops
 };
 
+static struct genl_family kznl_family = {
+	.name = "kzorp",
+	.version = 2,
+	.maxattr = KZNL_ATTR_TYPE_COUNT,
+	.module = THIS_MODULE,
+	.ops = kznl_ops,
+	.n_ops = ARRAY_SIZE(kznl_ops),
+};
+
 static struct notifier_block kz_rtnl_notifier = {
 	.notifier_call	= kznl_netlink_event,
 };
@@ -4251,7 +4257,7 @@ int __init kz_netlink_init(void)
 
 	/* register netlink notifier and genetlink family */
 	netlink_register_notifier(&kz_rtnl_notifier);
-	res = genl_register_family_with_ops(&kznl_family, kznl_ops);
+	res = genl_register_family(&kznl_family);
 	if (res < 0) {
 		pr_err_ratelimited("failed to register generic netlink family; err='%d'\n", res);
 		goto cleanup_notifier;

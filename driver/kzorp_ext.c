@@ -48,6 +48,8 @@ PRIVATE struct kmem_cache *kz_cachep;
 
 static void (*nf_ct_destroy_orig)(struct nf_conntrack *) __rcu __read_mostly;
 
+static unsigned int kz_ext_hashrnd __read_mostly;
+
 static inline u32
 kz_hash_get_lock_index(const u32 hash_index)
 {
@@ -59,7 +61,7 @@ kz_extension_get_hash_index(const struct nf_conn *ct)
 {
 	const u32 length = sizeof(ct) / sizeof(u32);
 	const u32 *key = (const u32 *) &ct;
-	const u32 hash = jhash2(key, length, nf_conntrack_hash_rnd);
+	const u32 hash = jhash2(key, length, kz_ext_hashrnd);
 	const u32 index = hash >> (32 - kz_hash_shift);
 
 	return index;
@@ -212,7 +214,7 @@ kz_extension_add_to_cache(struct kz_extension *kzorp, const struct nf_conn *ct)
 	struct hlist_nulls_node *n;
 	struct kz_extension *kzorp_find;
 	const struct nf_conntrack_tuple *tuple = &ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple;
-	const u16 zone_id = kz_nf_ct_zone_id(ct);
+	const u16 zone_id = nf_ct_zone_id(nf_ct_zone(ct), NF_CT_ZONE_DIR_ORIG);
 
 	kz_extension_prepare_to_cache_addition(kzorp, ct, tuple, zone_id);
 
@@ -300,13 +302,11 @@ kz_extension_conntrack_destroy(struct nf_conntrack *nfct)
 	struct nf_conn *ct = (struct nf_conn *) nfct;
 	void (*destroy_orig)(struct nf_conntrack *);
 
-	if (likely(!nf_ct_is_untracked(ct))) {
-		struct kz_extension *kzorp = kz_extension_find(ct);
-		if (likely(kzorp)) {
-			kz_extension_remove_from_cache(kzorp);
-			kz_log_accounting(kzorp, ct);
-			kz_extension_put(kzorp);
-		}
+	struct kz_extension *kzorp = kz_extension_find(ct);
+	if (likely(kzorp)) {
+		kz_extension_remove_from_cache(kzorp);
+		kz_log_accounting(kzorp, ct);
+		kz_extension_put(kzorp);
 	}
 
 	rcu_read_lock();
@@ -518,11 +518,12 @@ int kz_extension_init(void)
 {
 	int ret, i;
 
-       kz_cachep = kmem_cache_create("kzorp_slab",
-                                     sizeof(struct kz_extension), 0,
-                                     SLAB_DESTROY_BY_RCU, NULL);
+	kz_cachep = kmem_cache_create("kzorp_slab",
+				      sizeof(struct kz_extension), 0,
+				      SLAB_TYPESAFE_BY_RCU, NULL);
 
-	kz_hash_size = init_net.ct.htable_size;
+	get_random_once(&kz_ext_hashrnd, sizeof(kz_ext_hashrnd));
+	kz_hash_size = nf_conntrack_htable_size;
 	kz_hash_shift = ilog2(kz_hash_size);
 	kz_hash =
 	    kzalloc(kz_hash_size * sizeof(struct hlist_nulls_head), GFP_KERNEL);
@@ -539,7 +540,7 @@ int kz_extension_init(void)
 		atomic_set(&kz_hash_lengths[i], 0);
 	}
 
-        ret = register_pernet_subsys(&kz_extension_net_ops);
+	ret = register_pernet_subsys(&kz_extension_net_ops);
 	if (ret < 0) {
 		pr_err_ratelimited("kz_extension_init: cannot register pernet operations\n");
 		goto error_cleanup_hash;
