@@ -138,9 +138,10 @@ if [ -z ${KMemLeakImage} ]; then
  - linux-headers-generic"
 fi
 
-PowerOff="sudo poweroff"
+AfterTesting=" - sudo poweroff"
 if [ $ManualTesting -gt 0 ]; then
-  PowerOff="echo -e '>> VM will not power off, manual testing can be started! <<\n \
+  AfterTesting=" - chown -R ubuntu $KzorpPath
+ - echo -e '>> VM will not power off, manual testing can be started! <<\n \
 VM will not power off, manual testing can be started.\n \
 1. Login with \"ubuntu/balasys\"\n \
 2. Run \"cd $KzorpPath\" and edit kzorp code if needed\n \
@@ -191,7 +192,7 @@ runcmd:
  - cd $KzorpPath
  - git checkout $Branch
  - run_kzorp_unit_tests.sh
- - $PowerOff
+$AfterTesting
 EOF
 
 ## create the disk with NoCloud data on it.
