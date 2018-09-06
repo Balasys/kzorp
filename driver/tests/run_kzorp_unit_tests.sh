@@ -119,6 +119,10 @@ if [ ! -f "${OSImagePath}" ]; then
   qemu-img check "${OSImagePath}"
 fi
 
+## Clean all possible outdated files
+rm -rf $TestRoot
+rm -f result.xml kmemleak kmemleak.xml dmesg kasan.xml $TestSeedConf
+
 ## Create the result file so the VM will be able to write it
 mkdir -p $TestRoot
 touch $TestRoot/result.xml
