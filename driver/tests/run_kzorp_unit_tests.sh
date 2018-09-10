@@ -119,11 +119,23 @@ if [ ! -f "${OSImagePath}" ]; then
   qemu-img check "${OSImagePath}"
 fi
 
+## Clean all possible outdated files
+rm -rf $TestRoot
+rm -f result.xml kmemleak kmemleak.xml dmesg kasan.xml $TestSeedConf
+
 ## Create the result file so the VM will be able to write it
+## (Because of apparmor)
 mkdir -p $TestRoot
-touch $TestRoot/result.xml
-touch $TestRoot/kmemleak
-touch $TestRoot/dmesg
+cat >$TestRoot/result.xml <<EOF
+<?xml version="1.0" encoding="UTF-8"?><testsuite name="run_kzorp_unit_tests" tests="1" errors="1" failures="0" skip="0">
+  <testcase classname="run_kzorp_unit_tests" name="copy_results">
+    <failure>Could not compile kzorp and run tests. Please check the console output.</failure>
+  </testcase>
+</testsuite>
+EOF
+truncate -s 0 $TestRoot/kmemleak
+truncate -s 0 $TestRoot/dmesg
+
 
 ## Packages to install
 Packages="
