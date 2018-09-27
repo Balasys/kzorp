@@ -1,0 +1,24 @@
+version: 2
+jobs:
+  prepare_build_test:
+    docker:
+      - image: balasys/zorpgpl-circleci:7.0
+    environment:
+      - PACKAGE: kzorp
+      - OBS_PROJECT_DIR: security:Zorp:7:0:2/kzorp
+      - KBUILD: /lib/modules/4.15.0-45-generic/build
+    working_directory: ~/kzorp
+    steps:
+      - checkout
+      - run: dpkg -l | grep ii
+      - run: git submodule init
+      - run: git submodule update --init
+      - run: source ci/build.sh
+      - run: source ci/obs_prepare.sh
+      - run: source ci/obs_commit.sh
+
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - prepare_build_test
