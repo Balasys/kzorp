@@ -1128,7 +1128,7 @@ void
 dynexpect_nat_expected(struct nf_conn *ct,
 		       struct nf_conntrack_expect *exp)
 {
-	struct nf_nat_range2 r;
+	struct kz_nf_nat_range r;
 	struct dynexpect_mapping *m;
 	u_int16_t port = ntohs(ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple.src.u.udp.port);
 

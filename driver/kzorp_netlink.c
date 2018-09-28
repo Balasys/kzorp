@@ -2214,7 +2214,7 @@ kznl_recv_add_service_nat(struct sk_buff *skb, struct genl_info *info, bool snat
 	struct kz_service *svc;
 	struct kz_transaction *tr;
 	char *service_name = NULL;
-	struct nf_nat_range2 src, dst, map;
+	struct kz_nf_nat_range src, dst, map;
 	sa_family_t family;
 	sa_family_t tmp_family;
 

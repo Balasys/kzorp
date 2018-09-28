@@ -217,9 +217,9 @@ struct kz_dispatcher {
 
 struct kz_service_nat_entry {
 	struct list_head list;
-	struct nf_nat_range2 src;
-	struct nf_nat_range2 dst;
-	struct nf_nat_range2 map;
+	struct kz_nf_nat_range src;
+	struct kz_nf_nat_range dst;
+	struct kz_nf_nat_range map;
 	uint8_t l3proto;
 };
 
@@ -432,9 +432,9 @@ extern struct kz_service *__kz_service_lookup_name(const struct list_head * cons
 						   const char *name);
 extern struct kz_service *kz_service_lookup_name(const struct kz_config *cfg, const char *name);
 extern int kz_service_add_nat_entry(struct list_head *head,
-				    struct nf_nat_range2 *src,
-				    struct nf_nat_range2 *dst,
-				    struct nf_nat_range2 *map, uint8_t l3proto);
+				    struct kz_nf_nat_range *src,
+				    struct kz_nf_nat_range *dst,
+				    struct kz_nf_nat_range *map, uint8_t l3proto);
 extern struct kz_service *kz_service_clone(const struct kz_service * const o);
 extern long kz_service_lock(struct kz_service * const service);
 extern void kz_service_unlock(struct kz_service * const service);
@@ -547,7 +547,7 @@ extern bool kz_zone_lookup_from_skb(const struct sk_buff *skb, int l3proto, stru
 extern int kz_add_zone(struct kz_zone *zone);
 extern int kz_add_zone_subnet(struct kz_zone *zone, const struct kz_subnet * const zone_subnet);
 
-extern const struct nf_nat_range2 *kz_service_nat_lookup(const struct list_head
+extern const struct kz_nf_nat_range *kz_service_nat_lookup(const struct list_head
 							 *const head,
 							 const union nf_inet_addr
 							 *saddr,

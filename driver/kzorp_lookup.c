@@ -2162,7 +2162,7 @@ iprange_ipv6_lt(const struct in6_addr *a, const struct in6_addr *b)
 /* FIXME: this is _heavily_ dependent on TCP and UDP port numbers
  * being mapped to the same offset in the ip_nat_range structure */
 static inline int
-nat_in_range(const struct nf_nat_range2 *r,
+nat_in_range(const struct kz_nf_nat_range *r,
 	     const union nf_inet_addr *addr, const u_int8_t l3proto)
 {
 	/* log messages: the IP addresses are in host-endian format due to usage of "<" and ">" relations */
@@ -2190,7 +2190,7 @@ nat_in_range(const struct nf_nat_range2 *r,
 	return 1;
 }
 
-const struct nf_nat_range2 *kz_service_nat_lookup(const struct list_head *const
+const struct kz_nf_nat_range *kz_service_nat_lookup(const struct list_head *const
 						  head,
 						  const union nf_inet_addr
 						  *saddr,

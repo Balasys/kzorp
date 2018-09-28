@@ -872,8 +872,8 @@ kz_service_lookup_name(const struct kz_config *cfg, const char *name)
 EXPORT_SYMBOL_GPL(kz_service_lookup_name);
 
 int
-kz_service_add_nat_entry(struct list_head *head, struct nf_nat_range2 *src,
-			 struct nf_nat_range2 *dst, struct nf_nat_range2 *map,
+kz_service_add_nat_entry(struct list_head *head, struct kz_nf_nat_range *src,
+			 struct kz_nf_nat_range *dst, struct kz_nf_nat_range *map,
 			 uint8_t l3proto)
 {
 	struct kz_service_nat_entry *entry;
