@@ -443,7 +443,7 @@ def main(args):
                                           callback=evaluate_option_parser_cb,
                                           help="evaluate "
                                                "arguments: <protocol> <client address> <server address> <interface name>\n"\
-                                               "optional parameters of the evaluation might be set by src-port, dst-port, icmp-type, icmp-code, request-id oarameters"),
+                                               "optional parameters of the evaluation might be set by src-port, dst-port, icmp-type, icmp-code, request-id parameters"),
                      optparse.make_option(None, "--src-port",
                                           action="store", type="int", dest="sport",
                                           default=None,
