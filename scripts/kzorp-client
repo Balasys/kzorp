@@ -446,9 +446,9 @@ def main(args):
                                                "optional parameters of the evaluation might be set by src-port, dst-port, icmp-type, icmp-code, request-id parameters"),
                      optparse.make_option(None, "--src-port",
                                           action="store", type="int", dest="sport",
-                                          default=None,
+                                          default=1024,
                                           help="source port inc case of evaluation "
-                                               "[default: 1024]"),
+                                               "[default: %default]"),
                      optparse.make_option(None, "--dst-port",
                                           action="store", type="int", dest="dport",
                                           default=None,
