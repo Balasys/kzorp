@@ -30,8 +30,6 @@ import kzorp.netlink
 
 import time
 
-import errno
-
 AttributeRequiredError = "required attribute missing"
 
 def inet_ntoa(a):
@@ -394,7 +392,10 @@ def evaluate(parser, options, quiet):
             eval_str += " and the request id is %s" % (kws['reqid'])
         print eval_str
 
-    print str(kzorp.communication.Handle().exchange(query_msg))
+    try:
+        print str(kzorp.communication.Handle().exchange(query_msg))
+    except kzorp.netlink.NetlinkException as e:
+        print "Evaluate failed: result='%s', error='%s'" % (e.detail, os.strerror(-e.detail))
 
 def LookupZone(parser, address):
     handle = kzorp.communication.Handle()
