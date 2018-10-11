@@ -1,67 +1,70 @@
-$(eval HDR_ARCH ?= \
-	$(shell uname -m | sed -e s/i.86/x86/ -e s/x86_64/x86/\
-		-e s/sun4u/sparc64/ \
-		-e s/arm.*/arm/ -e s/sa110/arm/ \
-		-e s/s390x/s390/ -e s/parisc64/parisc/ \
-		-e s/ppc.*/powerpc/ -e s/mips.*/mips/ \
-		-e s/sh[234].*/sh/ -e s/aarch64.*/arm64/ \
-	))
-$(eval COMPAT_CPPFLAGS ?= \
-	-DKBUILD_MODNAME \
-	-isystem $(KBUILD)/include \
-	-isystem $(KBUILD)/arch/${HDR_ARCH}/include/ \
-	-isystem $(KBUILD)/arch/${HDR_ARCH}/include/generated/ \
-	-isystem $(KBUILD)/include/uapi/ \
-	-include $(KBUILD)/include/linux/kconfig.h \
-)
-$(eval COMPAT_CFLAGS ?= \
-	-D__KERNEL__ \
-)
+PWD=$(shell pwd)
 
 all: compat_h
 
 clean:
-	rm -f *.h *.o
+	rm -Rf *.mod.c
+	find . ! -name '*.c' ! -name Makefile -delete
 
-net_param_added_to_ip_local_functions.h: net_param_added_to_ip_local_functions.c
-	truncate -s 0 net_param_added_to_ip_local_functions.h
-	$(CC) $(COMPAT_CPPFLAGS) $(COMPAT_CFLAGS) -c net_param_added_to_ip_local_functions.c 2>/dev/null || \
-	echo "#define NET_PARAM_ADDED_TO_IP_LOCAL_FUNCTIONS 1" > net_param_added_to_ip_local_functions.h
+does_not_have_timer_setup.h: does_not_have_timer_setup.c
+	truncate -s 0 does_not_have_timer_setup.h
+	make -C $(KBUILD) M=$(PWD) obj-m=does_not_have_timer_setup.o modules 2>/dev/null || \
+	echo "#define KZ_COMP_DOES_NOT_HAVE_TIMER_SETUP 1" > does_not_have_timer_setup.h
 
-put_added_to_inet_twsk_deschedule.h: put_added_to_inet_twsk_deschedule.c
-	truncate -s 0 put_added_to_inet_twsk_deschedule.h
-	$(CC) $(COMPAT_CPPFLAGS) $(COMPAT_CFLAGS) -c -Werror=implicit-function-declaration put_added_to_inet_twsk_deschedule.c 2>/dev/null || \
-	echo "#define PUT_ADDED_TO_INET_TWSK_DESCHEDULE 1" > put_added_to_inet_twsk_deschedule.h
+inet_lookup_does_not_have_sdif.h: inet_lookup_does_not_have_sdif.c
+	truncate -s 0 inet_lookup_does_not_have_sdif.h
+	make -C $(KBUILD) M=$(PWD) obj-m=inet_lookup_does_not_have_sdif.o modules 2>/dev/null || \
+	echo "#define KZ_COMP_INET_LOOKUP_DOES_NOT_HAVE_SDIF 1" > inet_lookup_does_not_have_sdif.h
 
-skb_doff_added_to_lookup_listener_function.h: skb_doff_added_to_lookup_listener_function.c
-	truncate -s 0 skb_doff_added_to_lookup_listener_function.h
-	$(CC) $(COMPAT_CPPFLAGS) $(COMPAT_CFLAGS) -c skb_doff_added_to_lookup_listener_function.c 2>/dev/null || \
-	echo "#define SKB_DOFF_ADDED_TO_LOOKUP_LISTENER_FUNCTIONS 1" > skb_doff_added_to_lookup_listener_function.h
+does_not_have_refcount_inc_not_zero.h: does_not_have_refcount_inc_not_zero.c
+	truncate -s 0 does_not_have_refcount_inc_not_zero.h
+	make -C $(KBUILD) M=$(PWD) obj-m=does_not_have_refcount_inc_not_zero.o modules 2>/dev/null || \
+	echo "#define KZ_COMP_DOES_NOT_HAVE_REFCOUNT_INC_NOT_ZERO 1" > does_not_have_refcount_inc_not_zero.h
 
-nf_ct_zone_id.h: nf_ct_zone_id.c
-	truncate -s 0 nf_ct_zone_id.h
-	$(CC) $(COMPAT_CPPFLAGS) $(COMPAT_CFLAGS) -c nf_ct_zone_id.c 2>/dev/null || \
-	echo "#define DIR_ADDED_NF_CT_ZONE 1" > nf_ct_zone_id.h
+nla_parse_nested_does_not_have_extack.h: nla_parse_nested_does_not_have_extack.c
+	truncate -s 0 nla_parse_nested_does_not_have_extack.h
+	make -C $(KBUILD) M=$(PWD) obj-m=nla_parse_nested_does_not_have_extack.o modules 2>/dev/null || \
+	echo "#define KZ_COMP_NLA_PARSE_NESTED_DOES_NOT_HAVE_EXTACK 1" > nla_parse_nested_does_not_have_extack.h
 
-nf_conntrack_find_get.h: nf_conntrack_find_get.c
-	truncate -s 0 nf_conntrack_find_get.h
-	$(CC) $(COMPAT_CPPFLAGS) $(COMPAT_CFLAGS) -c -Werror nf_conntrack_find_get.c 2>/dev/null || \
-	echo "#define ZONE_STRUCT_ADDED_NF_CONNTRACK_FIND_GET 1" > nf_conntrack_find_get.h
+x_tables_does_not_have_helpers.h: x_tables_does_not_have_helpers.c
+	truncate -s 0 x_tables_does_not_have_helpers.h
+	make -C $(KBUILD) M=$(PWD) obj-m=x_tables_does_not_have_helpers.o modules 2>/dev/null || \
+	echo "#define KZ_COMP_X_TABLES_DOES_NOT_HAVE_HELPERS 1" > x_tables_does_not_have_helpers.h
 
+nf_defrag_does_not_have_net.h: nf_defrag_does_not_have_net.c
+	truncate -s 0 nf_defrag_does_not_have_net.h
+	make -C $(KBUILD) M=$(PWD) obj-m=nf_defrag_does_not_have_net.o modules 2>/dev/null || \
+	echo "#define KZ_COMP_NF_DEFRAG_DOES_NOT_HAVE_NET 1" > nf_defrag_does_not_have_net.h
+
+inet_lookup_does_not_have_skb_doff.h: inet_lookup_does_not_have_skb_doff.c
+	truncate -s 0 inet_lookup_does_not_have_skb_doff.h
+	make -C $(KBUILD) M=$(PWD) obj-m=inet_lookup_does_not_have_skb_doff.o modules 2>/dev/null || \
+	echo "#define KZ_COMP_INET_LOOKUP_DOES_NOT_HAVE_SKB_DOFF 1" > inet_lookup_does_not_have_skb_doff.h
+
+does_not_have_nla_put_u64_64bit.h: does_not_have_nla_put_u64_64bit.c
+	truncate -s 0 does_not_have_nla_put_u64_64bit.h
+	make -C $(KBUILD) M=$(PWD) obj-m=does_not_have_nla_put_u64_64bit.o modules 2>/dev/null || \
+	echo "#define KZ_COMP_DOES_NOT_HAVE_NLA_PUT_U64_64BIT 1" > does_not_have_nla_put_u64_64bit.h
 
 compat.h: \
-		net_param_added_to_ip_local_functions.h \
-		put_added_to_inet_twsk_deschedule.h \
-		skb_doff_added_to_lookup_listener_function.h \
-		nf_ct_zone_id.h \
-		nf_conntrack_find_get.h
+		does_not_have_timer_setup.h \
+		inet_lookup_does_not_have_sdif.h \
+		does_not_have_refcount_inc_not_zero.h \
+		nla_parse_nested_does_not_have_extack.h \
+		x_tables_does_not_have_helpers.h \
+		nf_defrag_does_not_have_net.h \
+		inet_lookup_does_not_have_skb_doff.h \
+		does_not_have_nla_put_u64_64bit.h
 
 	cat \
-	net_param_added_to_ip_local_functions.h \
-	put_added_to_inet_twsk_deschedule.h \
-	skb_doff_added_to_lookup_listener_function.h \
-	nf_ct_zone_id.h \
-	nf_conntrack_find_get.h \
+	does_not_have_timer_setup.h \
+	inet_lookup_does_not_have_sdif.h \
+	does_not_have_refcount_inc_not_zero.h \
+	nla_parse_nested_does_not_have_extack.h \
+	x_tables_does_not_have_helpers.h \
+	nf_defrag_does_not_have_net.h \
+	inet_lookup_does_not_have_skb_doff.h \
+	does_not_have_nla_put_u64_64bit.h \
 	> compat.h
 
 compat_h: compat.h

@@ -22,7 +22,7 @@ import sys
 sys.dont_write_bytecode = True
 
 import daemon
-from daemon.pidlockfile import PIDLockFile
+from lockfile.pidlockfile import PIDLockFile
 import itertools
 
 import os
@@ -183,6 +183,7 @@ class Daemon():
             uid=zorp_uid,
             gid=zorp_gid,
             pidfile=PIDLockFile('/var/run/zorp/kzorpd.pid'),
+            detach_process=True,
             signal_map={
                          signal.SIGHUP: self.sighup_handler,
                          signal.SIGINT: self.sigint_handler,

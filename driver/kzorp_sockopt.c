@@ -1,7 +1,7 @@
 /*
  * KZorp getsockopt() interface
  *
- * Copyright (C) 2010, BalaBit IT Ltd.
+ * Copyright (C) 2010-2015 BalaBit IT Security, 2015-2017 BalaSys IT Security.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published
@@ -65,7 +65,7 @@ kzorp_getsockopt_results(u8 family, struct sock *sk, int optval, void __user *us
 	}
 
 	if ((unsigned int) *len < sizeof(struct kz_lookup_result)) {
-		pr_debug("buffer size is too small for the result; len='%d', required='%lu'\n", *len, sizeof(struct kz_lookup_result));
+		pr_debug("buffer size is too small for the result; len='%d', required='%zu'\n", *len, sizeof(struct kz_lookup_result));
 		return -EINVAL;
 	}
 
@@ -88,7 +88,7 @@ kzorp_getsockopt_results(u8 family, struct sock *sk, int optval, void __user *us
 		BUG();
 	}
 
-	h = kz_nf_conntrack_find_get(sock_net(sk), &tuple);
+	h = nf_conntrack_find_get(sock_net(sk), &nf_ct_zone_dflt, &tuple);
 	if (h) {
 		struct nf_conn *ct = nf_ct_tuplehash_to_ctrack(h);
 		struct kz_extension *kzorp;

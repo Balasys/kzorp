@@ -1,8 +1,8 @@
 Name:                   kzorp
-Version:                6.0.11
-Release:                1
+Version:                7.0.1~alpha1
+Release:                0.1%{?dist}
 URL:                    https://www.balabit.com/network-security/zorp-gpl
-Source0:                kzorp_%{version}.tar.gz
+Source0:                kzorp_%{version}.tar.xz
 Summary:                Mixed packet filter/application level gateway, kernel modules
 License:                GPL-2.0
 Group:                  System/Daemons
@@ -16,6 +16,7 @@ BuildRequires:          python
 Requires(pre):          shadow-utils
 BuildRequires:          kernel
 BuildRequires:          kernel-devel
+BuildRequires:          elfutils-libelf-devel
 BuildRequires:          kmod
 Requires(pre):          shadow-utils
 %else
@@ -129,6 +130,10 @@ This package contains plugins for the Munin monitoring tool.
 
 
 %changelog
+* Thu Sep 27 2018 Balasys Development Team <devel@balasys.hu> - 7.0.1-0.1
+  - New upstream release 7.0.1~alpha1
+* Mon May 14 2018 Balasys Zorp GPL Team <zorp@googlegroups.com> - 6.0.12-1
+  - New upstream release 6.0.12
 * Fri Dec 08 2017 Balasys Zorp GPL Team <zorp@googlegroups.com> - 6.0.11-1
   - New upstream release 6.0.11
 * Fri Nov 25 2016 Balasys Zorp GPL Team <zorp@lists.balabit.hu> - 6.0.10-1

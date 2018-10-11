@@ -1,7 +1,7 @@
 /*
  * Transparent proxy support for Linux/iptables
  *
- * Copyright (C) 2007-2008 BalaBit IT Ltd.
+ * Copyright (C) 2007-2015 BalaBit IT Security, 2015-2017 BalaSys IT Security.
  * Author: Krisztian Kovacs
  *
  * This program is free software; you can redistribute it and/or modify
@@ -22,7 +22,6 @@
 #include <net/netfilter/ipv4/nf_defrag_ipv4.h>
 
 #if IS_ENABLED(CONFIG_IP6_NF_IPTABLES)
-#define XT_SOCKET_HAVE_IPV6 1
 #include <linux/netfilter_ipv6/ip6_tables.h>
 #include <net/inet6_hashtables.h>
 #include <net/netfilter/ipv6/nf_defrag_ipv6.h>
@@ -30,31 +29,29 @@
 
 #include <linux/netfilter/xt_socket_kzorp.h>
 
+#include "kzorp_compat.h"
+
 #if IS_ENABLED(CONFIG_NF_CONNTRACK)
-#define XT_SOCKET_HAVE_CONNTRACK 1
 #include <net/netfilter/nf_conntrack.h>
 #endif
 
-#include "kzorp_compat.h"
-
-#ifndef sk_dport
-static void
-sock_gen_put(struct sock *sk)
+static inline
+bool nf_sk_is_transparent(struct sock *sk)
 {
-        if (sk->sk_state == TCP_TIME_WAIT)
-                inet_twsk_put(inet_twsk(sk));
-        else
-                sock_put(sk);
+	switch (sk->sk_state) {
+	case TCP_TIME_WAIT:
+		return inet_twsk(sk)->tw_transparent;
+	case TCP_NEW_SYN_RECV:
+		return inet_rsk(inet_reqsk(sk))->no_srccheck;
+	default:
+		return inet_sk(sk)->transparent;
+	}
 }
-#endif
 
 static int
-extract_icmp4_fields(const struct sk_buff *skb,
-		    u8 *protocol,
-		    __be32 *raddr,
-		    __be32 *laddr,
-		    __be16 *rport,
-		    __be16 *lport)
+extract_icmp4_fields(const struct sk_buff *skb, u8 *protocol,
+		     __be32 *raddr, __be32 *laddr,
+		     __be16 *rport, __be16 *lport)
 {
 	unsigned int outside_hdrlen = ip_hdrlen(skb);
 	struct iphdr *inside_iph, _inside_iph;
@@ -105,36 +102,18 @@ extract_icmp4_fields(const struct sk_buff *skb,
 	return 0;
 }
 
-/* "socket" match based redirection (no specific rule)
- * ===================================================
- *
- * There are connections with dynamic endpoints (e.g. FTP data
- * connection) that the user is unable to add explicit rules
- * for. These are taken care of by a generic "socket" rule. It is
- * assumed that the proxy application is trusted to open such
- * connections without explicit iptables rule (except of course the
- * generic 'socket' rule). In this case the following sockets are
- * matched in preference order:
- *
- *   - match: if there's a fully established connection matching the
- *     _packet_ tuple
- *
- *   - match: if there's a non-zero bound listener (possibly with a
- *     non-local address) We don't accept zero-bound listeners, since
- *     then local services could intercept traffic going through the
- *     box.
- */
 static struct sock *
-xt_socket_get_sock_v4(struct net *net, const u8 protocol,
+nf_socket_get_sock_v4(struct net *net, struct sk_buff *skb, const int doff,
+		      const u8 protocol,
 		      const __be32 saddr, const __be32 daddr,
 		      const __be16 sport, const __be16 dport,
 		      const struct net_device *in)
 {
 	switch (protocol) {
 	case IPPROTO_TCP:
-		return __inet_lookup(net, &tcp_hashinfo,
-				     saddr, sport, daddr, dport,
-				     in->ifindex);
+		return kz_inet_lookup(net, &tcp_hashinfo, skb, doff,
+				      saddr, sport, daddr, dport,
+				      in->ifindex);
 	case IPPROTO_UDP:
 		return udp4_lib_lookup(net, saddr, sport, daddr, dport,
 				       in->ifindex);
@@ -142,48 +121,56 @@ xt_socket_get_sock_v4(struct net *net, const u8 protocol,
 	return NULL;
 }
 
-static bool
-socket_match(const struct sk_buff *skb, struct xt_action_param *par,
-	     const struct xt_socket_mtinfo1 *info)
+static struct sock *
+nf_sk_lookup_slow_v4(struct net *net, const struct sk_buff *skb,
+		     const struct net_device *indev)
 {
-	const struct net_device *dev = (par->hooknum == NF_INET_LOCAL_OUT) ? par->out : par->in;
-	const struct iphdr *iph = ip_hdr(skb);
-	struct udphdr _hdr, *hp = NULL;
-	struct sock *sk = skb->sk;
 	__be32 uninitialized_var(daddr), uninitialized_var(saddr);
 	__be16 uninitialized_var(dport), uninitialized_var(sport);
+	const struct iphdr *iph = ip_hdr(skb);
+	struct sk_buff *data_skb = NULL;
 	u8 uninitialized_var(protocol);
-#ifdef XT_SOCKET_HAVE_CONNTRACK
-	struct nf_conn const *ct;
+#if IS_ENABLED(CONFIG_NF_CONNTRACK)
 	enum ip_conntrack_info ctinfo;
+	struct nf_conn const *ct;
 #endif
+	int doff = 0;
 
 	if (iph->protocol == IPPROTO_UDP || iph->protocol == IPPROTO_TCP) {
+		struct tcphdr _hdr;
+		struct udphdr *hp;
+
 		hp = skb_header_pointer(skb, ip_hdrlen(skb),
-					sizeof(_hdr), &_hdr);
+					iph->protocol == IPPROTO_UDP ?
+					sizeof(*hp) : sizeof(_hdr), &_hdr);
 		if (hp == NULL)
-			return false;
+			return NULL;
 
 		protocol = iph->protocol;
 		saddr = iph->saddr;
 		sport = hp->source;
 		daddr = iph->daddr;
 		dport = hp->dest;
+		data_skb = (struct sk_buff *)skb;
+		doff = iph->protocol == IPPROTO_TCP ?
+			ip_hdrlen(skb) + kz___tcp_hdrlen((struct tcphdr *)hp) :
+			ip_hdrlen(skb) + sizeof(*hp);
 
 	} else if (iph->protocol == IPPROTO_ICMP) {
 		if (extract_icmp4_fields(skb, &protocol, &saddr, &daddr,
-					&sport, &dport))
-			return false;
+					 &sport, &dport))
+			return NULL;
 	} else {
-		return false;
+		return NULL;
 	}
 
-#ifdef XT_SOCKET_HAVE_CONNTRACK
-	/* Do the lookup with the original socket address in case this is a
-	 * reply packet of an established SNAT-ted connection. */
-
+#if IS_ENABLED(CONFIG_NF_CONNTRACK)
+	/* Do the lookup with the original socket address in
+	 * case this is a reply packet of an established
+	 * SNAT-ted connection.
+	 */
 	ct = nf_ct_get(skb, &ctinfo);
-	if (ct && !nf_ct_is_untracked(ct) &&
+	if (ct &&
 	    ((iph->protocol != IPPROTO_ICMP &&
 	      ctinfo == IP_CT_ESTABLISHED_REPLY) ||
 	     (iph->protocol == IPPROTO_ICMP &&
@@ -197,71 +184,9 @@ socket_match(const struct sk_buff *skb, struct xt_action_param *par,
 	}
 #endif
 
-	if (!sk)
-		sk = xt_socket_get_sock_v4(dev_net(dev), protocol,
-					   saddr, daddr, sport, dport,
-					   dev);
-	if (sk) {
-		bool wildcard;
-		bool transparent = true;
-		bool is_mark_matches = true;
-
-		/* Ignore sockets listening on INADDR_ANY,
-		 * unless XT_SOCKET_NOWILDCARD is set
-		 */
-		wildcard = (!(info->flags & XT_SOCKET_NOWILDCARD) &&
-			    sk->sk_state != TCP_TIME_WAIT &&
-			    inet_sk(sk)->inet_rcv_saddr == 0);
-
-		/* Ignore non-transparent sockets,
-		   if XT_SOCKET_TRANSPARENT is used */
-		if (info->flags & XT_SOCKET_TRANSPARENT)
-			transparent = ((sk->sk_state != TCP_TIME_WAIT &&
-					inet_sk(sk)->transparent) ||
-				       (sk->sk_state == TCP_TIME_WAIT &&
-					inet_twsk(sk)->tw_transparent));
-
-		if (info->flags & XT_SOCKET_MARK) {
-			const struct xt_socket_mtinfo3 *mark_info = (struct xt_socket_mtinfo3 *) info;
-
-			if (unlikely(sk->sk_state == TCP_TIME_WAIT))
-				is_mark_matches = mark_info->invert;
-			else
-				is_mark_matches = ((sk->sk_mark & mark_info->mask) == mark_info->mark) ^ mark_info->invert;
-		}
-
-		if (sk != skb->sk)
-			sock_gen_put(sk);
-
-		if (wildcard || !transparent || !is_mark_matches)
-			sk = NULL;
-	}
-
-	pr_debug("proto %hhu %pI4:%hu -> %pI4:%hu (orig %pI4:%hu) sock %p\n",
-		 protocol, &saddr, ntohs(sport),
-		 &daddr, ntohs(dport),
-		 &iph->daddr, hp ? ntohs(hp->dest) : 0, sk);
-
-	return (sk != NULL);
+	return nf_socket_get_sock_v4(net, data_skb, doff, protocol, saddr,
+				     daddr, sport, dport, indev);
 }
-
-static bool
-socket_mt4_v0(const struct sk_buff *skb, struct xt_action_param *par)
-{
-	static struct xt_socket_mtinfo1 xt_info_v0 = {
-		.flags = 0,
-	};
-
-	return socket_match(skb, par, &xt_info_v0);
-}
-
-static bool
-socket_mt4_v1_v2_v3(const struct sk_buff *skb, struct xt_action_param *par)
-{
-	return socket_match(skb, par, par->matchinfo);
-}
-
-#ifdef XT_SOCKET_HAVE_IPV6
 
 static int
 extract_icmp6_fields(const struct sk_buff *skb,
@@ -321,16 +246,17 @@ extract_icmp6_fields(const struct sk_buff *skb,
 }
 
 static struct sock *
-xt_socket_get_sock_v6(struct net *net, const u8 protocol,
+nf_socket_get_sock_v6(struct net *net, struct sk_buff *skb, int doff,
+		      const u8 protocol,
 		      const struct in6_addr *saddr, const struct in6_addr *daddr,
 		      const __be16 sport, const __be16 dport,
 		      const struct net_device *in)
 {
 	switch (protocol) {
 	case IPPROTO_TCP:
-		return inet6_lookup(net, &tcp_hashinfo,
-				    saddr, sport, daddr, dport,
-				    in->ifindex);
+		return kz_inet6_lookup(net, &tcp_hashinfo, skb, doff,
+				       saddr, sport, daddr, dport,
+				       in->ifindex);
 	case IPPROTO_UDP:
 		return udp6_lib_lookup(net, saddr, sport, daddr, dport,
 				       in->ifindex);
@@ -339,67 +265,101 @@ xt_socket_get_sock_v6(struct net *net, const u8 protocol,
 	return NULL;
 }
 
-static bool
-socket_mt6_v1_v2_v3(const struct sk_buff *skb, struct xt_action_param *par)
+static struct sock *
+nf_sk_lookup_slow_v6(struct net *net, const struct sk_buff *skb,
+		     const struct net_device *indev)
 {
-	const struct net_device *dev = (par->hooknum == NF_INET_LOCAL_OUT) ? par->out : par->in;
-	struct ipv6hdr ipv6_var, *iph = ipv6_hdr(skb);
-	struct udphdr _hdr, *hp = NULL;
-	struct sock *sk = skb->sk;
-	const struct in6_addr *daddr = NULL, *saddr = NULL;
 	__be16 uninitialized_var(dport), uninitialized_var(sport);
-	int thoff = 0, uninitialized_var(tproto);
-	const struct xt_socket_mtinfo1 *info = (struct xt_socket_mtinfo1 *) par->matchinfo;
+	const struct in6_addr *daddr = NULL, *saddr = NULL;
+	struct ipv6hdr *iph = ipv6_hdr(skb);
+	struct sk_buff *data_skb = NULL;
+	int doff = 0;
+	int thoff = 0, tproto;
 
 	tproto = ipv6_find_hdr(skb, &thoff, -1, NULL, NULL);
 	if (tproto < 0) {
 		pr_debug("unable to find transport header in IPv6 packet, dropping\n");
-		return NF_DROP;
+		return NULL;
 	}
 
 	if (tproto == IPPROTO_UDP || tproto == IPPROTO_TCP) {
-		hp = skb_header_pointer(skb, thoff,
-					sizeof(_hdr), &_hdr);
+		struct tcphdr _hdr;
+		struct udphdr *hp;
+
+		hp = skb_header_pointer(skb, thoff, tproto == IPPROTO_UDP ?
+					sizeof(*hp) : sizeof(_hdr), &_hdr);
 		if (hp == NULL)
-			return false;
+			return NULL;
 
 		saddr = &iph->saddr;
 		sport = hp->source;
 		daddr = &iph->daddr;
 		dport = hp->dest;
+		data_skb = (struct sk_buff *)skb;
+		doff = tproto == IPPROTO_TCP ?
+			thoff + kz___tcp_hdrlen((struct tcphdr *)hp) :
+			thoff + sizeof(*hp);
 
 	} else if (tproto == IPPROTO_ICMPV6) {
+		struct ipv6hdr ipv6_var;
+
 		if (extract_icmp6_fields(skb, thoff, &tproto, &saddr, &daddr,
 					 &sport, &dport, &ipv6_var))
-			return false;
+			return NULL;
 	} else {
-		return false;
+		return NULL;
 	}
 
+	return nf_socket_get_sock_v6(net, data_skb, doff, tproto, saddr, daddr,
+				     sport, dport, indev);
+}
+
+/* "socket" match based redirection (no specific rule)
+ * ===================================================
+ *
+ * There are connections with dynamic endpoints (e.g. FTP data
+ * connection) that the user is unable to add explicit rules
+ * for. These are taken care of by a generic "socket" rule. It is
+ * assumed that the proxy application is trusted to open such
+ * connections without explicit iptables rule (except of course the
+ * generic 'socket' rule). In this case the following sockets are
+ * matched in preference order:
+ *
+ *   - match: if there's a fully established connection matching the
+ *     _packet_ tuple
+ *
+ *   - match: if there's a non-zero bound listener (possibly with a
+ *     non-local address) We don't accept zero-bound listeners, since
+ *     then local services could intercept traffic going through the
+ *     box.
+ */
+static bool
+socket_match(const struct sk_buff *skb, struct xt_action_param *par,
+	     const struct xt_socket_mtinfo1 *info)
+{
+	struct sock *sk = skb->sk;
+	const struct net_device *dev =
+		(xt_hooknum(par) == NF_INET_LOCAL_OUT) ? xt_out(par) : xt_in(par);
+
 	if (!sk)
-		sk = xt_socket_get_sock_v6(dev_net(dev), tproto,
-					   saddr, daddr, sport, dport,
-					   dev);
+		sk = nf_sk_lookup_slow_v4(xt_net(par), skb, dev);
 	if (sk) {
 		bool wildcard;
 		bool transparent = true;
 		bool is_mark_matches = true;
 
-		/* Ignore sockets listening on INADDR_ANY
+		/* Ignore sockets listening on INADDR_ANY,
 		 * unless XT_SOCKET_NOWILDCARD is set
 		 */
 		wildcard = (!(info->flags & XT_SOCKET_NOWILDCARD) &&
-			    sk->sk_state != TCP_TIME_WAIT &&
-			    ipv6_addr_any(&sk->sk_v6_rcv_saddr)
-			   );
+			    sk_fullsock(sk) &&
+			    inet_sk(sk)->inet_rcv_saddr == 0);
 
 		/* Ignore non-transparent sockets,
-		   if XT_SOCKET_TRANSPARENT is used */
+		 * if XT_SOCKET_TRANSPARENT is used
+		 */
 		if (info->flags & XT_SOCKET_TRANSPARENT)
-			transparent = ((sk->sk_state != TCP_TIME_WAIT &&
-					inet_sk(sk)->transparent) ||
-				       (sk->sk_state == TCP_TIME_WAIT &&
-					inet_twsk(sk)->tw_transparent));
+			transparent = nf_sk_is_transparent(sk);
 
 		if (info->flags & XT_SOCKET_MARK) {
 			const struct xt_socket_mtinfo3 *mark_info = (struct xt_socket_mtinfo3 *) info;
@@ -417,22 +377,101 @@ socket_mt6_v1_v2_v3(const struct sk_buff *skb, struct xt_action_param *par)
 			sk = NULL;
 	}
 
-	pr_debug("proto %hhd %pI6c:%hu -> %pI6c:%hu "
-		 "(orig %pI6c:%hu) sock %p\n",
-		 tproto, saddr, ntohs(sport),
-		 daddr, ntohs(dport),
-		 &iph->daddr, hp ? ntohs(hp->dest) : 0, sk);
+	return sk != NULL;
+}
 
-	return (sk != NULL);
+static bool
+socket_mt4_v0(const struct sk_buff *skb, struct xt_action_param *par)
+{
+	static struct xt_socket_mtinfo1 xt_info_v0 = {
+		.flags = 0,
+	};
+
+	return socket_match(skb, par, &xt_info_v0);
+}
+
+static bool
+socket_mt4_v1_v2_v3(const struct sk_buff *skb, struct xt_action_param *par)
+{
+	return socket_match(skb, par, par->matchinfo);
+}
+
+#if IS_ENABLED(CONFIG_IP6_NF_IPTABLES)
+static bool
+socket_mt6_v1_v2_v3(const struct sk_buff *skb, struct xt_action_param *par)
+{
+	const struct xt_socket_mtinfo1 *info = (struct xt_socket_mtinfo1 *) par->matchinfo;
+	struct sock *sk = skb->sk;
+	const struct net_device *dev =
+		(xt_hooknum(par) == NF_INET_LOCAL_OUT) ? xt_out(par) : xt_in(par);
+
+	if (!sk)
+		sk = nf_sk_lookup_slow_v6(xt_net(par), skb, dev);
+	if (sk) {
+		bool wildcard;
+		bool transparent = true;
+		bool is_mark_matches = true;
+
+		/* Ignore sockets listening on INADDR_ANY
+		 * unless XT_SOCKET_NOWILDCARD is set
+		 */
+		wildcard = (!(info->flags & XT_SOCKET_NOWILDCARD) &&
+			    sk_fullsock(sk) &&
+			    ipv6_addr_any(&sk->sk_v6_rcv_saddr)
+			   );
+
+		/* Ignore non-transparent sockets,
+		 * if XT_SOCKET_TRANSPARENT is used
+		 */
+		if (info->flags & XT_SOCKET_TRANSPARENT)
+			transparent = nf_sk_is_transparent(sk);
+
+		if (info->flags & XT_SOCKET_MARK) {
+			const struct xt_socket_mtinfo3 *mark_info = (struct xt_socket_mtinfo3 *) info;
+
+			if (unlikely(sk->sk_state == TCP_TIME_WAIT))
+				is_mark_matches = mark_info->invert;
+			else
+				is_mark_matches = ((sk->sk_mark & mark_info->mask) == mark_info->mark) ^ mark_info->invert;
+		}
+
+		if (sk != skb->sk)
+			sock_gen_put(sk);
+
+		if (wildcard || !transparent || !is_mark_matches)
+			sk = NULL;
+	}
+
+	return sk != NULL;
 }
 #endif
+
+static int socket_mt_enable_defrag(struct net *net, int family)
+{
+	switch (family) {
+	case NFPROTO_IPV4:
+		return kz_nf_defrag_ipv4_enable(net);
+#if IS_ENABLED(CONFIG_IP6_NF_IPTABLES)
+	case NFPROTO_IPV6:
+		return kz_nf_defrag_ipv6_enable(net);
+#endif
+	}
+	WARN_ONCE(1, "Unknown family %d\n", family);
+	return 0;
+}
 
 static int socket_mt_v1_check(const struct xt_mtchk_param *par)
 {
 	const struct xt_socket_mtinfo1 *info = (struct xt_socket_mtinfo1 *) par->matchinfo;
+	int err;
+
+	err = socket_mt_enable_defrag(par->net, par->family);
+	if (err)
+		return err;
 
 	if (info->flags & ~XT_SOCKET_FLAGS_V1) {
-		pr_info("unknown flags 0x%x\n", info->flags & ~XT_SOCKET_FLAGS_V1);
+		pr_info_ratelimited("unknown flags 0x%x\n",
+				    info->flags & ~XT_SOCKET_FLAGS_V1);
 		return -EINVAL;
 	}
 	return 0;
@@ -441,9 +480,15 @@ static int socket_mt_v1_check(const struct xt_mtchk_param *par)
 static int socket_mt_v2_check(const struct xt_mtchk_param *par)
 {
 	const struct xt_socket_mtinfo2 *info = (struct xt_socket_mtinfo2 *) par->matchinfo;
+	int err;
+
+	err = socket_mt_enable_defrag(par->net, par->family);
+	if (err)
+		return err;
 
 	if (info->flags & ~XT_SOCKET_FLAGS_V2) {
-		pr_info("unknown flags 0x%x\n", info->flags & ~XT_SOCKET_FLAGS_V2);
+		pr_info_ratelimited("unknown flags 0x%x\n",
+				    info->flags & ~XT_SOCKET_FLAGS_V2);
 		return -EINVAL;
 	}
 	return 0;
@@ -453,7 +498,7 @@ static inline int socket_mt_check_flags(__u8 flags, __u8 valid_flags) {
 	const __u8 invalid_flags = flags & ~valid_flags;
 
 	if (invalid_flags) {
-		pr_info("unknown flags 0x%x\n", invalid_flags);
+		pr_info_ratelimited("unknown flags 0x%x\n", invalid_flags);
 		return -EINVAL;
 	}
 	return 0;
@@ -486,7 +531,7 @@ static struct xt_match socket_mt_reg[] __read_mostly = {
 				  (1 << NF_INET_LOCAL_IN),
 		.me		= THIS_MODULE,
 	},
-#ifdef XT_SOCKET_HAVE_IPV6
+#if IS_ENABLED(CONFIG_IP6_NF_IPTABLES)
 	{
 		.name		= "socket_kzorp",
 		.revision	= 1,
@@ -510,7 +555,7 @@ static struct xt_match socket_mt_reg[] __read_mostly = {
 				  (1 << NF_INET_LOCAL_IN),
 		.me		= THIS_MODULE,
 	},
-#ifdef XT_SOCKET_HAVE_IPV6
+#if IS_ENABLED(CONFIG_IP6_NF_IPTABLES)
 	{
 		.name		= "socket_kzorp",
 		.revision	= 2,
@@ -535,7 +580,7 @@ static struct xt_match socket_mt_reg[] __read_mostly = {
 				  (1 << NF_INET_LOCAL_OUT),
 		.me		= THIS_MODULE,
 	},
-#ifdef XT_SOCKET_HAVE_IPV6
+#if IS_ENABLED(CONFIG_IP6_NF_IPTABLES)
 	{
 		.name		= "socket_kzorp",
 		.revision	= 3,
@@ -554,11 +599,6 @@ static struct xt_match socket_mt_reg[] __read_mostly = {
 
 static int __init socket_mt_init(void)
 {
-	nf_defrag_ipv4_enable();
-#ifdef XT_SOCKET_HAVE_IPV6
-	nf_defrag_ipv6_enable();
-#endif
-
 	return xt_register_matches(socket_mt_reg, ARRAY_SIZE(socket_mt_reg));
 }
 
@@ -571,7 +611,7 @@ module_init(socket_mt_init);
 module_exit(socket_mt_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Krisztian Kovacs, Balazs Scheidler, Szilárd Pfeiffer");
+MODULE_AUTHOR("BalaSys Development Team <devel@balasys.hu>");
 MODULE_DESCRIPTION("x_tables socket_kzorp match module");
 MODULE_ALIAS("ipt_socket_kzorp");
 MODULE_ALIAS("ip6t_socket_kzorp");

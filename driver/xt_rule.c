@@ -1,7 +1,7 @@
 /*
  * kZorp `rule' match
  *
- * Copyright (C) 2014, BalaBit IT Ltd.
+ * Copyright (C) 2014-2015 BalaBit IT Security, 2015-2017 BalaSys IT Security.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published
@@ -23,7 +23,7 @@ rule_mt_v0_eval(const struct sk_buff *skb, const struct ipt_rule_info_v0 *info, 
 	struct kz_extension *kzorp;
 	bool res = true;
 
-	kzorp = kz_extension_find_or_evaluate(skb, par->in, par->family, NULL);
+	kzorp = kz_extension_find_or_evaluate(skb, xt_in(par), xt_family(par), NULL);
 
 	res &= (kzorp->rule_id == info->id);
 	if (res && (info->flags & IPT_RULE_NOCOUNT) == 0)
@@ -69,7 +69,7 @@ static void __exit rule_mt_exit(void)
 	xt_unregister_matches(xt_rule_match, ARRAY_SIZE(xt_rule_match));
 }
 
-MODULE_AUTHOR("Szilárd Pfeiffer coroner@balabit.hu>");
+MODULE_AUTHOR("BalaSys Development Team <devel@balasys.hu>");
 MODULE_DESCRIPTION("kzorp rule match");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("ipt_rule");

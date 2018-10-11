@@ -1,7 +1,7 @@
 /*
  * KZorp `zone' match
  *
- * Copyright (C) 2006-2011, BalaBit IT Ltd.
+ * Copyright (C) 2006-2015 BalaBit IT Security, 2015-2017 BalaSys IT Security.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published
@@ -35,7 +35,7 @@ zone_mt_v1_eval(const struct sk_buff *skb, const struct xt_zone_info_v1 *info, c
 		else
 			zone = reply ? kzorp->czone : kzorp->szone;
 	} else {
-		if (kz_zone_lookup_from_skb(skb, par->family, &src_zone, &dst_zone)) {
+		if (kz_zone_lookup_from_skb(skb, xt_family(par), &src_zone, &dst_zone)) {
 			if (info->flags & IPT_ZONE_SRC)
 				zone = reply ? dst_zone : src_zone;
 			else
@@ -156,7 +156,7 @@ static void __exit zone_mt_exit(void)
 	xt_unregister_matches(xt_zone_match, ARRAY_SIZE(xt_zone_match));
 }
 
-MODULE_AUTHOR("Krisztian Kovacs <hidden@balabit.hu>");
+MODULE_AUTHOR("BalaSys Development Team <devel@balasys.hu>");
 MODULE_DESCRIPTION("kzorp zone match");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("ipt_zone");

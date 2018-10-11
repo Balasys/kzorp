@@ -1,7 +1,7 @@
 /*
  * KZorp data structure lookup implementation
  *
- * Copyright (C) 2006-2011, BalaBit IT Ltd.
+ * Copyright (C) 2006-2015 BalaBit IT Security, 2015-2017 BalaSys IT Security.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published
@@ -1073,7 +1073,7 @@ kz_generate_lookup_data_rule(const struct kz_rule * const rule, void *buf)
 
 #undef CALL_kz_generate_lookup_rule_dim
 
-	pos = (void*)PAD((int64_t)pos, 8);
+	pos = (void*)PAD((size_t) pos, 8);
 	current_rule->dimension_map = map;
 	current_rule->bytes_to_next = pos - buf;
 	current_rule = pos;

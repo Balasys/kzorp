@@ -1,7 +1,7 @@
 /*
  * KZorp `service' match
  *
- * Copyright (C) 2006-2011, BalaBit IT Ltd.
+ * Copyright (C) 2006-2015 BalaBit IT Security, 2015-2017 BalaSys IT Security.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published
@@ -30,7 +30,7 @@ service_mt(const struct sk_buff *skb, struct xt_action_param *par)
 
 	rcu_read_lock();
 
-	kzorp = kz_extension_find_or_evaluate(skb, par->in, par->family, &cfg);
+	kzorp = kz_extension_find_or_evaluate(skb, xt_in(par), xt_family(par), &cfg);
 
 	if ((p_svc = kzorp->svc) == NULL) {
 		/* no service for this packet => no match */
@@ -154,7 +154,7 @@ static void __exit service_mt_exit(void)
 	xt_unregister_matches(service_match, ARRAY_SIZE(service_match));
 }
 
-MODULE_AUTHOR("Krisztian Kovacs <hidden@balabit.hu>");
+MODULE_AUTHOR("BalaSys Development Team <devel@balasys.hu>");
 MODULE_DESCRIPTION("kzorp service match");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("ipt_service");
