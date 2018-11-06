@@ -46,7 +46,7 @@ struct kzorp_hash_stats __percpu *kz_hash_stats;
 static __cacheline_aligned_in_smp spinlock_t kz_hash_locks[KZ_HASH_LOCK_NUM];
 PRIVATE struct kmem_cache *kz_cachep;
 
-static void (*nf_ct_destroy_orig)(struct nf_conntrack *) __rcu __read_mostly;
+kz_global_kz_nf_ct_hook;
 
 static unsigned int kz_ext_hashrnd __read_mostly;
 
@@ -300,7 +300,6 @@ static void
 kz_extension_conntrack_destroy(struct nf_conntrack *nfct)
 {
 	struct nf_conn *ct = (struct nf_conn *) nfct;
-	void (*destroy_orig)(struct nf_conntrack *);
 
 	struct kz_extension *kzorp = kz_extension_find(ct);
 	if (likely(kzorp)) {
@@ -309,11 +308,7 @@ kz_extension_conntrack_destroy(struct nf_conntrack *nfct)
 		kz_extension_put(kzorp);
 	}
 
-	rcu_read_lock();
-	destroy_orig = rcu_dereference(nf_ct_destroy_orig);
-	BUG_ON(destroy_orig == NULL);
-	destroy_orig(nfct);
-	rcu_read_unlock();
+	kz_nf_ct_hook_call_destroy;
 }
 
 static int kz_hash_lengths_show(struct seq_file *p, void *v)
@@ -424,12 +419,7 @@ static int __net_init kz_extension_net_init(struct net *net)
 	if (!proc_create("kz_hash_stats", S_IRUGO, NULL, &kz_hash_stats_file_ops))
 		goto err_pcpu_lists;
 
-	rcu_read_lock();
-	nf_ct_destroy_orig = rcu_dereference(nf_ct_destroy);
-	BUG_ON(nf_ct_destroy_orig == NULL);
-	rcu_read_unlock();
-
-	rcu_assign_pointer(nf_ct_destroy, kz_extension_conntrack_destroy);
+	kz_nf_ct_hook_divert;
 
 	return 0;
 
@@ -443,14 +433,7 @@ err_proc_entry:
 
 void kz_extension_net_exit(struct net *net)
 {
-	void (*destroy_orig)(struct nf_conntrack *);
-
-	rcu_read_lock();
-	destroy_orig = rcu_dereference(nf_ct_destroy_orig);
-	BUG_ON(destroy_orig == NULL);
-	rcu_read_unlock();
-
-	rcu_assign_pointer(nf_ct_destroy, destroy_orig);
+	kz_nf_ct_hook_revert;
 
 	remove_proc_entry("kz_hash_stats", NULL);
 	remove_proc_entry("kz_hash_lengths", NULL);
