@@ -1,3 +1,9 @@
+kzorp (7.0.1~alpha2) bionic; urgency=low
+
+  * version bump
+
+ -- Szilárd Pfeiffer <pfeiffer.szilard@balasys.hu>  Fri, 30 Nov 2018 13:42:56 +0100
+
 kzorp (7.0.1~alpha1) bionic; urgency=low
 
   * version bump
