@@ -30,7 +30,7 @@ import kzorp.netlink
 
 import time
 
-AttributeRequiredError = "required attribute missing"
+EvaluateArgumentDescription = "<protocol> <client address> <server address> <interface name>"
 
 def inet_ntoa(a):
     return "%s.%s.%s.%s" % ((a >> 24) & 0xff, (a >> 16) & 0xff, (a >> 8) & 0xff, a & 0xff)
@@ -278,7 +278,7 @@ def evaluate_option_parser_cb(option, opt_str, value, parser):
         value.append(arg)
 
     if len(value) != 4:
-        raise optparse.OptionValueError("-e option requires 4 arguments")
+        raise optparse.OptionValueError("-e option requires 4 arguments: " + EvaluateArgumentDescription)
 
     del parser.rargs[:len(value)]
     setattr(parser.values, option.dest, value)
@@ -442,8 +442,7 @@ def main(args):
                                           action="callback",
                                           default=None,
                                           callback=evaluate_option_parser_cb,
-                                          help="evaluate "
-                                               "arguments: <protocol> <client address> <server address> <interface name>\n"\
+                                          help="evaluate arguments: " + EvaluateArgumentDescription + "\n"
                                                "optional parameters of the evaluation might be set by src-port, dst-port, icmp-type, icmp-code, request-id parameters"),
                      optparse.make_option(None, "--src-port",
                                           action="store", type="int", dest="sport",
