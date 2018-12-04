@@ -64,7 +64,7 @@ Depends: ${misc:Depends},
          python-daemon,
          zorp-kernel-module,
          python-kzorp (= ${source:Version}),
-         python-zorp-base (>= 7.0.1~alpha0),
+         python-zorp-base (>= 7.0.1),
          python-prctl,
          python-systemd
 Description: Python bindings for kzorp.
