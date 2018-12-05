@@ -151,7 +151,7 @@ class ZoneUpdateMessageCreator(object):
         ipv6_addresses_to_send = set()
         for hostname in zone.hostnames:
             try:
-                resolved_ipv4_addresses, resolved_ipv6_addresses = self.dnscache.lookupHostname(hostname)
+                resolved_ipv4_addresses, resolved_ipv6_addresses = self.dnscache.lookupCachedHostname(hostname)
 
                 non_conflicting_ipv4_addresses = filter(
                     lambda resolved_ipv4_address: not has_zone_with_static_address(resolved_ipv4_address),
