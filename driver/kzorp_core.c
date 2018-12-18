@@ -458,6 +458,7 @@ static void kz_extension_fill_with_lookup_data_rcu(struct kz_extension * kzorp,
 	union nf_inet_addr *saddr, *daddr;
         struct kz_reqids reqids;
 	int sp_idx;
+	struct sec_path *sp = NULL;
 
 	if (p_cfg == NULL)
 		p_cfg = &loc_cfg;
@@ -474,12 +475,12 @@ static void kz_extension_fill_with_lookup_data_rcu(struct kz_extension * kzorp,
 		goto done;
 
 	/* copy IPSEC reqids from secpath to our own structure */
-	if (skb->sp != NULL) {
-		reqids.len = skb->sp->len;
+	reqids.len = 0;
+	sp = skb_ext_find(skb, SKB_EXT_SEC_PATH);
+	if (sp) {
+		reqids.len = sp->len;
 		for (sp_idx = 0; sp_idx  < reqids.len; sp_idx++)
-			reqids.vec[sp_idx] = skb->sp->xvec[sp_idx]->props.reqid;
-	} else {
-		reqids.len = 0;
+			reqids.vec[sp_idx] = sp->xvec[sp_idx]->props.reqid;
 	}
 
 	kz_traffic_props_init(&traffic_props);
