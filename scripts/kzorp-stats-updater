@@ -21,6 +21,8 @@ sys.dont_write_bytecode = True
 import csv
 import os
 
+from kzorp.messages import *
+
 class Counter(object):
     def __init__(self, id, timestamp, count):
         self.id = id if type(id) is str else long(id)
@@ -37,9 +39,10 @@ class Counter(object):
         return cmp(self.id, other.id)
 
 
-class DumpBase():
-    def __init__(self, dump_message, id_name_in_reply_message):
+class DumpBase(object):
+    def __init__(self, dump_message, message_class, id_name_in_reply_message):
         self.dump_message = dump_message
+        self.message_class = message_class
         self.id_name_in_reply_message = id_name_in_reply_message
 
     def dump(self):
@@ -58,22 +61,22 @@ class DumpBase():
 
         import time
         timestamp = time.time()
-        counts = set()
-        for reply in replies:
-            counts.add(Counter(id=getattr(reply, self.id_name_in_reply_message), timestamp=timestamp, count=reply.count))
+        counts = {
+            Counter(id=getattr(reply, self.id_name_in_reply_message), timestamp=timestamp, count=reply.count)
+            for reply in replies
+            if isinstance(reply, self.message_class)
+        }
 
         return counts
 
 
 class DumpRuleCounters(DumpBase):
     def __init__(self):
-        import kzorp.messages
-        DumpBase.__init__(self, kzorp.messages.KZorpGetRuleCounterMessage(), 'rule_id')
+        super(DumpRuleCounters, self).__init__(KZorpGetDispatcherMessage(), KZorpAddRuleMessage, 'rule_id')
 
 class DumpZoneCounters(DumpBase):
     def __init__(self):
-        import kzorp.messages
-        DumpBase.__init__(self, kzorp.messages.KZorpGetZoneCounterMessage(), 'name')
+        super(DumpZoneCounters, self).__init__(KZorpGetZoneMessage(), KZorpAddZoneMessage, 'name')
 
 class CounterCSVUpdater(object):
     csv_params = {
