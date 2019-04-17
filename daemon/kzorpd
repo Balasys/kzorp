@@ -327,7 +327,7 @@ class Daemon():
                         Common.log(None, Common.CORE_INFO, 6, "No hostnames in cache, no update needed;")
             time.sleep(sleep_sec)
 
-def run(foreground, log_verbosity, log_spec, user, group, manage_caps, use_syslog):
+def run(log_verbosity, log_spec, user, group, manage_caps, use_syslog):
     Common.LoggerSingleton().init("kzorpd", log_verbosity, log_spec, use_syslog)
 
     ZoneDownloadFactory.init(manage_caps)
@@ -338,8 +338,6 @@ def process_command_line_arguments():
     import argparse
 
     parser = argparse.ArgumentParser(description='KZorp daemon')
-    parser.add_argument("-F", "--foreground", action="store_true", dest="foreground", default=False,
-                        help='do not go into the background after initialization (default: %(default)s)')
     parser.add_argument('-N', '--no-caps', action="store_true", dest="do_not_manage_caps", default=False,
                         help='Disable managing Linux capabilities (default: %(default)s)')
     parser.add_argument('-v', '--verbose', action='store', dest='verbose', type=int, default=3,
@@ -356,8 +354,7 @@ def process_command_line_arguments():
 
 if __name__ == "__main__":
     args = process_command_line_arguments()
-    run(args.foreground,
-        args.verbose, args.log_spec,
+    run(args.verbose, args.log_spec,
         args.user, args.group,
         not args.do_not_manage_caps,
         not args.do_not_use_syslog)
