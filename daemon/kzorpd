@@ -331,13 +331,8 @@ def run(foreground, log_verbosity, log_spec, user, group, manage_caps, use_syslo
     Common.LoggerSingleton().init("kzorpd", log_verbosity, log_spec, use_syslog)
 
     ZoneDownloadFactory.init(manage_caps)
-    DAEMON = Daemon(user, group, manage_caps)
 
-    if foreground:
-        DAEMON.do_main()
-    else:
-        with DAEMON.context:
-            DAEMON.do_main()
+    Daemon(user, group, manage_caps).do_main()
 
 def process_command_line_arguments():
     import argparse
