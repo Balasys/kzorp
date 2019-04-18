@@ -30,6 +30,8 @@ import time
 import traceback
 import radix
 
+import systemd.daemon
+
 import Zorp.Common as Common
 import Zorp.ResolverCache as ResolverCache
 
@@ -246,7 +248,11 @@ class Daemon():
                 Common.log(None, Common.CORE_ERROR, 1, "Unable to drop capabilities; error='%s'" % (e))
                 raise e
 
+        systemd.daemon.notify('READY=1')
+
     def reload(self):
+        systemd.daemon.notify('RELOADING=1')
+
         saved_dnscache = self.dnscache
         self.conf_handler.save_state()
         self.dnscache = ResolverCache.ResolverCache(ResolverCache.DNSResolver())
@@ -258,9 +264,10 @@ class Daemon():
             self.conf_handler.restore_state()
             self.dnscache = saved_dnscache
 
+        systemd.daemon.notify('READY=1')
+
     def do_main(self):
         expired_hostname = None
-        self.setup()
 
         while True:
             now = time.time()
@@ -314,7 +321,9 @@ def run(log_verbosity, log_spec, user, group, manage_caps, use_syslog):
 
     ZoneDownloadFactory.init(manage_caps)
 
-    Daemon(user, group, manage_caps).do_main()
+    kzorpd_daemon = Daemon(user, group, manage_caps)
+    kzorpd_daemon.setup()
+    kzorpd_daemon.do_main()
 
 def process_command_line_arguments():
     import argparse

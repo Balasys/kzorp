@@ -3,13 +3,11 @@ Description=kZorpd Service
 After=syslog.target
 
 [Service]
-Type=forking
-PIDFile=/var/run/zorp/kzorpd.pid
+Type=notify
 PermissionsStartOnly=true
 ExecStartPre=/bin/mkdir -m 770 -p /var/run/zorp/
 ExecStartPre=/bin/chown -R zorp:zorp /var/run/zorp/
-ExecStart=/usr/sbin/kzorpd --no-caps
-WatchdogSec=30s
+ExecStart=/usr/sbin/kzorpd --no-caps --no-syslog
 Restart=always
 AmbientCapabilities=CAP_NET_ADMIN
 User=zorp
