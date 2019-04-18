@@ -61,7 +61,6 @@ Section: python
 Depends: ${misc:Depends},
          ${python:Depends},
          python-all (>= 2.7),
-         python-daemon,
          zorp-kernel-module,
          python-kzorp (= ${source:Version}),
          python-zorp-base (>= 7.0.1),

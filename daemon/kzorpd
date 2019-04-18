@@ -21,8 +21,6 @@ from __future__ import with_statement
 import sys
 sys.dont_write_bytecode = True
 
-import daemon
-from lockfile.pidlockfile import PIDLockFile
 import itertools
 
 import os
@@ -176,21 +174,6 @@ class Daemon():
                 Common.log(None, Common.CORE_ERROR, 1, "Unable to drop capabilities; error='%s'" % (e))
                 raise e
 
-        import signal
-        self.context = daemon.DaemonContext(
-            working_directory='/etc/zorp',
-            umask=0o002,
-            uid=zorp_uid,
-            gid=zorp_gid,
-            pidfile=PIDLockFile('/var/run/zorp/kzorpd.pid'),
-            detach_process=True,
-            signal_map={
-                         signal.SIGHUP: self.sighup_handler,
-                         signal.SIGINT: self.sigint_handler,
-                         signal.SIGTERM: self.sigterm_handler,
-                       },
-            )
-
         self.conf_handler = ConfigurationHandler()
         self.dnscache = ResolverCache.ResolverCache(ResolverCache.DNSResolver())
         self.zone_handler = None
@@ -216,7 +199,6 @@ class Daemon():
     def sigterm_handler(self, sig_num, frame):
         Common.log(None, Common.CORE_INFO, 1, "KZorpd shutting down...")
         try:
-            self.context.pidfile.break_lock()
             if self.zone_handler:
                 with ZoneDownloadFactory().makeZoneDownload() as zone_download:
                     messages = self.zone_handler.create_zone_static_address_initialization_messages()
