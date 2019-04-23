@@ -5,7 +5,7 @@ After=syslog.target
 [Service]
 Type=notify
 PermissionsStartOnly=true
-ExecStart=/usr/sbin/kzorpd --no-caps --no-syslog
+ExecStart=/usr/sbin/kzorpd --no-syslog
 ExecReload=/bin/kill -HUP ${MAINPID}
 Restart=always
 AmbientCapabilities=CAP_NET_ADMIN

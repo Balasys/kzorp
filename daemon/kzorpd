@@ -156,19 +156,8 @@ class ConfigurationHandler():
 class Daemon():
     min_sleep_in_sec = 60
 
-    def __init__(self, manage_caps):
+    def __init__(self):
         Common.log(None, Common.CORE_INFO, 1, "KZorpd starting up...")
-
-        self.manage_caps = manage_caps
-        if self.manage_caps:
-            #inherit capabilities with user change
-            try:
-                import prctl
-                prctl.set_keepcaps(True)
-                Common.log(None, Common.CORE_DEBUG, 6, "Set keep capabilities to get them back later")
-            except OSError, e:
-                Common.log(None, Common.CORE_ERROR, 1, "Unable to drop capabilities; error='%s'" % (e))
-                raise e
 
         self.conf_handler = ConfigurationHandler()
         self.dnscache = ResolverCache.ResolverCache(ResolverCache.DNSResolver())
@@ -217,14 +206,6 @@ class Daemon():
         except (ImportError, NetlinkException) as e:
             Common.log(None, Common.CORE_ERROR, 1, "Unable to load configuration, keep existing one; error='%s'" % (e))
             self.conf_handler.restore_state()
-
-        if self.manage_caps:
-            try:
-                import prctl
-                prctl.set_caps((prctl.ALL_CAPS, prctl.CAP_EFFECTIVE, False))
-            except OSError, e:
-                Common.log(None, Common.CORE_ERROR, 1, "Unable to drop capabilities; error='%s'" % (e))
-                raise e
 
         systemd.daemon.notify('READY=1')
 
@@ -294,12 +275,12 @@ class Daemon():
                         Common.log(None, Common.CORE_INFO, 6, "No hostnames in cache, no update needed;")
             time.sleep(sleep_sec)
 
-def run(log_verbosity, log_spec, manage_caps, use_syslog):
+def run(log_verbosity, log_spec, use_syslog):
     Common.LoggerSingleton().init("kzorpd", log_verbosity, log_spec, use_syslog)
 
-    ZoneDownloadFactory.init(manage_caps)
+    ZoneDownloadFactory.init(manage_caps=False)
 
-    kzorpd_daemon = Daemon(manage_caps)
+    kzorpd_daemon = Daemon()
     kzorpd_daemon.setup()
     kzorpd_daemon.do_main()
 
@@ -307,8 +288,6 @@ def process_command_line_arguments():
     import argparse
 
     parser = argparse.ArgumentParser(description='KZorp daemon')
-    parser.add_argument('-N', '--no-caps', action="store_true", dest="do_not_manage_caps", default=False,
-                        help='Disable managing Linux capabilities (default: %(default)s)')
     parser.add_argument('-v', '--verbose', action='store', dest='verbose', type=int, default=3,
                         help='set verbosity level (default: %(default)d)')
     parser.add_argument('-l', '--no-syslog', action="store_true", dest="do_not_use_syslog", default=False,
@@ -319,6 +298,4 @@ def process_command_line_arguments():
 
 if __name__ == "__main__":
     args = process_command_line_arguments()
-    run(args.verbose, args.log_spec,
-        not args.do_not_manage_caps,
-        not args.do_not_use_syslog)
+    run(args.verbose, args.log_spec, not args.do_not_use_syslog)
