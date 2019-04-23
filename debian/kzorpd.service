@@ -8,6 +8,7 @@ PermissionsStartOnly=true
 ExecStartPre=/bin/mkdir -m 770 -p /var/run/zorp/
 ExecStartPre=/bin/chown -R zorp:zorp /var/run/zorp/
 ExecStart=/usr/sbin/kzorpd --no-caps --no-syslog
+ExecReload=/bin/kill -HUP ${MAINPID}
 Restart=always
 AmbientCapabilities=CAP_NET_ADMIN
 User=zorp
