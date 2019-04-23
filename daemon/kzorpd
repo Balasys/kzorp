@@ -24,7 +24,6 @@ sys.dont_write_bytecode = True
 import itertools
 
 import os
-import pwd
 
 import time
 import traceback
@@ -157,13 +156,8 @@ class ConfigurationHandler():
 class Daemon():
     min_sleep_in_sec = 60
 
-    def __init__(self, user, group, manage_caps):
+    def __init__(self, manage_caps):
         Common.log(None, Common.CORE_INFO, 1, "KZorpd starting up...")
-
-        import grp
-        import pwd
-        zorp_uid = pwd.getpwnam(user).pw_uid
-        zorp_gid = grp.getgrnam(group).gr_gid
 
         self.manage_caps = manage_caps
         if self.manage_caps:
@@ -300,12 +294,12 @@ class Daemon():
                         Common.log(None, Common.CORE_INFO, 6, "No hostnames in cache, no update needed;")
             time.sleep(sleep_sec)
 
-def run(log_verbosity, log_spec, user, group, manage_caps, use_syslog):
+def run(log_verbosity, log_spec, manage_caps, use_syslog):
     Common.LoggerSingleton().init("kzorpd", log_verbosity, log_spec, use_syslog)
 
     ZoneDownloadFactory.init(manage_caps)
 
-    kzorpd_daemon = Daemon(user, group, manage_caps)
+    kzorpd_daemon = Daemon(manage_caps)
     kzorpd_daemon.setup()
     kzorpd_daemon.do_main()
 
@@ -321,15 +315,10 @@ def process_command_line_arguments():
                         help='do not send messages to syslog (default: %(default)s)')
     parser.add_argument('-s', '--log-spec', action='store', dest='log_spec', type=str, default="core.accounting:4",
                         help='set log specification (default: %(default)s)')
-    parser.add_argument('-u', '--user', action='store', dest='user', type=str, default="zorp",
-                        help='set the user to run the deamon as (default: %(default)s)')
-    parser.add_argument('-g', '--group', action='store', dest='group', type=str, default="zorp",
-                        help='set the group to run the deamon as (default: %(default)s)')
     return parser.parse_args()
 
 if __name__ == "__main__":
     args = process_command_line_arguments()
     run(args.verbose, args.log_spec,
-        args.user, args.group,
         not args.do_not_manage_caps,
         not args.do_not_use_syslog)
