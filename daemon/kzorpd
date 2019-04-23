@@ -30,6 +30,7 @@ import traceback
 import radix
 
 import systemd.daemon
+import signal
 
 import Zorp.Common as Common
 import Zorp.ResolverCache as ResolverCache
@@ -206,6 +207,10 @@ class Daemon():
         except (ImportError, NetlinkException) as e:
             Common.log(None, Common.CORE_ERROR, 1, "Unable to load configuration, keep existing one; error='%s'" % (e))
             self.conf_handler.restore_state()
+
+        signal.signal(signal.SIGHUP, self.sighup_handler)
+        signal.signal(signal.SIGINT, self.sigint_handler)
+        signal.signal(signal.SIGTERM, self.sigterm_handler)
 
         systemd.daemon.notify('READY=1')
 
