@@ -179,7 +179,6 @@ class Daemon():
         self.conf_handler = ConfigurationHandler()
         self.dnscache = ResolverCache.ResolverCache(ResolverCache.DNSResolver())
         self.zone_handler = None
-        self.checkAndCreatePidfiledir()
 
     def sigint_handler(self, sig_num, frame):
         Common.log(None, Common.CORE_INFO, 1, "Received SIGINT, loading static zones")
@@ -211,21 +210,6 @@ class Daemon():
             Common.log(None, Common.CORE_ERROR, 1, "Unexpected error; error='%s'" % (traceback.format_exc()))
         finally:
             exit(0)
-
-    def checkAndCreatePidfiledir(self):
-        zorpctlconf = ZorpctlConfig.Instance()
-        pidfiledir = zorpctlconf['ZORP_PIDFILEDIR']
-        if not os.path.exists(pidfiledir):
-            owner = zorpctlconf['PIDFILE_DIR_OWNER']
-            group = zorpctlconf['PIDFILE_DIR_GROUP']
-            mode_oct = zorpctlconf['PIDFILE_DIR_MODE']
-
-            owner_uid = pwd.getpwnam(owner).pw_uid
-            group_uid = pwd.getpwnam(group).pw_gid
-
-            os.makedirs(pidfiledir)
-            os.chown(pidfiledir, owner_uid, group_uid)
-            os.chmod(pidfiledir, mode_oct)
 
     def reinitialize_zone_handler(self):
         self.zone_handler = DynamicZoneHandler(Zone.zones.values(), self.dnscache)
