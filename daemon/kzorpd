@@ -20,11 +20,14 @@ from __future__ import with_statement
 
 import argparse
 import enum
+import errno
 import imp
 import itertools
 import os
 import radix
+import select
 import signal
+import socket
 import sys
 import systemd.daemon
 import threading
@@ -161,6 +164,15 @@ class DaemonEvent(enum.Enum):
     exit = 2
 
 
+class DaemonMessage(object):
+    reload = "RELOAD\n"
+    ok = "OK\n"
+
+    @staticmethod
+    def get_max_len():
+        return max(len(attr) for attr, value in DaemonMessage.__dict__.iteritems())
+
+
 class Daemon():
     min_sleep_in_sec = 60
 
@@ -174,21 +186,25 @@ class Daemon():
 
         self.event = None
 
-        self.signal_event = threading.Event()
+        self.listen_socket = None
+        self.epoll = None
+        self.connections = {}
+        self.requests = {}
+        self.responses = {}
+
+    def __del__(self):
+        self._remove_control_socket(get_control_socket_path())
 
     def _sighup_handler(self, sig_num, frame):
         self.event = DaemonEvent.reload
-        self.signal_event.set()
         Common.log(None, Common.CORE_INFO, 1, 'Received SIGHUP, reloading configuration')
 
     def _sigint_handler(self, sig_num, frame):
         self.event = DaemonEvent.exit
-        self.signal_event.set()
         Common.log(None, Common.CORE_INFO, 1, 'Received SIGINT, loading static zones')
 
     def _sigterm_handler(self, sig_num, frame):
         self.event = DaemonEvent.exit
-        self.signal_event.set()
         Common.log(None, Common.CORE_INFO, 1, 'KZorpd shutting down...')
 
     def _download_static_zones(self):
@@ -264,6 +280,68 @@ class Daemon():
                 else:
                     Common.log(None, Common.CORE_INFO, 6, "No hostnames in cache, no update needed;")
 
+    def _remove_control_socket(self, path):
+        if os.path.exists(path):
+            os.remove(path)
+
+    def _server_init(self):
+        ctl_socket_path = get_control_socket_path()
+        self._remove_control_socket(ctl_socket_path)
+
+        self.listen_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.listen_socket.bind(ctl_socket_path)
+        self.listen_socket.listen(1)
+        self.listen_socket.setblocking(0)
+
+        self.epoll = select.epoll()
+        self.epoll.register(self.listen_socket.fileno(), select.EPOLLIN)
+
+    def _accept_connection(self):
+        (connection, address) = self.listen_socket.accept()
+        connection.setblocking(0)
+        self.epoll.register(connection.fileno(), select.EPOLLIN)
+        self.connections[connection.fileno()] = connection
+        self.requests[connection.fileno()] = b''
+        self.responses[connection.fileno()] = b''
+
+    def _close_connection(self, fd):
+        self.epoll.unregister(fd)
+        self.connections[fd].shutdown(socket.SHUT_RDWR)
+        self.connections[fd].close()
+        del self.connections[fd]
+        del self.requests[fd]
+        del self.responses[fd]
+
+    def _read_request(self, fd):
+        max_request_len = DaemonMessage.get_max_len()
+        try:
+            self.requests[fd] += self.connections[fd].recv(max_request_len)
+        except socket.error as e:
+            Common.log(None, Common.CORE_ERROR, 1, "Could not read request; error='{}'".format(e))
+            self._close_connection(fd)
+            return
+
+        if len(self.requests[fd]) > max_request_len:
+            self._close_connection(fd)
+        elif self.requests[fd].decode('ascii') == DaemonMessage.reload:
+            self.event = DaemonEvent.reload
+            self.responses[fd] = DaemonMessage.ok
+            self.epoll.modify(fd, select.EPOLLOUT)
+
+    def _write_response(self, fd):
+        byteswritten = 0
+        try:
+            byteswritten = self.connections[fd].send(self.responses[fd])
+        except socket.error as e:
+            Common.log(None, Common.CORE_ERROR, 1, "Could not write response; error='{}'".format(e))
+            self._close_connection(fd)
+            return
+
+        self.responses[fd] = self.responses[fd][byteswritten:]
+        if len(self.responses[fd]) == 0:
+            self.epoll.modify(fd, 0)
+            self._close_connection(fd)
+
     def setup(self):
         self.conf_handler.save_state()
         try:
@@ -277,22 +355,54 @@ class Daemon():
         signal.signal(signal.SIGINT, self._sigint_handler)
         signal.signal(signal.SIGTERM, self._sigterm_handler)
 
+        self._server_init()
+
         systemd.daemon.notify('READY=1')
 
-    def do_main(self):
-        while True:
-            if self.event is DaemonEvent.reload:
-                self._reload()
-            elif self.event is DaemonEvent.exit:
-                self._download_static_zones()
-                break
+    def run(self):
+        try:
+            while True:
+                if self.event is DaemonEvent.reload:
+                    self._reload()
+                elif self.event is DaemonEvent.exit:
+                    self._download_static_zones()
+                    break
 
-            self.event = None
+                self.event = None
 
-            self._update_dnscache()
+                self._update_dnscache()
 
-            self.signal_event.wait(self.sleep_sec)
-            self.signal_event.clear()
+                epoll_events = []
+                try:
+                    epoll_events = self.epoll.poll(self.sleep_sec)
+                except IOError as e:
+                    if e.errno != errno.EINTR:
+                        raise
+
+                for (fd, event_type) in epoll_events:
+                    if fd == self.listen_socket.fileno():
+                        self._accept_connection()
+                    elif event_type & select.EPOLLIN:
+                        self._read_request(fd)
+                    elif event_type & select.EPOLLOUT:
+                        self._write_response(fd)
+                    elif event & select.EPOLLHUP:
+                        self._close_connection(fd)
+        finally:
+            self.epoll.unregister(self.listen_socket.fileno())
+            self.epoll.close()
+            self.listen_socket.close()
+
+
+def get_control_socket_path():
+    zorpctlconf = ZorpctlConfig.Instance()
+    try:
+        pid_file_dir_path = zorpctlconf['ZORP_PIDFILEDIR']
+    except KeyError:
+        raise RuntimeError('Failed to lookup Zorp PID file directory path;')
+
+    return os.path.join(pid_file_dir_path, "kzorpd")
+
 
 def run(log_verbosity, log_spec, use_syslog):
     Common.LoggerSingleton().init("kzorpd", log_verbosity, log_spec, use_syslog)
@@ -301,7 +411,7 @@ def run(log_verbosity, log_spec, use_syslog):
 
     kzorpd_daemon = Daemon()
     kzorpd_daemon.setup()
-    kzorpd_daemon.do_main()
+    kzorpd_daemon.run()
 
 def process_command_line_arguments():
     parser = argparse.ArgumentParser(description='KZorp daemon')
