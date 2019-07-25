@@ -9,6 +9,7 @@ ExecStartPre=/bin/mkdir -m 770 -p /var/run/zorp
 ExecStartPre=/bin/chown -R zorp:zorp /var/run/zorp
 ExecStart=/usr/sbin/kzorpd --no-syslog
 ExecReload=/usr/sbin/kzorpd --reload
+WatchdogSec=120s
 Restart=always
 AmbientCapabilities=CAP_NET_ADMIN
 User=zorp

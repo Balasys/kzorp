@@ -362,6 +362,8 @@ class Daemon():
     def run(self):
         try:
             while True:
+                systemd.daemon.notify('WATCHDOG=1')
+
                 if self.event is DaemonEvent.reload:
                     self._reload()
                 elif self.event is DaemonEvent.exit:
