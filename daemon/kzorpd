@@ -164,6 +164,7 @@ class Daemon():
         self.conf_handler = ConfigurationHandler()
         self.dnscache = ResolverCache.ResolverCache(ResolverCache.DNSResolver())
         self.zone_handler = None
+        self.sleep_sec = self.min_sleep_in_sec
 
         self.signal_event = threading.Event()
         self.trigger_reload = False
@@ -215,6 +216,51 @@ class Daemon():
 
         systemd.daemon.notify('READY=1')
 
+    def _update_dnscache(self):
+        expired_hostname = None
+        try:
+            self.dnscache.update()
+            try:
+                expired_hostname, expiration_time = self.dnscache.getNextExpiration()
+            except ValueError, e:
+                # if no hosts are in the cache, a ValueError is raised, sleep for the minimum time
+                self.sleep_sec = self.min_sleep_in_sec
+                Common.log(None, Common.CORE_DEBUG, 6,
+                           "No hostnames in cache, sleep minimum expiration; sleep_sec='%d'" %
+                           (self.sleep_sec, ))
+            else:
+                self.sleep_sec = max(expiration_time - time.time(), self.min_sleep_in_sec)
+                Common.log(None, Common.CORE_DEBUG, 6,
+                           "Sleep until next DNS expiration; sleep_sec='%d', host='%s'" %
+                           (self.sleep_sec, expired_hostname))
+        except KeyError:
+            self.sleep_sec = self.min_sleep_in_sec
+            Common.log(None, Common.CORE_DEBUG, 6,
+                       "Cache lookup failed, sleep minimum expiration; sleep_sec='%d'" %
+                       (self.sleep_sec, ))
+        except BaseException, e:
+            self.sleep_sec = self.min_sleep_in_sec
+            Common.log(None, Common.CORE_ERROR, 1, "Unexpected error; error='%s'" % (traceback.format_exc()))
+        finally:
+            if self.zone_handler is not None:
+                if expired_hostname is not None:
+                    Common.log(None, Common.CORE_INFO, 4,
+                               "TTL for host expired, updating host; hostname='%s', ttl='%d'" % (expired_hostname, expiration_time))
+                    messages = self.zone_handler.create_zone_update_messages(expired_hostname)
+                    try:
+                        with ZoneDownloadFactory().makeZoneDownload() as zone_download:
+                            zone_download.update(messages)
+                    except NetlinkException as e:
+                        Common.log(None, Common.CORE_ERROR, 1, "Unable to update addresses in zones, keep existing ones; error='%s'" % (e))
+                elif self.zone_handler.dnscache.hosts:
+                    Common.log(None, Common.CORE_ERROR, 3,
+                               "Name resolution has failed, reinitialize hostname based addresses;")
+                    with ZoneDownloadFactory().makeZoneDownload() as zone_download:
+                        messages = self.zone_handler.create_zone_dynamic_address_initialization_messages()
+                        zone_download.update(messages)
+                else:
+                    Common.log(None, Common.CORE_INFO, 6, "No hostnames in cache, no update needed;")
+
     def setup(self):
         self.conf_handler.save_state()
         try:
@@ -231,9 +277,6 @@ class Daemon():
         systemd.daemon.notify('READY=1')
 
     def do_main(self):
-        expired_hostname = None
-        sleep_sec = self.min_sleep_in_sec
-
         while True:
             if self.trigger_reload:
                 self._reload()
@@ -246,50 +289,9 @@ class Daemon():
                 self.trigger_exit = False
                 break
 
-            try:
-                self.dnscache.update()
-                try:
-                    expired_hostname, expiration_time = self.dnscache.getNextExpiration()
-                except ValueError, e:
-                    # if no hosts are in the cache, a ValueError is raised, sleep for the minimum time
-                    sleep_sec = self.min_sleep_in_sec
-                    Common.log(None, Common.CORE_DEBUG, 6,
-                               "No hostnames in cache, sleep minimum expiration; sleep_sec='%d'" %
-                               (sleep_sec, ))
-                else:
-                    sleep_sec = max(expiration_time - time.time(), self.min_sleep_in_sec)
-                    Common.log(None, Common.CORE_DEBUG, 6,
-                               "Sleep until next DNS expiration; sleep_sec='%d', host='%s'" %
-                               (sleep_sec, expired_hostname))
-            except KeyError:
-                sleep_sec = self.min_sleep_in_sec
-                Common.log(None, Common.CORE_DEBUG, 6,
-                           "Cache lookup failed, sleep minimum expiration; sleep_sec='%d'" %
-                           (sleep_sec, ))
-            except BaseException, e:
-                sleep_sec = self.min_sleep_in_sec
-                Common.log(None, Common.CORE_ERROR, 1, "Unexpected error; error='%s'" % (traceback.format_exc()))
-            finally:
-                if self.zone_handler is not None:
-                    if expired_hostname is not None:
-                        Common.log(None, Common.CORE_INFO, 4,
-                                   "TTL for host expired, updating host; hostname='%s', ttl='%d'" % (expired_hostname, expiration_time))
-                        messages = self.zone_handler.create_zone_update_messages(expired_hostname)
-                        try:
-                            with ZoneDownloadFactory().makeZoneDownload() as zone_download:
-                                zone_download.update(messages)
-                        except NetlinkException as e:
-                            Common.log(None, Common.CORE_ERROR, 1, "Unable to update addresses in zones, keep existing ones; error='%s'" % (e))
-                    elif self.zone_handler.dnscache.hosts:
-                        Common.log(None, Common.CORE_ERROR, 3,
-                                   "Name resolution has failed, reinitialize hostname based addresses;")
-                        with ZoneDownloadFactory().makeZoneDownload() as zone_download:
-                            messages = self.zone_handler.create_zone_dynamic_address_initialization_messages()
-                            zone_download.update(messages)
-                    else:
-                        Common.log(None, Common.CORE_INFO, 6, "No hostnames in cache, no update needed;")
+            self._update_dnscache()
 
-            self.signal_event.wait(sleep_sec)
+            self.signal_event.wait(self.sleep_sec)
             self.signal_event.clear()
 
 def run(log_verbosity, log_spec, use_syslog):
