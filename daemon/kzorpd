@@ -413,6 +413,24 @@ def run(log_verbosity, log_spec, use_syslog):
     kzorpd_daemon.setup()
     kzorpd_daemon.run()
 
+
+def run_reload():
+    max_wait_sec = 60.0
+
+    ctl_socket_path = get_control_socket_path()
+    ctl_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    ctl_socket.settimeout(max_wait_sec)
+    response = ''
+
+    ctl_socket.connect(ctl_socket_path)
+    ctl_socket.sendall(bytes(DaemonMessage.reload))
+    response = str(ctl_socket.recv(1024))
+    ctl_socket.close()
+
+    if response != DaemonMessage.ok:
+        sys.exit(1)
+
+
 def process_command_line_arguments():
     parser = argparse.ArgumentParser(description='KZorp daemon')
     parser.add_argument('-v', '--verbose', action='store', dest='verbose', type=int, default=3,
@@ -421,8 +439,15 @@ def process_command_line_arguments():
                         help='do not send messages to syslog (default: %(default)s)')
     parser.add_argument('-s', '--log-spec', action='store', dest='log_spec', type=str, default="core.accounting:4",
                         help='set log specification (default: %(default)s)')
+    parser.add_argument('-r', '--reload', action='store_true', dest='reload', default=False,
+                        help='reload KZorp daemon')
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     args = process_command_line_arguments()
-    run(args.verbose, args.log_spec, not args.do_not_use_syslog)
+
+    if args.reload:
+        run_reload()
+    else:
+        run(args.verbose, args.log_spec, not args.do_not_use_syslog)
