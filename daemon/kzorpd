@@ -19,6 +19,7 @@ from __future__ import unicode_literals
 from __future__ import with_statement
 
 import argparse
+import enum
 import imp
 import itertools
 import os
@@ -155,6 +156,11 @@ class ConfigurationHandler():
         self.setup()
 
 
+class DaemonEvent(enum.Enum):
+    reload = 1
+    exit = 2
+
+
 class Daemon():
     min_sleep_in_sec = 60
 
@@ -166,25 +172,22 @@ class Daemon():
         self.zone_handler = None
         self.sleep_sec = self.min_sleep_in_sec
 
+        self.event = None
+
         self.signal_event = threading.Event()
-        self.trigger_reload = False
-        self.trigger_static_zones_download = False
-        self.trigger_exit = False
 
     def _sighup_handler(self, sig_num, frame):
-        self.trigger_reload = True
+        self.event = DaemonEvent.reload
         self.signal_event.set()
         Common.log(None, Common.CORE_INFO, 1, 'Received SIGHUP, reloading configuration')
 
     def _sigint_handler(self, sig_num, frame):
-        self.trigger_static_zones_download = True
-        self.trigger_exit = True
+        self.event = DaemonEvent.exit
         self.signal_event.set()
         Common.log(None, Common.CORE_INFO, 1, 'Received SIGINT, loading static zones')
 
     def _sigterm_handler(self, sig_num, frame):
-        self.trigger_static_zones_download = True
-        self.trigger_exit = True
+        self.event = DaemonEvent.exit
         self.signal_event.set()
         Common.log(None, Common.CORE_INFO, 1, 'KZorpd shutting down...')
 
@@ -278,16 +281,13 @@ class Daemon():
 
     def do_main(self):
         while True:
-            if self.trigger_reload:
+            if self.event is DaemonEvent.reload:
                 self._reload()
-                self.trigger_reload = False
-            if self.trigger_static_zones_download:
+            elif self.event is DaemonEvent.exit:
                 self._download_static_zones()
-                self.trigger_static_zones_download = False
-
-            if self.trigger_exit:
-                self.trigger_exit = False
                 break
+
+            self.event = None
 
             self._update_dnscache()
 

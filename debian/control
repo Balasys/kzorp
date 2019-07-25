@@ -33,6 +33,7 @@ Section: kernel
 Depends: ${misc:Depends},
          ${python:Depends},
          python-all (>= 2.7),
+         python-enum34,
          python-kzorp (= ${source:Version}),
          zorp-kernel-module
 Conflicts: kzorp (<< 6.0)
