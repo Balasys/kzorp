@@ -11,7 +11,6 @@
  */
 
 #include <linux/hash.h>
-#include <linux/bootmem.h>
 #include <linux/proc_fs.h>
 #include <net/netfilter/nf_conntrack_acct.h>
 #include <net/netfilter/nf_conntrack_ecache.h>
