@@ -262,4 +262,12 @@ kz___tcp_hdrlen(const struct tcphdr *th)
 	kvfree(hash)
 #endif
 
+#ifdef KZ_COMP_DOES_NOT_HAVE_SKB_EXT_FIND
+#define kz_skb_ext_find(skb, id) \
+	((skb->sp) ? skb->sp : NULL)
+#else
+#define kz_skb_ext_find(skb, id) \
+	skb_ext_find(skb, id)
+#endif
+
 #endif /* _KZORP_COMPAT_H */
