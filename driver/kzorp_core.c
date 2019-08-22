@@ -476,7 +476,7 @@ static void kz_extension_fill_with_lookup_data_rcu(struct kz_extension * kzorp,
 
 	/* copy IPSEC reqids from secpath to our own structure */
 	reqids.len = 0;
-	sp = skb_ext_find(skb, SKB_EXT_SEC_PATH);
+	sp = kz_skb_ext_find(skb, SKB_EXT_SEC_PATH);
 	if (sp) {
 		reqids.len = sp->len;
 		for (sp_idx = 0; sp_idx  < reqids.len; sp_idx++)

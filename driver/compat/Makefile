@@ -61,6 +61,11 @@ does_have_nf_ct_free_hashtable.h: does_have_nf_ct_free_hashtable.c
 	make -C $(KBUILD) M=$(PWD) obj-m=does_have_nf_ct_free_hashtable.o modules 2>/dev/null && \
 	echo "#define KZ_COMP_HAVE_NF_CT_FREE_HASHTABLE 1" > does_have_nf_ct_free_hashtable.h || true
 
+does_not_have_skb_ext_find.h: does_not_have_skb_ext_find.c
+	truncate -s 0 does_not_have_skb_ext_find.h
+	make -C $(KBUILD) M=$(PWD) obj-m=does_not_have_skb_ext_find.o modules 2>/dev/null || \
+	echo "#define KZ_COMP_DOES_NOT_HAVE_SKB_EXT_FIND 1" > does_not_have_skb_ext_find.h
+
 compat.h: \
 		does_not_have_timer_setup.h \
 		inet_lookup_does_not_have_sdif.h \
@@ -72,7 +77,8 @@ compat.h: \
 		does_not_have_nla_put_u64_64bit.h \
 		does_not_have_nf_nat_range2.h \
 		does_not_have_nf_ct_hook.h \
-		does_have_nf_ct_free_hashtable.h
+		does_have_nf_ct_free_hashtable.h \
+		does_not_have_skb_ext_find.h
 
 	cat \
 	does_not_have_timer_setup.h \
@@ -86,6 +92,7 @@ compat.h: \
 	does_not_have_nf_nat_range2.h \
 	does_not_have_nf_ct_hook.h \
 	does_have_nf_ct_free_hashtable.h \
+	does_not_have_skb_ext_find.h \
 	> compat.h
 
 compat_h: compat.h
