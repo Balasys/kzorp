@@ -56,10 +56,10 @@ does_not_have_nf_ct_hook.h: does_not_have_nf_ct_hook.c
 	make -C $(KBUILD) M=$(PWD) obj-m=does_not_have_nf_ct_hook.o modules 2>/dev/null || \
 	echo "#define KZ_COMP_DOES_NOT_HAVE_NF_CT_HOOK 1" > does_not_have_nf_ct_hook.h
 
-does_not_have_nf_ct_free_hashtable.h: does_not_have_nf_ct_free_hashtable.c
-	truncate -s 0 does_not_have_nf_ct_free_hashtable.h
-	make -C $(KBUILD) M=$(PWD) obj-m=does_not_have_nf_ct_free_hashtable.o modules 2>/dev/null || \
-	echo "#define KZ_COMP_DOES_NOT_HAVE_NF_CT_FREE_HASHTABLE 1" > does_not_have_nf_ct_free_hashtable.h
+does_have_nf_ct_free_hashtable.h: does_have_nf_ct_free_hashtable.c
+	truncate -s 0 does_have_nf_ct_free_hashtable.h
+	make -C $(KBUILD) M=$(PWD) obj-m=does_have_nf_ct_free_hashtable.o modules 2>/dev/null && \
+	echo "#define KZ_COMP_HAVE_NF_CT_FREE_HASHTABLE 1" > does_have_nf_ct_free_hashtable.h || true
 
 compat.h: \
 		does_not_have_timer_setup.h \
@@ -72,7 +72,7 @@ compat.h: \
 		does_not_have_nla_put_u64_64bit.h \
 		does_not_have_nf_nat_range2.h \
 		does_not_have_nf_ct_hook.h \
-		does_not_have_nf_ct_free_hashtable.h
+		does_have_nf_ct_free_hashtable.h
 
 	cat \
 	does_not_have_timer_setup.h \
@@ -85,7 +85,7 @@ compat.h: \
 	does_not_have_nla_put_u64_64bit.h \
 	does_not_have_nf_nat_range2.h \
 	does_not_have_nf_ct_hook.h \
-	does_not_have_nf_ct_free_hashtable.h \
+	does_have_nf_ct_free_hashtable.h \
 	> compat.h
 
 compat_h: compat.h
