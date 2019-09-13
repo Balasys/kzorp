@@ -64,7 +64,7 @@ Depends: ${misc:Depends},
          python-all (>= 2.7),
          zorp-kernel-module,
          python-kzorp (= ${source:Version}),
-         python-zorp-base (>= 7.0.1),
+         python-zorp-base (>= 7.0.4),
          python-prctl,
          python-systemd
 Description: Python bindings for kzorp.
