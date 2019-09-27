@@ -182,7 +182,7 @@ class Daemon():
         self.conf_handler = ConfigurationHandler()
         self.dnscache = ResolverCache.ResolverCache(ResolverCache.DNSResolver())
         self.zone_handler = None
-        self.sleep_sec = self.min_sleep_in_sec
+        self.next_update_time = 0
 
         self.event = None
 
@@ -243,22 +243,23 @@ class Daemon():
                 expired_hostname, expiration_time = self.dnscache.getNextExpiration()
             except ValueError, e:
                 # if no hosts are in the cache, a ValueError is raised, sleep for the minimum time
-                self.sleep_sec = self.min_sleep_in_sec
+                self.next_update_time = time.time() + self.min_sleep_in_sec
                 Common.log(None, Common.CORE_DEBUG, 6,
                            "No hostnames in cache, sleep minimum expiration; sleep_sec='%d'" %
-                           (self.sleep_sec, ))
+                           (self.min_sleep_in_sec, ))
             else:
-                self.sleep_sec = max(expiration_time - time.time(), self.min_sleep_in_sec)
+                now = time.time()
+                self.next_update_time = max(expiration_time, now + self.min_sleep_in_sec)
                 Common.log(None, Common.CORE_DEBUG, 6,
                            "Sleep until next DNS expiration; sleep_sec='%d', host='%s'" %
-                           (self.sleep_sec, expired_hostname))
+                           (self.next_update_time - now, expired_hostname))
         except KeyError:
-            self.sleep_sec = self.min_sleep_in_sec
+            self.next_update_time = time.time() + self.min_sleep_in_sec
             Common.log(None, Common.CORE_DEBUG, 6,
                        "Cache lookup failed, sleep minimum expiration; sleep_sec='%d'" %
-                       (self.sleep_sec, ))
+                       (self.min_sleep_in_sec, ))
         except BaseException, e:
-            self.sleep_sec = self.min_sleep_in_sec
+            self.next_update_time = time.time() + self.min_sleep_in_sec
             Common.log(None, Common.CORE_ERROR, 1, "Unexpected error; error='%s'" % (traceback.format_exc()))
         finally:
             if self.zone_handler is not None:
@@ -372,11 +373,14 @@ class Daemon():
 
                 self.event = None
 
-                self._update_dnscache()
+                now = time.time()
+                if self.next_update_time < now:
+                    self._update_dnscache()
 
                 epoll_events = []
+                timeout_sec = min(self.next_update_time - now, self.min_sleep_in_sec)
                 try:
-                    epoll_events = self.epoll.poll(self.sleep_sec)
+                    epoll_events = self.epoll.poll(timeout_sec if timeout_sec > 0 else 0)
                 except IOError as e:
                     if e.errno != errno.EINTR:
                         raise
