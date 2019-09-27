@@ -183,6 +183,7 @@ class Daemon():
         self.dnscache = ResolverCache.ResolverCache(ResolverCache.DNSResolver())
         self.zone_handler = None
         self.next_update_time = 0
+        self.watchdog_sec = int(os.environ.get('WATCHDOG_USEC', 60000000)) / 1000000 / 2
 
         self.event = None
 
@@ -378,7 +379,7 @@ class Daemon():
                     self._update_dnscache()
 
                 epoll_events = []
-                timeout_sec = min(self.next_update_time - now, self.min_sleep_in_sec)
+                timeout_sec = min(self.next_update_time - now, self.watchdog_sec)
                 try:
                     epoll_events = self.epoll.poll(timeout_sec if timeout_sec > 0 else 0)
                 except IOError as e:
