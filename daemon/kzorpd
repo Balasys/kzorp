@@ -183,8 +183,10 @@ class Daemon():
         self.dnscache = ResolverCache.ResolverCache(ResolverCache.DNSResolver())
         self.zone_handler = None
         self.next_update_time = 0
-        self.watchdog_sec = int(os.environ.get('WATCHDOG_USEC', 60000000)) / 1000000 / 2
-
+        try:
+            self.watchdog_sec = int(os.environ['WATCHDOG_USEC']) / 1000000 / 2
+        except (ValueError, KeyError):
+            self.watchdog_sec = 60 / 2
         self.event = None
 
         self.listen_socket = None
