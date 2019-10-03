@@ -50,6 +50,9 @@ import kzorp.zoneupdate
 
 sys.dont_write_bytecode = True
 
+SYSTEMD_DEFAULT_WATCHDOG_SEC = 60.0
+SYSTEMD_WATCHDOG_PERIOD_DIV = 2
+ONE_SEC_IN_USEC = 1000000.0
 
 class ZoneDownloadFactory(object):
     _instance = None
@@ -184,9 +187,9 @@ class Daemon():
         self.zone_handler = None
         self.next_update_time = 0
         try:
-            self.watchdog_sec = int(os.environ['WATCHDOG_USEC']) / 1000000 / 2
+            self.watchdog_sec = int(os.environ['WATCHDOG_USEC']) / ONE_SEC_IN_USEC / SYSTEMD_WATCHDOG_PERIOD_DIV
         except (ValueError, KeyError):
-            self.watchdog_sec = 60 / 2
+            self.watchdog_sec = SYSTEMD_DEFAULT_WATCHDOG_SEC / SYSTEMD_WATCHDOG_PERIOD_DIV
         self.event = None
 
         self.listen_socket = None
