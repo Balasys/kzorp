@@ -254,12 +254,20 @@ kz___tcp_hdrlen(const struct tcphdr *th)
 
 #endif
 
-#ifdef KZ_COMP_DOES_NOT_HAVE_NF_CT_FREE_HASHTABLE
-#define kz_nf_ct_free_hashtable(hash, size) \
-	kvfree(hash)
+#ifdef KZ_COMP_DOES_HAVE_NF_CT_FREE_HASHTABLE
+#define kz_nf_ct_free_hashtable(hash, size)
+	nf_ct_free_hashtable(hash, size)
 #else
 #define kz_nf_ct_free_hashtable(hash, size) \
-	nf_ct_free_hashtable(hash, size)
+	kvfree(hash)
+#endif
+
+#ifdef KZ_COMP_DOES_NOT_HAVE_SKB_EXT_FIND
+#define kz_skb_ext_find(skb, id) \
+	((skb->sp) ? skb->sp : NULL)
+#else
+#define kz_skb_ext_find(skb, id) \
+	skb_ext_find(skb, id)
 #endif
 
 #endif /* _KZORP_COMPAT_H */
