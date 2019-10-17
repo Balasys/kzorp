@@ -255,7 +255,7 @@ kz___tcp_hdrlen(const struct tcphdr *th)
 #endif
 
 #ifdef KZ_COMP_DOES_HAVE_NF_CT_FREE_HASHTABLE
-#define kz_nf_ct_free_hashtable(hash, size)
+#define kz_nf_ct_free_hashtable(hash, size) \
 	nf_ct_free_hashtable(hash, size)
 #else
 #define kz_nf_ct_free_hashtable(hash, size) \

@@ -56,6 +56,16 @@ function check_architecture_and_software(){
   done
 }
 
+function download_image(){
+  ImageURL=$1
+  OSImagePath=$2
+
+  echo "Downloading image."
+  curl "${ImageURL}" --fail -L -o "${OSImagePath}"
+  echo "Verifying image."
+  qemu-img check "${OSImagePath}"
+}
+
 Repository="https://github.com/balasys/kzorp.git"
 Branch="master"
 
@@ -112,12 +122,8 @@ if [ -f "${KMemLeakImage}" ]; then
   cp -f "${KMemLeakImage}" "${OSImagePath}"
 fi
 
-## Download the image (only once)
-if [ ! -f "${OSImagePath}" ]; then
-  echo "Image not found under ${OSImagePath}"
-  curl "${ImageURL}" -L -o "${OSImagePath}" -z "${OSImagePath}"
-  qemu-img check "${OSImagePath}"
-fi
+## Verify image and try to download a fresh one if necessary
+qemu-img check "${OSImagePath}" || download_image ${ImageURL} ${OSImagePath}
 
 ## Clean all possible outdated files
 rm -rf $TestRoot
