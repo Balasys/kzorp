@@ -1,5 +1,5 @@
 Name:                   kzorp
-Version:                7.0.1
+Version:                7.0.2
 Release:                1%{?dist}
 URL:                    https://www.balabit.com/network-security/zorp-gpl
 Source0:                kzorp_%{version}.tar.xz
@@ -130,6 +130,8 @@ This package contains plugins for the Munin monitoring tool.
 
 
 %changelog
+* Thu Jan 31 2019 Balasys Development Team <devel@balasys.hu> - 7.0.2-1
+  - New upstream release 7.0.2
 * Tue Dec 4 2018 Balasys Development Team <devel@balasys.hu> - 7.0.1-1
   - New upstream release 7.0.1
 * Wed Oct 17 2018 Balasys Development Team <devel@balasys.hu> - 7.0.1-0.2
