@@ -2,10 +2,10 @@ version: 2
 jobs:
   prepare_build_test:
     docker:
-      - image: balasys/zorpgpl-circleci:7.0.1-alpha1
+      - image: balasys/zorpgpl-circleci:7.0
     environment:
       - PACKAGE: kzorp
-      - OBS_PROJECT_DIR: security:Zorp:7:0:1:alpha2/kzorp
+      - OBS_PROJECT_DIR: security:Zorp:7:0:1/kzorp
       - KBUILD: /lib/modules/4.15.0-45-generic/build
     working_directory: ~/kzorp
     steps:

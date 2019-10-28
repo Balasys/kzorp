@@ -1,6 +1,6 @@
 Name:                   kzorp
-Version:                7.0.1~alpha2
-Release:                0.2%{?dist}
+Version:                7.0.1
+Release:                1%{?dist}
 URL:                    https://www.balabit.com/network-security/zorp-gpl
 Source0:                kzorp_%{version}.tar.xz
 Summary:                Mixed packet filter/application level gateway, kernel modules
@@ -130,6 +130,8 @@ This package contains plugins for the Munin monitoring tool.
 
 
 %changelog
+* Tue Dec 4 2018 Balasys Development Team <devel@balasys.hu> - 7.0.1-1
+  - New upstream release 7.0.1
 * Wed Oct 17 2018 Balasys Development Team <devel@balasys.hu> - 7.0.1-0.2
   - New upstream release 7.0.1~alpha2
 * Thu Sep 27 2018 Balasys Development Team <devel@balasys.hu> - 7.0.1-0.1
