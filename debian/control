@@ -33,6 +33,7 @@ Section: kernel
 Depends: ${misc:Depends},
          ${python:Depends},
          python-all (>= 2.7),
+         python-enum34,
          python-kzorp (= ${source:Version}),
          zorp-kernel-module
 Conflicts: kzorp (<< 6.0)
@@ -61,10 +62,9 @@ Section: python
 Depends: ${misc:Depends},
          ${python:Depends},
          python-all (>= 2.7),
-         python-daemon,
          zorp-kernel-module,
          python-kzorp (= ${source:Version}),
-         python-zorp-base (>= 7.0.1),
+         python-zorp-base (>= 7.0.4),
          python-prctl,
          python-systemd
 Description: Python bindings for kzorp.

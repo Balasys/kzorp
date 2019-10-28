@@ -1,1 +1,1 @@
-*/5 * * * *       /usr/sbin/kzorp-stats-updater
+*/5 * * * *  root  [ -x /usr/sbin/kzorp-stats-updater ] && /usr/sbin/kzorp-stats-updater
