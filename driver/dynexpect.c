@@ -1128,7 +1128,7 @@ void
 dynexpect_nat_expected(struct nf_conn *ct,
 		       struct nf_conntrack_expect *exp)
 {
-	struct nf_nat_range r;
+	struct kz_nf_nat_range r;
 	struct dynexpect_mapping *m;
 	u_int16_t port = ntohs(ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple.src.u.udp.port);
 
@@ -1297,9 +1297,9 @@ int init_or_cleanup(const int cleanup)
  err_register_ct_helper:
  err_alloc_hash:
 	if (dynexpect_htable_by_id != NULL)
-		nf_ct_free_hashtable(dynexpect_htable_by_id, htable_by_id_allocated_size);
+		kz_nf_ct_free_hashtable(dynexpect_htable_by_id, htable_by_id_allocated_size);
 	if (dynexpect_htable_by_addr != NULL)
-		nf_ct_free_hashtable(dynexpect_htable_by_addr, htable_by_addr_allocated_size);
+		kz_nf_ct_free_hashtable(dynexpect_htable_by_addr, htable_by_addr_allocated_size);
 
 
 	kmem_cache_destroy(dynexpect_mapping_cache);

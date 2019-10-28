@@ -5,8 +5,8 @@ jobs:
       - image: balasys/zorpgpl-circleci:7.0.1-alpha1
     environment:
       - PACKAGE: kzorp
-      - OBS_PROJECT_DIR: security:Zorp:7:0:1:alpha1/kzorp
-      - KBUILD: /lib/modules/4.15.0-34-generic/build
+      - OBS_PROJECT_DIR: security:Zorp:7:0:1:alpha2/kzorp
+      - KBUILD: /lib/modules/4.15.0-45-generic/build
     working_directory: ~/kzorp
     steps:
       - checkout

@@ -378,8 +378,8 @@ process_forwarded_session(unsigned int hooknum, struct sk_buff *skb,
 			  struct kz_zone **const szone, struct kz_service *svc)
 {
 	unsigned int verdict = NF_ACCEPT;
-	const struct nf_nat_range *map;
-	struct nf_nat_range fakemap;
+	const struct kz_nf_nat_range *map;
+	struct kz_nf_nat_range fakemap;
 	union nf_inet_addr saddr, raddr;
 	__be16 rport;
 	const struct list_head *head = NULL;
@@ -517,7 +517,7 @@ process_forwarded_session(unsigned int hooknum, struct sk_buff *skb,
 			if ((hooknum == NF_INET_POST_ROUTING) &&
 			    !(svc->flags & KZF_SERVICE_FORGE_ADDR)) {
 				struct rtable *rt;
-				struct nf_nat_range range;
+				struct kz_nf_nat_range range;
 				union nf_inet_addr laddr;
 
 				rt = skb_rtable(skb);

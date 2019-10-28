@@ -174,4 +174,92 @@ kz___tcp_hdrlen(const struct tcphdr *th)
 	nla_put_u64_64bit(skb, attrtype, value, padattr)
 #endif
 
+#ifdef KZ_COMP_DOES_NOT_HAVE_NF_NAT_RANGE2
+#define kz_nf_nat_range \
+	nf_nat_range
+#else
+#define kz_nf_nat_range \
+	nf_nat_range2
+#endif
+
+#ifdef KZ_COMP_DOES_NOT_HAVE_NF_CT_HOOK
+
+#define kz_global_kz_nf_ct_hook \
+	static void (*nf_ct_destroy_orig)(struct nf_conntrack *) __rcu __read_mostly;
+
+#define kz_nf_ct_hook_call_destroy \
+	do { \
+		void (*destroy_orig)(struct nf_conntrack *); \
+		rcu_read_lock(); \
+		destroy_orig = rcu_dereference(nf_ct_destroy_orig); \
+		BUG_ON(destroy_orig == NULL); \
+		destroy_orig(nfct); \
+		rcu_read_unlock(); \
+	} while (0)
+
+#define kz_nf_ct_hook_divert \
+	do { \
+		rcu_read_lock(); \
+		nf_ct_destroy_orig = rcu_dereference(nf_ct_destroy); \
+		BUG_ON(nf_ct_destroy_orig == NULL); \
+		rcu_read_unlock(); \
+		rcu_assign_pointer(nf_ct_destroy, kz_extension_conntrack_destroy); \
+	} while (0)
+
+#define kz_nf_ct_hook_revert \
+	do { \
+		void (*destroy_orig)(struct nf_conntrack *); \
+		rcu_read_lock(); \
+		destroy_orig = rcu_dereference(nf_ct_destroy_orig); \
+		BUG_ON(destroy_orig == NULL); \
+		rcu_read_unlock(); \
+		rcu_assign_pointer(nf_ct_destroy, destroy_orig); \
+	} while (0)
+
+#else
+
+#define kz_global_kz_nf_ct_hook \
+	static struct nf_ct_hook __rcu *nf_ct_hook_orig __read_mostly; \
+	static void kz_extension_conntrack_destroy(struct nf_conntrack *nfct); \
+	static struct nf_ct_hook kz_nf_ct_hook = { .destroy = kz_extension_conntrack_destroy, };
+
+#define kz_nf_ct_hook_call_destroy \
+	do { \
+		struct nf_ct_hook *ct_hook_orig = NULL; \
+		rcu_read_lock(); \
+		ct_hook_orig = rcu_dereference(nf_ct_hook_orig); \
+		BUG_ON(ct_hook_orig == NULL); \
+		ct_hook_orig->destroy(nfct); \
+		rcu_read_unlock(); \
+	} while (0)
+
+#define kz_nf_ct_hook_divert \
+	do { \
+		rcu_read_lock(); \
+		nf_ct_hook_orig = rcu_dereference(nf_ct_hook); \
+		BUG_ON(nf_ct_hook_orig == NULL); \
+		rcu_read_unlock(); \
+		rcu_assign_pointer(nf_ct_hook, &kz_nf_ct_hook); \
+	} while (0)
+
+#define kz_nf_ct_hook_revert \
+	do { \
+		struct nf_ct_hook *ct_hook_orig = NULL; \
+		rcu_read_lock(); \
+		ct_hook_orig = rcu_dereference(nf_ct_hook_orig); \
+		BUG_ON(ct_hook_orig == NULL); \
+		rcu_read_unlock(); \
+		rcu_assign_pointer(nf_ct_hook, ct_hook_orig); \
+	} while (0)
+
+#endif
+
+#ifdef KZ_COMP_DOES_NOT_HAVE_NF_CT_FREE_HASHTABLE
+#define kz_nf_ct_free_hashtable(hash, size) \
+	kvfree(hash)
+#else
+#define kz_nf_ct_free_hashtable(hash, size) \
+	nf_ct_free_hashtable(hash, size)
+#endif
+
 #endif /* _KZORP_COMPAT_H */
