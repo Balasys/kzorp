@@ -56,6 +56,33 @@ function check_architecture_and_software(){
   done
 }
 
+function newer_image_available(){
+  ImageURL=$1
+  OSImagePath=$2
+  RemoteTimestamp=$(curl --silent --head "$ImageURL" | awk '/^Last-Modified/{print $0}' | sed 's/^Last-Modified: //')
+  RemoteCtime=$(date --date="$modified" +%s)
+  LocalTimestamp=$(stat -c %z "$OSImagePath")
+  LocalCtime=$(date --date="$LocalTimestamp" +%s)
+
+  if [ $RemoteCtime -gt $LocalCtime ]; then
+    echo "There is a newer image available."
+    return 0
+  else
+    echo "Local image is at the latest version."
+    return 1
+  fi
+}
+
+function download_image(){
+  ImageURL=$1
+  OSImagePath=$2
+
+  echo "Downloading image."
+  curl "${ImageURL}" --fail --location --max-time 180 --output "${OSImagePath}"
+  echo "Verifying downloaded image."
+  qemu-img check "${OSImagePath}"
+}
+
 Repository="https://github.com/balasys/kzorp.git"
 Branch="master"
 
@@ -112,11 +139,17 @@ if [ -f "${KMemLeakImage}" ]; then
   cp -f "${KMemLeakImage}" "${OSImagePath}"
 fi
 
-## Download the image (only once)
+## Download image if necessary - old images and fresh but broken images are replaced
 if [ ! -f "${OSImagePath}" ]; then
-  echo "Image not found under ${OSImagePath}"
-  curl "${ImageURL}" -L -o "${OSImagePath}" -z "${OSImagePath}"
-  qemu-img check "${OSImagePath}"
+  echo "No image found locally."
+  download_image ${ImageURL} ${OSImagePath}
+else
+  echo "Local image found, checking timestamp and image integrity."
+  if ! newer_image_available "${ImageURL}" "${OSImagePath}" && qemu-img check "${OSImagePath}"; then
+    echo "No image download necessary."
+  else
+    download_image ${ImageURL} ${OSImagePath}
+  fi
 fi
 
 ## Clean all possible outdated files
