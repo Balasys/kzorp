@@ -1225,6 +1225,11 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	struct nf_conn *ct;
 	struct kz_extension *kzorp;
 	const struct kz_config *cfg = NULL;
+
+	const bool in_mangle_prerouting = par->target &&
+		!strcmp(par->target->table, "mangle") &&
+		xt_hooknum(par) == NF_INET_PRE_ROUTING;
+
 	u_int8_t l4proto = 0;
 	struct {
 		u16 src;
@@ -1300,7 +1305,33 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	}
 
 	rcu_read_lock();
-	kzorp = kz_extension_find_or_evaluate(skb, in, xt_family(par), &cfg);
+
+	kzorp = kz_extension_find(ct);
+
+	if (!kzorp && !in_mangle_prerouting) {
+		/* traffic bypassed kzorp only on mangle prerouting (likely IPTables
+		 * misconfiguration, we do not have to handle it. */
+
+		rcu_read_unlock();
+
+		/* check if there is a input interface for this packet */
+		if (in && in->name && in->type != ARPHRD_LOOPBACK) {
+			const struct nf_conntrack_tuple *ct_orig_tuple = &ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple;
+			const u16 zone_id_orig = nf_ct_zone_id(nf_ct_zone(ct), NF_CT_ZONE_DIR_ORIG);
+			kz_log_with_dumped_tuple_warn_ratelimited(
+				"unable to find kzorp object for a not locally originated packet "
+				"elsewhere than mangle PREROUTING",
+				ct_orig_tuple, zone_id_orig
+			);
+		} else {
+			pr_debug("unable to find kzorp object for packet elsewhere than mangle PREROUTING\n");
+		}
+
+		return NF_ACCEPT;
+	}
+
+	if (!kzorp)
+		kzorp = kz_extension_find_or_evaluate(skb, in, xt_family(par), &cfg);
 
 	pr_debug("lookup data for kzorp hook; dpt='%s', client_zone='%s', server_zone='%s', svc='%s'\n",
 		 kzorp->dpt ? kzorp->dpt->name : kz_log_null,
