@@ -1218,6 +1218,78 @@ kz_postrouting_newconn_verdict(struct sk_buff *skb,
 	return NF_ACCEPT;
 }
 
+static bool
+kz_get_transport_ports(const struct sk_buff *skb,
+		       const struct xt_action_param *par,
+		       u8 *l4proto,
+		       __be16 *sport,
+		       __be16 *dport)
+{
+	switch (xt_family(par)) {
+	case NFPROTO_IPV4:
+	{
+		const struct iphdr * const iph = ip_hdr(skb);
+
+		*l4proto = iph->protocol;
+
+		if ((*l4proto == IPPROTO_TCP) || (*l4proto == IPPROTO_UDP)) {
+			l4hdr = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_l4hdr), &_l4hdr);
+			if (unlikely(!l4hdr)) {
+				/* unexpected ill case */
+				pr_debug("failed to get ports, dropped packet; src='%pI4', dst='%pI4'\n",
+					 &iph->saddr, &iph->daddr);
+				return false;
+			}
+		}
+
+		*sport = l4hdr->source;
+		*dport = l4hdr->dest;
+
+		pr_debug("kzorp hook processing packet: hook='%u', protocol='%u', src='%pI4:%u', dst='%pI4:%u'\n",
+			 xt_hooknum(par), *l4proto, &iph->saddr, ntohs(*sport), &iph->daddr, ntohs(*dport));
+	}
+		break;
+	case NFPROTO_IPV6:
+	{
+		const struct ipv6hdr * const iph = ipv6_hdr(skb);
+		int thoff;
+		u8 tproto = iph->nexthdr;
+
+		/* find transport header */
+		__be16 frag_offp;
+		thoff = ipv6_skip_exthdr(skb, sizeof(*iph), &tproto, &frag_offp);
+		if (unlikely(thoff < 0)) {
+			pr_debug("unable to find transport header in IPv6 packet, dropped; src='%pI6c', dst='%pI6c'\n",
+			         &iph->saddr, &iph->daddr);
+			return false;
+		}
+
+		*l4proto = tproto;
+
+		if ((*l4proto == IPPROTO_TCP) || (*l4proto == IPPROTO_UDP)) {
+			/* get info from transport header */
+			l4hdr = skb_header_pointer(skb, thoff, sizeof(_l4hdr), &_l4hdr);
+			if (unlikely(!l4hdr)) {
+				pr_debug("failed to get ports, dropped packet; src='%pI6c', dst='%pI6c'\n",
+					 &iph->saddr, &iph->daddr);
+				return false;
+			}
+		}
+
+		*sport = l4hdr->source;
+		*dport = l4hdr->dest;
+
+		pr_debug("kzorp hook processing packet: hook='%u', protocol='%u', src='%pI6c:%u', dst='%pI6c:%u'\n",
+			 xt_hooknum(par), *l4proto, &iph->saddr, ntohs(*sport), &iph->daddr, ntohs(*dport));
+	}
+		break;
+	default:
+		BUG();
+	}
+
+	return true;
+}
+
 static unsigned int
 kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 {
@@ -1236,8 +1308,6 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 		xt_hooknum(par) == NF_INET_PRE_ROUTING;
 
 	u_int8_t l4proto = 0;
-	struct l4hdr_stub _l4hdr = {0};
-	const struct l4hdr_stub *l4hdr = &_l4hdr;
 	__be16 sport = 0;
 	__be16 dport = 0;
 
@@ -1251,67 +1321,8 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	if (ct == NULL || ctinfo >= IP_CT_IS_REPLY)
 		return NF_ACCEPT;
 
-	switch (xt_family(par)) {
-	case NFPROTO_IPV4:
-	{
-		const struct iphdr * const iph = ip_hdr(skb);
-
-		l4proto = iph->protocol;
-
-		if ((l4proto == IPPROTO_TCP) || (l4proto == IPPROTO_UDP)) {
-			l4hdr = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_l4hdr), &_l4hdr);
-			if (unlikely(!l4hdr)) {
-				/* unexpected ill case */
-				pr_debug("failed to get ports, dropped packet; src='%pI4', dst='%pI4'\n",
-					 &iph->saddr, &iph->daddr);
-				return NF_DROP;
-			}
-		}
-
-		sport = l4hdr->source;
-		dport = l4hdr->dest;
-
-		pr_debug("kzorp hook processing packet: hook='%u', protocol='%u', src='%pI4:%u', dst='%pI4:%u'\n",
-			 xt_hooknum(par), l4proto, &iph->saddr, ntohs(sport), &iph->daddr, ntohs(dport));
-	}
-		break;
-	case NFPROTO_IPV6:
-	{
-		const struct ipv6hdr * const iph = ipv6_hdr(skb);
-		int thoff;
-		u8 tproto = iph->nexthdr;
-
-		/* find transport header */
-		__be16 frag_offp;
-		thoff = ipv6_skip_exthdr(skb, sizeof(*iph), &tproto, &frag_offp);
-		if (unlikely(thoff < 0)) {
-			pr_debug("unable to find transport header in IPv6 packet, dropped; src='%pI6c', dst='%pI6c'\n",
-			         &iph->saddr, &iph->daddr);
-			return NF_DROP;
-		}
-
-		l4proto = tproto;
-
-		if ((l4proto == IPPROTO_TCP) || (l4proto == IPPROTO_UDP)) {
-			/* get info from transport header */
-			l4hdr = skb_header_pointer(skb, thoff, sizeof(_l4hdr), &_l4hdr);
-			if (unlikely(!l4hdr)) {
-				pr_debug("failed to get ports, dropped packet; src='%pI6c', dst='%pI6c'\n",
-					 &iph->saddr, &iph->daddr);
-				return NF_DROP;
-			}
-		}
-
-		sport = l4hdr->source;
-		dport = l4hdr->dest;
-
-		pr_debug("kzorp hook processing packet: hook='%u', protocol='%u', src='%pI6c:%u', dst='%pI6c:%u'\n",
-			 xt_hooknum(par), l4proto, &iph->saddr, ntohs(sport), &iph->daddr, ntohs(dport));
-	}
-		break;
-	default:
-		BUG();
-	}
+	if (!kz_get_transport_ports(skb, par, &l4proto, &sport, &dport))
+		return NF_DROP;
 
 	rcu_read_lock();
 
