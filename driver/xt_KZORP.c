@@ -49,6 +49,11 @@
 #include <linux/netfilter_bridge.h>
 #endif
 
+struct l4hdr_stub {
+	__be16 source;
+	__be16 dest;
+};
+
 static const char *const kz_log_null = "(NULL)";
 
 /**
@@ -1231,12 +1236,10 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 		xt_hooknum(par) == NF_INET_PRE_ROUTING;
 
 	u_int8_t l4proto = 0;
-	struct {
-		u16 src;
-		u16 dst;
-	} __attribute__((packed)) *ports, _ports = { .src = 0, .dst = 0, };
-
-	ports = &_ports;
+	struct l4hdr_stub _l4hdr = {0};
+	const struct l4hdr_stub *l4hdr = &_l4hdr;
+	__be16 sport = 0;
+	__be16 dport = 0;
 
 	ct = nf_ct_get(skb, &ctinfo);
 	/* no conntrack or this is a reply packet: we simply accept it
@@ -1256,8 +1259,8 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 		l4proto = iph->protocol;
 
 		if ((l4proto == IPPROTO_TCP) || (l4proto == IPPROTO_UDP)) {
-			ports = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_ports), &_ports);
-			if (unlikely(ports == NULL)) {
+			l4hdr = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_l4hdr), &_l4hdr);
+			if (unlikely(!l4hdr)) {
 				/* unexpected ill case */
 				pr_debug("failed to get ports, dropped packet; src='%pI4', dst='%pI4'\n",
 					 &iph->saddr, &iph->daddr);
@@ -1265,8 +1268,11 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 			}
 		}
 
+		sport = l4hdr->source;
+		dport = l4hdr->dest;
+
 		pr_debug("kzorp hook processing packet: hook='%u', protocol='%u', src='%pI4:%u', dst='%pI4:%u'\n",
-			 xt_hooknum(par), l4proto, &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
+			 xt_hooknum(par), l4proto, &iph->saddr, ntohs(sport), &iph->daddr, ntohs(dport));
 	}
 		break;
 	case NFPROTO_IPV6:
@@ -1288,16 +1294,19 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 
 		if ((l4proto == IPPROTO_TCP) || (l4proto == IPPROTO_UDP)) {
 			/* get info from transport header */
-			ports = skb_header_pointer(skb, thoff, sizeof(_ports), &_ports);
-			if (unlikely(ports == NULL)) {
+			l4hdr = skb_header_pointer(skb, thoff, sizeof(_l4hdr), &_l4hdr);
+			if (unlikely(!l4hdr)) {
 				pr_debug("failed to get ports, dropped packet; src='%pI6c', dst='%pI6c'\n",
 					 &iph->saddr, &iph->daddr);
 				return NF_DROP;
 			}
 		}
 
+		sport = l4hdr->source;
+		dport = l4hdr->dest;
+
 		pr_debug("kzorp hook processing packet: hook='%u', protocol='%u', src='%pI6c:%u', dst='%pI6c:%u'\n",
-			 xt_hooknum(par), l4proto, &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
+			 xt_hooknum(par), l4proto, &iph->saddr, ntohs(sport), &iph->daddr, ntohs(dport));
 	}
 		break;
 	default:
@@ -1344,26 +1353,26 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	case NF_INET_PRE_ROUTING:
 		verdict = kz_prerouting_verdict(skb, in, out, cfg,
 						xt_family(par), l4proto,
-						ports->src, ports->dst, 
+						sport, dport,
 						ctinfo, ct, kzorp, tgi);
 		break;
 	case NF_INET_LOCAL_IN:
 		if (ctinfo == IP_CT_NEW)
 			verdict = kz_input_newconn_verdict(skb, in, xt_family(par), l4proto,
-							   ports->src, ports->dst,
+							   sport, dport,
 							   ct, kzorp);
 		break;
 	case NF_INET_FORWARD:
 		if (ctinfo == IP_CT_NEW)
 			verdict = kz_forward_newconn_verdict(skb, in, xt_family(par), l4proto,
-							     ports->src, ports->dst,
+							     sport, dport,
 							     ct, kzorp);
 		break;
 	case NF_INET_POST_ROUTING:
 		if (ctinfo == IP_CT_NEW)
 			verdict = kz_postrouting_newconn_verdict(skb, in, out, cfg,
 								 xt_family(par), l4proto,
-								 ports->src, ports->dst,
+								 sport, dport,
 								 ct, kzorp, tgi);
 		break;
 	default:
