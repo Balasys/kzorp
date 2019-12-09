@@ -398,7 +398,7 @@ class Daemon():
                         self._read_request(fd)
                     elif event_type & select.EPOLLOUT:
                         self._write_response(fd)
-                    elif event & select.EPOLLHUP:
+                    elif event_type & select.EPOLLHUP:
                         self._close_connection(fd)
         finally:
             self.epoll.unregister(self.listen_socket.fileno())
