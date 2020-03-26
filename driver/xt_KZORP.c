@@ -49,6 +49,11 @@
 #include <linux/netfilter_bridge.h>
 #endif
 
+struct l4hdr_stub {
+	__be16 source;
+	__be16 dest;
+};
+
 static const char *const kz_log_null = "(NULL)";
 
 /**
@@ -1213,6 +1218,105 @@ kz_postrouting_newconn_verdict(struct sk_buff *skb,
 	return NF_ACCEPT;
 }
 
+static bool
+kz_get_transport_ports_ipv4(const struct sk_buff *skb,
+			    const struct xt_action_param *par,
+			    u8 *l4proto,
+			    __be16 *sport,
+			    __be16 *dport)
+{
+	struct l4hdr_stub _l4hdr = {0};
+	const struct l4hdr_stub *l4hdr = &_l4hdr;
+	const struct iphdr * const iph = ip_hdr(skb);
+
+	*l4proto = iph->protocol;
+
+	if ((*l4proto == IPPROTO_TCP) || (*l4proto == IPPROTO_UDP)) {
+		l4hdr = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_l4hdr), &_l4hdr);
+		if (unlikely(!l4hdr)) {
+			/* unexpected ill case */
+			pr_debug("failed to get ports, dropped packet; src='%pI4', dst='%pI4'\n",
+				 &iph->saddr, &iph->daddr);
+			return false;
+		}
+	}
+
+	*sport = l4hdr->source;
+	*dport = l4hdr->dest;
+
+	pr_debug("kzorp hook processing packet: hook='%u', protocol='%u', src='%pI4:%u', dst='%pI4:%u'\n",
+		 xt_hooknum(par), *l4proto, &iph->saddr, ntohs(*sport), &iph->daddr, ntohs(*dport));
+
+	return true;
+}
+
+static bool
+kz_get_transport_ports_ipv6(const struct sk_buff *skb,
+			    const struct xt_action_param *par,
+			    u8 *l4proto,
+			    __be16 *sport,
+			    __be16 *dport)
+{
+	struct l4hdr_stub _l4hdr = {0};
+	const struct l4hdr_stub *l4hdr = &_l4hdr;
+	const struct ipv6hdr * const iph = ipv6_hdr(skb);
+	int thoff;
+	u8 tproto = iph->nexthdr;
+
+	/* find transport header */
+	__be16 frag_offp;
+	thoff = ipv6_skip_exthdr(skb, sizeof(*iph), &tproto, &frag_offp);
+	if (unlikely(thoff < 0)) {
+		pr_debug("unable to find transport header in IPv6 packet, dropped; src='%pI6c', dst='%pI6c'\n",
+			 &iph->saddr, &iph->daddr);
+		return false;
+	}
+
+	*l4proto = tproto;
+
+	if ((*l4proto == IPPROTO_TCP) || (*l4proto == IPPROTO_UDP)) {
+		/* get info from transport header */
+		l4hdr = skb_header_pointer(skb, thoff, sizeof(_l4hdr), &_l4hdr);
+		if (unlikely(!l4hdr)) {
+			pr_debug("failed to get ports, dropped packet; src='%pI6c', dst='%pI6c'\n",
+				 &iph->saddr, &iph->daddr);
+			return false;
+		}
+	}
+
+	*sport = l4hdr->source;
+	*dport = l4hdr->dest;
+
+	pr_debug("kzorp hook processing packet: hook='%u', protocol='%u', src='%pI6c:%u', dst='%pI6c:%u'\n",
+		 xt_hooknum(par), *l4proto, &iph->saddr, ntohs(*sport), &iph->daddr, ntohs(*dport));
+
+	return true;
+}
+
+static bool
+kz_get_transport_ports(const struct sk_buff *skb,
+		       const struct xt_action_param *par,
+		       u8 *l4proto,
+		       __be16 *sport,
+		       __be16 *dport)
+{
+	switch (xt_family(par)) {
+	case NFPROTO_IPV4:
+		if (!kz_get_transport_ports_ipv4(skb, par, l4proto, sport, dport))
+			return false;
+		break;
+	case NFPROTO_IPV6:
+		if (!kz_get_transport_ports_ipv6(skb, par, l4proto, sport, dport))
+			return false;
+		break;
+	default:
+		BUG();
+		break;
+	}
+
+	return true;
+}
+
 static unsigned int
 kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 {
@@ -1225,13 +1329,14 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	struct nf_conn *ct;
 	struct kz_extension *kzorp;
 	const struct kz_config *cfg = NULL;
-	u_int8_t l4proto = 0;
-	struct {
-		u16 src;
-		u16 dst;
-	} __attribute__((packed)) *ports, _ports = { .src = 0, .dst = 0, };
 
-	ports = &_ports;
+	const bool in_mangle_prerouting = par->target &&
+		!strcmp(par->target->table, "mangle") &&
+		xt_hooknum(par) == NF_INET_PRE_ROUTING;
+
+	u_int8_t l4proto = 0;
+	__be16 sport = 0;
+	__be16 dport = 0;
 
 	ct = nf_ct_get(skb, &ctinfo);
 	/* no conntrack or this is a reply packet: we simply accept it
@@ -1243,64 +1348,37 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	if (ct == NULL || ctinfo >= IP_CT_IS_REPLY)
 		return NF_ACCEPT;
 
-	switch (xt_family(par)) {
-	case NFPROTO_IPV4:
-	{
-		const struct iphdr * const iph = ip_hdr(skb);
-
-		l4proto = iph->protocol;
-
-		if ((l4proto == IPPROTO_TCP) || (l4proto == IPPROTO_UDP)) {
-			ports = skb_header_pointer(skb, ip_hdrlen(skb), sizeof(_ports), &_ports);
-			if (unlikely(ports == NULL)) {
-				/* unexpected ill case */
-				pr_debug("failed to get ports, dropped packet; src='%pI4', dst='%pI4'\n",
-					 &iph->saddr, &iph->daddr);
-				return NF_DROP;
-			}
-		}
-
-		pr_debug("kzorp hook processing packet: hook='%u', protocol='%u', src='%pI4:%u', dst='%pI4:%u'\n",
-			 xt_hooknum(par), l4proto, &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
-	}
-		break;
-	case NFPROTO_IPV6:
-	{
-		const struct ipv6hdr * const iph = ipv6_hdr(skb);
-		int thoff;
-		u8 tproto = iph->nexthdr;
-
-		/* find transport header */
-		__be16 frag_offp;
-		thoff = ipv6_skip_exthdr(skb, sizeof(*iph), &tproto, &frag_offp);
-		if (unlikely(thoff < 0)) {
-			pr_debug("unable to find transport header in IPv6 packet, dropped; src='%pI6c', dst='%pI6c'\n",
-			         &iph->saddr, &iph->daddr);
-			return NF_DROP;
-		}
-
-		l4proto = tproto;
-
-		if ((l4proto == IPPROTO_TCP) || (l4proto == IPPROTO_UDP)) {
-			/* get info from transport header */
-			ports = skb_header_pointer(skb, thoff, sizeof(_ports), &_ports);
-			if (unlikely(ports == NULL)) {
-				pr_debug("failed to get ports, dropped packet; src='%pI6c', dst='%pI6c'\n",
-					 &iph->saddr, &iph->daddr);
-				return NF_DROP;
-			}
-		}
-
-		pr_debug("kzorp hook processing packet: hook='%u', protocol='%u', src='%pI6c:%u', dst='%pI6c:%u'\n",
-			 xt_hooknum(par), l4proto, &iph->saddr, ntohs(ports->src), &iph->daddr, ntohs(ports->dst));
-	}
-		break;
-	default:
-		BUG();
-	}
+	if (!kz_get_transport_ports(skb, par, &l4proto, &sport, &dport))
+		return NF_DROP;
 
 	rcu_read_lock();
-	kzorp = kz_extension_find_or_evaluate(skb, in, xt_family(par), &cfg);
+
+	kzorp = kz_extension_find(ct);
+
+	if (!kzorp && !in_mangle_prerouting) {
+		/* traffic bypassed kzorp only on mangle prerouting (likely IPTables
+		 * misconfiguration, we do not have to handle it. */
+
+		rcu_read_unlock();
+
+		/* check if there is a input interface for this packet */
+		if (in && in->name && in->type != ARPHRD_LOOPBACK) {
+			const struct nf_conntrack_tuple *ct_orig_tuple = &ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple;
+			const u16 zone_id_orig = nf_ct_zone_id(nf_ct_zone(ct), NF_CT_ZONE_DIR_ORIG);
+			kz_log_with_dumped_tuple_warn_ratelimited(
+				"unable to find kzorp object for a not locally originated packet "
+				"elsewhere than mangle PREROUTING",
+				ct_orig_tuple, zone_id_orig
+			);
+		} else {
+			pr_debug("unable to find kzorp object for packet elsewhere than mangle PREROUTING\n");
+		}
+
+		return NF_ACCEPT;
+	}
+
+	if (!kzorp)
+		kzorp = kz_extension_find_or_evaluate(skb, in, xt_family(par), &cfg);
 
 	pr_debug("lookup data for kzorp hook; dpt='%s', client_zone='%s', server_zone='%s', svc='%s'\n",
 		 kzorp->dpt ? kzorp->dpt->name : kz_log_null,
@@ -1313,26 +1391,26 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	case NF_INET_PRE_ROUTING:
 		verdict = kz_prerouting_verdict(skb, in, out, cfg,
 						xt_family(par), l4proto,
-						ports->src, ports->dst, 
+						sport, dport,
 						ctinfo, ct, kzorp, tgi);
 		break;
 	case NF_INET_LOCAL_IN:
 		if (ctinfo == IP_CT_NEW)
 			verdict = kz_input_newconn_verdict(skb, in, xt_family(par), l4proto,
-							   ports->src, ports->dst,
+							   sport, dport,
 							   ct, kzorp);
 		break;
 	case NF_INET_FORWARD:
 		if (ctinfo == IP_CT_NEW)
 			verdict = kz_forward_newconn_verdict(skb, in, xt_family(par), l4proto,
-							     ports->src, ports->dst,
+							     sport, dport,
 							     ct, kzorp);
 		break;
 	case NF_INET_POST_ROUTING:
 		if (ctinfo == IP_CT_NEW)
 			verdict = kz_postrouting_newconn_verdict(skb, in, out, cfg,
 								 xt_family(par), l4proto,
-								 ports->src, ports->dst,
+								 sport, dport,
 								 ct, kzorp, tgi);
 		break;
 	default:

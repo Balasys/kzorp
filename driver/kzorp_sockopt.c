@@ -98,7 +98,10 @@ kzorp_getsockopt_results(u8 family, struct sock *sk, int optval, void __user *us
 		rcu_read_lock_bh();
 		kzorp = kz_extension_find(ct);
 		if (kzorp == NULL) {
-			pr_err("no kzorp extension structure found\n");
+			kz_log_with_dumped_tuple_err_ratelimited(
+				"no kzorp extension structure found",
+				&ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple, nf_ct_zone_dflt.id
+			);
 			res = -ENOENT;
 			goto error_put_ct;
 		}

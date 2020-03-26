@@ -690,6 +690,36 @@ enum {
 	KZL_FUNC_EXTRA_DEBUG    = 64,   /* basically same as KZL_FUNC_DEBUG, lots of log */
 };
 
+#define kz_log_with_dumped_tuple(logger_func, error_msg, tuple, zone_id) \
+	char buf[L4PROTOCOL_STRING_SIZE]; \
+	switch (tuple->src.l3num) { \
+	case AF_INET: \
+		logger_func("%s; tuple_address='%p' zone_id='%u' l4proto='%s' %pI4:%hu -> %pI4:%hu\n", \
+			    error_msg, tuple, zone_id, l4proto_as_string(tuple->dst.protonum, buf), \
+			    &tuple->src.u3.ip, ntohs(tuple->src.u.all), \
+			    &tuple->dst.u3.ip, ntohs(tuple->dst.u.all)); \
+		break; \
+	case AF_INET6: \
+		logger_func("%s; tuple_address='%p' zone_id='%u' l4proto='%s' %pI6:%hu -> %pI6:%hu\n", \
+			    error_msg, tuple, zone_id, l4proto_as_string(tuple->dst.protonum, buf), \
+			    tuple->src.u3.all, ntohs(tuple->src.u.all), \
+			    tuple->dst.u3.all, ntohs(tuple->dst.u.all)); \
+		break; \
+	}
+
+static inline void
+kz_log_with_dumped_tuple_err_ratelimited(const char *error_msg, const struct nf_conntrack_tuple *tuple, const u16 zone_id)
+{
+	kz_log_with_dumped_tuple(pr_err_ratelimited, error_msg, tuple, zone_id)
+}
+
+static inline void
+kz_log_with_dumped_tuple_warn_ratelimited(const char *error_msg, const struct nf_conntrack_tuple *tuple, const u16 zone_id)
+{
+	kz_log_with_dumped_tuple(pr_warn_ratelimited, error_msg, tuple, zone_id)
+}
+
+
 /***********************************************************
  * Accounting
  ***********************************************************/
