@@ -186,6 +186,7 @@ class Daemon():
         self.dnscache = ResolverCache.ResolverCache(ResolverCache.DNSResolver())
         self.zone_handler = None
         self.next_update_time = 0
+        self.forced_update = False
         try:
             self.watchdog_sec = int(os.environ['WATCHDOG_USEC']) / ONE_SEC_IN_USEC / SYSTEMD_WATCHDOG_PERIOD_DIV
         except (ValueError, KeyError):
@@ -245,6 +246,9 @@ class Daemon():
         updated_hostnames = None
         try:
             updated_hostnames = self.dnscache.update()
+            if self.forced_update:
+                updated_hostnames = self.dnscache.hosts
+                self.forced_update = False
             expired_hostname, expiration_time = self.dnscache.getNextExpiration()
             if not expired_hostname:
                 # if no hosts are in the cache, sleep for the minimum time
@@ -278,6 +282,7 @@ class Daemon():
                             zone_download.update(self.zone_handler.create_zone_update_messages(hostname))
                         except NetlinkException as e:
                             Common.log(None, Common.CORE_ERROR, 1, "Unable to update addresses in zones, keep existing ones; error='%s'" % (e))
+                            self.forced_update = True
                 elif updated_hostnames is None:
                     Common.log(None, Common.CORE_ERROR, 3,
                                "Name resolution has failed, reinitialize hostname based addresses;")
