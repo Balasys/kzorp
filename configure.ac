@@ -38,5 +38,7 @@ scripts/Makefile
 pylib/Makefile
 pylib/kzorp/Makefile
 pylib/Zorp/Makefile
+tests/Makefile
+tests/python/Makefile
 ])
 AC_OUTPUT
