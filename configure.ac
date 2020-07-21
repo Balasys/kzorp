@@ -29,6 +29,7 @@ AC_CONFIG_FILES([
 Makefile
 daemon/Makefile
 debian/Makefile
+debian/control
 debian/source/Makefile
 driver/tests/Makefile
 driver/tests/communication/Makefile
