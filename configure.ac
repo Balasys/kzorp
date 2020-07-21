@@ -19,17 +19,26 @@ ZORP_PYTHON_DIR="${pythondir}/Zorp"
 KZORP_MUNIN_CONF_DIR="${sysconfdir}/munin/plugin-conf.d"
 KZORP_MUNIN_DIR="${prefix}/share/munin/plugins"
 
+CURRDATE=`date -R`
+
+if test -z "$RELEASE_TAG"; then
+    RELEASE_TAG=release
+fi
+
 AC_SUBST([PYTHON])
 AC_SUBST(KZORP_MUNIN_CONF_DIR)
 AC_SUBST(KZORP_MUNIN_DIR)
 AC_SUBST(KZORP_PYTHON_DIR)
 AC_SUBST(ZORP_PYTHON_DIR)
+AC_SUBST(CURRDATE)
+AC_SUBST(RELEASE_TAG)
 
 AC_CONFIG_FILES([
 Makefile
 daemon/Makefile
 debian/Makefile
 debian/control
+debian/changelog
 debian/source/Makefile
 driver/tests/Makefile
 driver/tests/communication/Makefile
