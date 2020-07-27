@@ -21,8 +21,7 @@ Depends: ${python:Depends},
          python-all (>= 2.7),
          python-netaddr,
          python-prctl
-Conflicts: zorp-common (<< 3.5), python-kzorp (<< 6.0)
-Replaces: python-kzorp (<< 6.0)
+Conflicts: python-kzorp (<< @VERSION_MAJOR@), python-kzorp (>> @NEXT_VERSION_MAJOR@)
 Description: Python bindings for kzorp.
  Zorp is a new generation firewall. It is essentially a transparent proxy
  firewall, with strict protocol analyzing proxies, a modular architecture,
@@ -39,8 +38,7 @@ Depends: ${misc:Depends},
          python-enum34,
          python-kzorp (= ${source:Version}),
          zorp-kernel-module
-Conflicts: kzorp (<< 6.0)
-Replaces: kzorp (<< 6.0)
+Conflicts: kzorp-utils (<< @VERSION_MAJOR@), kzorp-utils (>> @NEXT_VERSION_MAJOR@)
 Description: mixed packet filter/application level gateway 
  Kzorp is a open source set of mechanisms to implement mixed
  packet filter/application level gateway functionality on Linux.
@@ -50,7 +48,7 @@ Package: kzorp-dkms
 Architecture: all
 Section: kernel
 Depends: ${misc:Depends}, dkms (>= 1.95)
-Conflicts: kzorp
+Conflicts: kzorp, kzorp-dkms (<< @VERSION_MAJOR@), kzorp-dkms (>> @NEXT_VERSION_MAJOR@)
 Provides: zorp-kernel-module
 Description: mixed packet filter/application level gateway, kernel module
  Kzorp is a open source set of mechanisms to implement mixed
@@ -70,6 +68,7 @@ Depends: ${misc:Depends},
          python-zorp-base (>= @ZORP_PYTHON_MIN_VERSION@),
          python-prctl,
          python-systemd
+Conflicts: kzorpd (<< @VERSION_MAJOR@), kzorpd (>> @NEXT_VERSION_MAJOR@)
 Description: Python bindings for kzorp.
  Zorp is a new generation firewall. It is essentially a transparent proxy
  firewall, with strict protocol analyzing proxies, a modular architecture,
@@ -80,6 +79,7 @@ Description: Python bindings for kzorp.
 Package: kzorp-munin-plugins
 Architecture: any
 Depends: munin-node
+Conflicts: kzorp-munin-plugins (<< @VERSION_MAJOR@), kzorp-munin-plugins (>> @NEXT_VERSION_MAJOR@)
 Recommends: kzorp-dkms | kzorp
 Description: An advanced protocol analyzing firewall
  Zorp is a new generation firewall. It is essentially a transparent proxy
