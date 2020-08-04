@@ -19,6 +19,16 @@ ZORP_PYTHON_DIR="${pythondir}/Zorp"
 KZORP_MUNIN_CONF_DIR="${sysconfdir}/munin/plugin-conf.d"
 KZORP_MUNIN_DIR="${prefix}/share/munin/plugins"
 
+if test -r $srcdir/dist.conf; then
+        # read defaults, dist.conf does not change
+        # values for parameters that are already set
+        source $srcdir/dist.conf
+fi
+
+if test -n "$SNAPSHOT_VERSION"; then
+        VERSION=$VERSION+$SNAPSHOT_VERSION
+fi
+
 CURRDATE=`date -R`
 
 if test -z "$RELEASE_TAG"; then
@@ -46,9 +56,11 @@ AC_SUBST(RELEASE_TAG)
 AC_SUBST(ZORP_PYTHON_MIN_VERSION)
 AC_SUBST(VERSION_MAJOR)
 AC_SUBST(NEXT_VERSION_MAJOR)
+AC_SUBST(SNAPSHOT_VERSION)
 
 AC_CONFIG_FILES([
 Makefile
+dist.conf
 daemon/Makefile
 debian/Makefile
 debian/control
