@@ -408,6 +408,12 @@ static const struct file_operations kz_hash_stats_file_ops = {
 
 static int __net_init kz_extension_net_init(struct net *net)
 {
+	if (!net_eq(net, &init_net)) {
+		pr_info("Network namespaces are not supported, "
+			"not creating /proc entries in other than the initial namespace.\n");
+		return 0;
+	}
+
 	if (!proc_create("kz_hash_lengths", S_IRUGO, NULL, &kz_hash_lengths_file_ops))
 		return -1;
 
@@ -432,6 +438,9 @@ err_proc_entry:
 
 void kz_extension_net_exit(struct net *net)
 {
+	if (!net_eq(net, &init_net))
+		return;
+
 	kz_nf_ct_hook_revert;
 
 	remove_proc_entry("kz_hash_stats", NULL);
