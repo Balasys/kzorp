@@ -6,7 +6,10 @@ Build-Depends: debhelper (>= 9),
                dh-autoreconf,
                python-all (>= 2.7),
                dkms (>= 1.95),
-               dh-systemd
+               dh-systemd,
+               python-enum34,
+               python-netaddr,
+               python-mock
 Standards-Version: 3.9.5
 Homepage: https://github.com/balasys/kzorp/
 

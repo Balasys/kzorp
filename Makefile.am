@@ -1,4 +1,4 @@
-SUBDIRS = debian munin_plugins pylib daemon scripts
+SUBDIRS = debian munin_plugins pylib daemon scripts tests
 DIST_SUBDIRS = $(SUBDIRS) driver
 
 DRIVER_SUBDIR = driver
