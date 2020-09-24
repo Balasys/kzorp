@@ -37,9 +37,9 @@ zone_mt_v1_eval(const struct sk_buff *skb, const struct xt_zone_info_v1 *info, c
 	} else {
 		if (kz_zone_lookup_from_skb(skb, xt_family(par), &src_zone, &dst_zone)) {
 			if (info->flags & IPT_ZONE_SRC)
-				zone = reply ? dst_zone : src_zone;
+				zone = src_zone;
 			else
-				zone = reply ? src_zone : dst_zone;
+				zone = dst_zone;
 		} else {
 			zone = NULL;
 		}
