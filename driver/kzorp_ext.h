@@ -73,6 +73,14 @@ extern struct kz_extension *kz_extension_find(const struct nf_conn *ct);
 extern struct kz_extension *kz_extension_add_to_cache(struct kz_extension *kzorp, const struct nf_conn *ct);
 extern void kz_extension_remove_from_cache(struct kz_extension *kzorp);
 
+extern void
+kz_extension_config_validate(struct kz_extension *kzorp,
+			     enum ip_conntrack_info ctinfo,
+			     const struct sk_buff *skb,
+			     const struct net_device * const in,
+			     const u8 l3proto,
+			     const struct kz_config **p_cfg);
+
 extern struct kz_extension *
 kz_extension_find_or_evaluate(const struct sk_buff *skb,
 			      const struct net_device * const in,
