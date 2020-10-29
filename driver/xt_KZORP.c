@@ -1379,6 +1379,8 @@ kzorp_tg(struct sk_buff *skb, const struct xt_action_param *par)
 
 	if (!kzorp)
 		kzorp = kz_extension_find_or_evaluate(skb, in, xt_family(par), &cfg);
+	else
+		kz_extension_config_validate(kzorp, ctinfo, skb, in, xt_family(par), &cfg);
 
 	pr_debug("lookup data for kzorp hook; dpt='%s', client_zone='%s', server_zone='%s', svc='%s'\n",
 		 kzorp->dpt ? kzorp->dpt->name : kz_log_null,

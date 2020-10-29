@@ -616,6 +616,24 @@ kz_zone_lookup_from_skb(const struct sk_buff *skb, int l3proto, struct kz_zone *
 }
 EXPORT_SYMBOL_GPL(kz_zone_lookup_from_skb);
 
+void
+kz_extension_config_validate(struct kz_extension *kzorp,
+			     enum ip_conntrack_info ctinfo,
+			     const struct sk_buff *skb,
+			     const struct net_device * const in,
+			     const u8 l3proto,
+			     const struct kz_config **p_cfg)
+{
+	const struct kz_config *kzorp_config = rcu_dereference(kz_config_rcu);
+
+	if (unlikely(!kz_generation_valid(kzorp_config, kzorp->generation)))
+		kz_extension_fill_with_lookup_data_rcu(kzorp, ctinfo, skb, in, l3proto, &kzorp_config);
+
+	if (p_cfg)
+		*p_cfg = kzorp_config;
+}
+EXPORT_SYMBOL_GPL(kz_extension_config_validate);
+
 /* returns consolidated kzorp lookup info; caches it in ct, and uses
    the cache if valid;
    returns NULL only if it's not possible to add kzorp extension to ct
@@ -633,17 +651,15 @@ kz_extension_find_or_add(struct nf_conn *ct,
 	struct kz_extension *kzorp;
 	const struct kz_config *kzorp_config;
 
-	kzorp_config = rcu_dereference(kz_config_rcu);
 	kzorp = kz_extension_find(ct);
 	if (kzorp) {
-		if (unlikely(!kz_generation_valid(kzorp_config, kzorp->generation)))
-			kz_extension_fill_with_lookup_data_rcu(kzorp, ctinfo, skb, in, l3proto, &kzorp_config);
+		kz_extension_config_validate(kzorp, ctinfo, skb, in, l3proto, p_cfg);
 	} else {
+		kzorp_config = rcu_dereference(kz_config_rcu);
 		kzorp = kz_extension_add(ct, ctinfo, skb, in, l3proto, &kzorp_config);
+		if (p_cfg)
+			*p_cfg = kzorp_config;
 	}
-
-	if (p_cfg)
-		*p_cfg = kzorp_config;
 
 	return kzorp;
 }
