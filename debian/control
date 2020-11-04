@@ -1,0 +1,90 @@
+Source: kzorp
+Section: net
+Priority: extra
+Maintainer: BalaSys Development Team <devel@balasys.hu>
+Build-Depends: debhelper (>= 9),
+               dh-autoreconf,
+               python-all (>= 2.7),
+               dkms (>= 1.95),
+               dh-systemd,
+               python-enum34,
+               python-netaddr,
+               python-mock
+Standards-Version: 3.9.5
+Homepage: https://github.com/balasys/kzorp/
+
+Package: python-kzorp
+Architecture: all
+Section: python
+Depends: ${python:Depends},
+         ${misc:Depends},
+         python-all (>= 2.7),
+         python-netaddr,
+         python-prctl
+Conflicts: python-kzorp (<< 7), python-kzorp (>> 8)
+Description: Python bindings for kzorp.
+ Zorp is a new generation firewall. It is essentially a transparent proxy
+ firewall, with strict protocol analyzing proxies, a modular architecture,
+ and fine-grained control over the mediated traffic. Configuration decisions
+ .
+ General python bindings for kzorp.
+
+Package: kzorp-utils
+Architecture: all
+Section: kernel
+Depends: ${misc:Depends},
+         ${python:Depends},
+         python-all (>= 2.7),
+         python-enum34,
+         python-kzorp (= ${source:Version}),
+         zorp-kernel-module
+Conflicts: kzorp-utils (<< 7), kzorp-utils (>> 8)
+Description: mixed packet filter/application level gateway 
+ Kzorp is a open source set of mechanisms to implement mixed
+ packet filter/application level gateway functionality on Linux.
+ Kzorp is used by Zorp, and anyone is welcome to use it with other gateways.
+
+Package: kzorp-dkms
+Architecture: all
+Section: kernel
+Depends: ${misc:Depends}, dkms (>= 1.95)
+Conflicts: kzorp, kzorp-dkms (<< 7), kzorp-dkms (>> 8)
+Provides: zorp-kernel-module
+Description: mixed packet filter/application level gateway, kernel module
+ Kzorp is a open source set of mechanisms to implement mixed
+ packet filter/application level gateway functionality on Linux.
+ Kzorp is used by Zorp, and anyone is welcome to use it with other gateways.
+ .
+ This package provides the kernel module.
+
+Package: kzorpd
+Architecture: all
+Section: python
+Depends: ${misc:Depends},
+         ${python:Depends},
+         python-all (>= 2.7),
+         zorp-kernel-module,
+         python-kzorp (= ${source:Version}),
+         python-zorp-base (>= 7.0.4),
+         python-prctl,
+         python-systemd
+Conflicts: kzorpd (<< 7), kzorpd (>> 8)
+Description: Python bindings for kzorp.
+ Zorp is a new generation firewall. It is essentially a transparent proxy
+ firewall, with strict protocol analyzing proxies, a modular architecture,
+ and fine-grained control over the mediated traffic. Configuration decisions
+ .
+ Standalone daemon that handles zones and updates dynamic zones.
+
+Package: kzorp-munin-plugins
+Architecture: any
+Depends: munin-node
+Conflicts: kzorp-munin-plugins (<< 7), kzorp-munin-plugins (>> 8)
+Recommends: kzorp-dkms | kzorp
+Description: An advanced protocol analyzing firewall
+ Zorp is a new generation firewall. It is essentially a transparent proxy
+ firewall, with strict protocol analyzing proxies, a modular architecture,
+ and fine-grained control over the mediated traffic. Configuration decisions
+ are scriptable with the Python based configuration language.
+ .
+ This package contains plugins for the Munin monitoring tool.

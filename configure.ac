@@ -62,9 +62,6 @@ AC_CONFIG_FILES([
 Makefile
 dist.conf
 daemon/Makefile
-debian/Makefile
-debian/control
-debian/changelog
 debian/source/Makefile
 driver/tests/Makefile
 driver/tests/communication/Makefile
